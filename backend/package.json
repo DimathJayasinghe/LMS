@@ -12,5 +12,8 @@
   },
   "keywords": [],
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
 }
