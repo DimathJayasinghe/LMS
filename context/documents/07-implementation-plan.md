@@ -5,6 +5,24 @@
 
 ---
 
+## API Response Format Documentation
+
+All API responses must follow the standard response structure below.
+
+---
+
+### Standard Response Structure
+
+```json
+{
+  "status": "success",
+  "data": {},
+  "count": 0,
+  "message": "Request completed successfully"
+}
+```
+
+
 ## Dependency Graph
 
 ```mermaid
@@ -57,6 +75,7 @@ Lanes A, B, C can run in parallel once Step 4 is complete.
 Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ---
+
 
 ## Step 0 — Server Foundation ✅ DONE
 
