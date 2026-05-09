@@ -8,8 +8,8 @@ datasource db {
 }
 
 enum Role {
-  SUPER_ADMIN
   ADMIN
+  STAFF
   MARKER
   STUDENT
 }
@@ -316,6 +316,8 @@ model AuditLog {
   @@index([createdAt])
 }
 
+
+
 model SmsLog {
   id          String    @id @default(uuid())
   phoneNumber String
@@ -333,6 +335,22 @@ model SmsLog {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+
+model Permission {
+  id String @id @default(uuid())
+
+  editStudent Boolean @default(false)
+  markStudent Boolean @default(false)
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 
