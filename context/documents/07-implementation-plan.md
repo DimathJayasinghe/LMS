@@ -5,6 +5,33 @@
 
 ---
 
+## API Response Format Documentation
+
+All API responses must follow the standard response structure below.
+
+---
+
+### Response Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `status` | `"success"` \| `"error"` | Indicates whether the request was successful or failed. |
+| `data` | `array` \| `object` \| `string` | Contains the response payload. |
+| `count` | `number` | Required only when `data` is an array. Represents the total number of items. |
+| `message` | `string` | Human-readable response message. |
+
+### Standard Response Structure
+
+```json
+{
+  "status": "success",
+  "data": {},
+  "count": 0,
+  "message": "Request completed successfully"
+}
+```
+
+
 ## Dependency Graph
 
 ```mermaid
@@ -58,6 +85,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ---
 
+
 ## Step 0 — Server Foundation ✅ DONE
 
 **Branch:** `feature/server-foundation`
@@ -77,7 +105,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ## Step 1 — Database + Prisma Schema
 
-**Branch:** `feature/database-setup`
+**Branch:** 
 **Depends on:** Step 0
 **Objective:** Full Prisma schema from the plan doc, database connection, and first migration.
 
