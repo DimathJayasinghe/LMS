@@ -45,13 +45,8 @@ erDiagram
     %% ─── EXAMS ───
     USER ||--o{ SUBMISSION : "submits"
     USER ||--o{ MARKER_ASSIGNMENT : "assigned as marker"
-    USER ||--o{ MCQ_ANSWER : "selects"
     EXAM ||--o{ SUBMISSION : "receives"
     EXAM ||--o{ MARKER_ASSIGNMENT : "requires"
-    EXAM ||--o{ MCQ_QUESTION : "contains"
-    MCQ_QUESTION ||--o{ MCQ_OPTION : "has choices"
-    MCQ_QUESTION ||--o{ MCQ_ANSWER : "receives"
-    MCQ_OPTION ||--o{ MCQ_ANSWER : "selected in"
 
     %% ─── TABLES ───
     USER {
@@ -162,6 +157,7 @@ erDiagram
         string title "exam name"
         enum type "MCQ WRITTEN HYBRID"
         string paperPdfUrl "nullable - R2 URL"
+        json mcqPayload "nullable - questions and options JSONB"
         datetime startTime "server-authoritative"
         datetime endTime "server-authoritative"
         int totalMarks "default 100"
@@ -171,35 +167,11 @@ erDiagram
         datetime updatedAt
     }
 
-    MCQ_QUESTION {
-        uuid id PK
-        string questionText "the question body"
-        int orderIndex "display order 1 2 3"
-        int marks "default 1 - points for this Q"
-        uuid examId FK "references Exam"
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    MCQ_OPTION {
-        uuid id PK
-        string optionText "choice text"
-        boolean isCorrect "multiple can be true"
-        uuid questionId FK "references McqQuestion"
-    }
-
-    MCQ_ANSWER {
-        uuid id PK
-        uuid userId FK "references User"
-        uuid questionId FK "references McqQuestion"
-        uuid selectedOptionId FK "references McqOption"
-        datetime createdAt
-    }
-
     SUBMISSION {
         uuid id PK
         enum status "UPLOADING COMPLETED"
-        string answerPdfUrl "nullable - R2 URL"
+        string answerPdfUrl "nullable - R2 URL for written"
+        json answers "nullable - MCQ answers JSONB"
         int marks "nullable - until graded"
         string feedback "nullable - marker comments"
         uuid userId FK "references User"
@@ -285,7 +257,6 @@ model User {
   enrollments       Enrollment[]
   attendance        Attendance[]
   submissions       Submission[]
-  mcqAnswers        McqAnswer[]
   auditLogs         AuditLog[]         @relation("AuditAdmin")
   markerAssignments MarkerAssignment[] @relation("AssignedMarker")
   smsLogs           SmsLog[]
@@ -548,6 +519,7 @@ model Exam {
   title       String
   type        ExamType  @default(WRITTEN)
   paperPdfUrl String?                          // R2 URL — null for pure MCQ exams
+  mcqPayload  Json?                            // JSONB — questions + options for MCQ/HYBRID exams
   startTime   DateTime
   endTime     DateTime
   totalMarks  Int       @default(100)          // Maximum marks for this exam
@@ -560,7 +532,6 @@ model Exam {
 
   submissions       Submission[]
   markerAssignments MarkerAssignment[]
-  mcqQuestions      McqQuestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -579,90 +550,90 @@ model Exam {
 - **`type ExamType`** — Distinguishes MCQ, WRITTEN (PDF upload), and HYBRID (both). Determines which submission flow the frontend uses.
 - **`totalMarks`** — Markers need to know the maximum. Percentage calculation needs this.
 - **`isPublished`** — Controls whether students can see their results. Super Admin flips this to `true` after all marking is done, which triggers the SSE broadcast.
+- **`mcqPayload Json?`** — Stores the entire MCQ structure as a single JSONB object. See §4.9 for the schema.
 - **`paperPdfUrl` is nullable** — Pure MCQ exams don't have a paper PDF.
 
-### 4.9 MCQ Models (New)
+### 4.9 MCQ Design (JSONB — No Separate Tables)
 
-```prisma
-model McqQuestion {
-  id           String   @id @default(uuid())
-  questionText String
-  orderIndex   Int                             // Display order (1, 2, 3...)
-  marks        Int      @default(1)            // Points awarded for a fully correct answer
+To prevent database bloat, MCQ questions/options are stored as JSONB on the `Exam` model, and student answers are stored as JSONB on the `Submission` model. No separate `McqQuestion`, `McqOption`, or `McqAnswer` tables exist.
 
-  examId       String
-  exam         Exam     @relation(fields: [examId], references: [id], onDelete: Restrict)
+#### `Exam.mcqPayload` Schema
 
-  options      McqOption[]
-  answers      McqAnswer[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([examId])
-  @@index([examId, orderIndex])                // Ordered fetch per exam
-}
-
-model McqOption {
-  id         String  @id @default(uuid())
-  optionText String
-  isCorrect  Boolean @default(false)           // MULTIPLE options can be true per question
-
-  questionId String
-  question   McqQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-
-  answers    McqAnswer[]                       // Which students selected this option
-
-  @@index([questionId])
-}
-
-model McqAnswer {
-  id               String @id @default(uuid())
-
-  userId           String
-  user             User   @relation(fields: [userId], references: [id], onDelete: Restrict)
-
-  questionId       String
-  question         McqQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
-
-  selectedOptionId String
-  selectedOption   McqOption @relation(fields: [selectedOptionId], references: [id], onDelete: Restrict)
-
-  createdAt DateTime @default(now())
-
-  @@unique([userId, questionId, selectedOptionId]) // One row per student per option selected
-  @@index([userId])
-  @@index([questionId])
-  @@index([selectedOptionId])
+```json
+{
+  "questions": [
+    {
+      "id": "q1",
+      "text": "Which are prime numbers?",
+      "order": 1,
+      "marks": 2,
+      "options": [
+        { "id": "o1", "text": "2", "isCorrect": true },
+        { "id": "o2", "text": "4", "isCorrect": false },
+        { "id": "o3", "text": "7", "isCorrect": true },
+        { "id": "o4", "text": "9", "isCorrect": false }
+      ]
+    }
+  ]
 }
 ```
 
-**Why these models are needed:**
+#### `Submission.answers` Schema
 
-- The plan explicitly mentions "online MCQ papers" as a core feature. The original schema had no MCQ support — it only supported PDF upload/download.
-
-**Multi-select design (multiple correct answers):**
-
-- `McqOption.isCorrect` — Multiple options per question can be `true`. Example: *"Which are prime numbers? A) 2 B) 4 C) 7 D) 9"* → Both A and C are correct.
-- `McqAnswer` is a **join table** — one row per selected option per student per question. If a student selects options A and C, that's 2 rows in `McqAnswer`.
-- `@@unique([userId, questionId, selectedOptionId])` — Prevents selecting the same option twice, but allows selecting multiple different options for the same question.
-
-**Cascade rules:**
-
-- `McqOption.onDelete: Cascade` on the question FK — This is the ONE exception to our "no cascade" rule. If a question is deleted (before the exam starts), its options are meaningless without it.
-- `McqQuestion.onDelete: Restrict` on the exam FK — Cannot delete questions that have student answers.
-- `McqAnswer.selectedOption onDelete: Restrict` — Cannot delete an option that students have selected.
-
-**Auto-grading logic (service layer):**
-
+```json
+{
+  "q1": ["o1", "o3"],
+  "q2": ["o2"]
+}
 ```
-For each question:
-  correctSet  = { optionId WHERE isCorrect = true }
-  selectedSet = { selectedOptionId WHERE userId = X AND questionId = Q }
 
-  if (correctSet === selectedSet)  → full marks
-  if (partial overlap)             → 0 (or partial credit if configured)
-  if (selectedSet is empty)        → 0 (unanswered)
+Key = question ID, Value = array of selected option IDs.
+
+#### Why JSONB over separate tables?
+
+| Concern | Separate Tables | JSONB on Submission |
+|---------|----------------|--------------------|
+| Row count for 1,200 students × 50 questions | 60,000+ rows per exam | 1,200 rows (one per student) |
+| Query complexity | 3-table JOIN for grading | Single row read |
+| Schema flexibility | Migration required to add fields | Add fields to JSON freely |
+| Referential integrity | DB-enforced FKs | Service-layer validation via Zod |
+| Indexing answers | Per-option indexes | Not needed — graded in bulk |
+
+#### Auto-grading logic (service layer)
+
+```typescript
+const gradeSubmission = (mcqPayload: McqPayload, answers: Record<string, string[]>) => {
+  let totalScore = 0;
+  for (const question of mcqPayload.questions) {
+    const correctIds = question.options.filter(o => o.isCorrect).map(o => o.id);
+    const selected = answers[question.id] ?? [];
+    // Full marks only if sets match exactly
+    if (arraysEqual(correctIds.sort(), selected.sort())) {
+      totalScore += question.marks;
+    }
+  }
+  return totalScore;
+};
+```
+
+#### Zod validation (service layer)
+
+```typescript
+const mcqPayloadSchema = z.object({
+  questions: z.array(z.object({
+    id: z.string(),
+    text: z.string().min(1),
+    order: z.number().int().positive(),
+    marks: z.number().int().positive(),
+    options: z.array(z.object({
+      id: z.string(),
+      text: z.string().min(1),
+      isCorrect: z.boolean(),
+    })).min(2),  // At least 2 options per question
+  })).min(1),
+});
+
+const answersSchema = z.record(z.string(), z.array(z.string()));
 ```
 
 ### 4.10 Submission
@@ -671,7 +642,8 @@ For each question:
 model Submission {
   id           String           @id @default(uuid())
   status       SubmissionStatus @default(UPLOADING)
-  answerPdfUrl String?                         // R2 URL — null until upload completes
+  answerPdfUrl String?                         // R2 URL — null until upload completes (WRITTEN/HYBRID)
+  answers      Json?                           // JSONB — MCQ answer payload (MCQ/HYBRID exams)
   marks        Int?                            // Null until graded
   feedback     String?                         // Marker's feedback/comments
 
@@ -797,10 +769,6 @@ model SmsLog {
 | ClassSession → VideoRecording | Restrict | Cannot delete class with videos                     |        |
 | Exam → Submission             | Restrict | Cannot delete exam with submissions                 |        |
 | Exam → MarkerAssignment       | Restrict | Cannot delete exam with markers assigned            |        |
-| Exam → McqQuestion            | Restrict | Cannot delete exam with questions that have answers |        |
-| McqQuestion → McqOption       | Cascade  | Options are meaningless without their question      |        |
-| McqQuestion → McqAnswer       | Restrict | Cannot delete question with student answers         |        |
-| McqOption → McqAnswer         | Restrict | Cannot delete an option that students have selected |        |
 
 ---
 
@@ -842,7 +810,9 @@ These constraints can't be expressed purely in the schema. The service layer mus
 
 | Rule                                                                    | Enforcement                                  |
 | ----------------------------------------------------------------------- | -------------------------------------------- |
-| At least one `McqOption` per question must have `isCorrect = true`  | Service-level validation on exam creation    |
+| `Exam.mcqPayload` must have ≥1 option marked `isCorrect` per question | Zod validation via `mcqPayloadSchema`        |
+| `Submission.answers` keys must match `mcqPayload` question IDs        | Service-layer validation on submission       |
+| `Submission.answers` values must reference valid option IDs            | Service cross-references `mcqPayload`        |
 | `Exam.endTime` must be after `Exam.startTime`                       | Zod schema validation                        |
 | `Submission` rejected if `server_time > exam.endTime`               | Server-authoritative time check in service   |
 | `MarkerAssignment.marker` must have role `MARKER`                   | Service checks `user.role` before creating |
@@ -893,8 +863,6 @@ Prisma does not support PostgreSQL Row-Level Security natively. Access control i
 | **Attendance**         |            Read all            |    Read all, scan barcode    |       Read own       |                    Read own                    |
 | **VideoRecording**     |              CRUD              |           Read all           |       Read all       | Read non-deleted, enrolled + paid courses only |
 | **Exam**               |       CRUD (soft delete)       |           Read all           |  Read assigned exams  |    Read non-deleted, enrolled courses only    |
-| **McqQuestion/Option** |   CRUD (before exam starts)   |              ❌              |          ❌          |             Read during exam only             |
-| **McqAnswer**          | Read all (for grading reports) |              ❌              |          ❌          |            Create own (during exam)            |
 | **Submission**         |   Read all, publish results   |           Read all           | Read + grade assigned |              Create own, read own              |
 | **MarkerAssignment**   |              CRUD              |           Read all           |       Read own       |                       ❌                       |
 | **AuditLog**           |            Read all            |           Read own           |          ❌          |                       ❌                       |
@@ -924,7 +892,7 @@ export const getPayments = async (user: AuthUser): Promise<Payment[]> => {
 | Only SUPER_ADMIN can override payments           | Route-level role guard + idempotency middleware                           |
 | Students see exam papers only within time window | Service checks `server_time >= startTime && server_time <= endTime`     |
 | Markers only see exams they're assigned to       | Service JOINs `MarkerAssignment` to filter by `markerId`              |
-| MCQ correct answers hidden from students         | Service strips `isCorrect` from response during exam                    |
+| MCQ correct answers hidden from students         | Service strips `isCorrect` from `mcqPayload` response during exam           |
 | Soft-deleted records hidden from STUDENT role    | Service appends `WHERE deletedAt IS NULL` for student queries           |
 | ADMIN/MARKER never access AuditLog writes        | Only services triggered by SUPER_ADMIN/ADMIN actions create audit entries |
 
@@ -939,7 +907,7 @@ The schema is in **Third Normal Form (3NF)** with documented pragmatic exception
 | Check                                   | Status | Notes                                                   |
 | --------------------------------------- | ------ | ------------------------------------------------------- |
 | All fields contain single atomic values | ✅     | No comma-separated lists, no arrays for structured data |
-| No repeating groups                     | ✅     | MCQ options are a separate table, not JSON arrays       |
+| No repeating groups                     | ✅     | MCQ data stored as structured JSONB (documented denormalization) |
 | Every row is uniquely identifiable      | ✅     | UUID PK on every table                                  |
 
 ### 2NF — No Partial Dependencies
@@ -955,7 +923,7 @@ The schema is in **Third Normal Form (3NF)** with documented pragmatic exception
 | Check                                     | Status       | Notes                                                                                                                                               |
 | ----------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | No field depends on another non-key field | ✅           | Example:`Payment.amount` depends on the payment itself, not on `userId`                                                                         |
-| Derived data is not stored                | ✅           | MCQ scores computed at runtime, not stored on McqAnswer                                                                                             |
+| Derived data is not stored                | ✅           | MCQ scores computed at runtime from `mcqPayload` + `answers`, not stored on Submission                                                                                          |
 | Enums are DB-level, not lookup tables     | ✅ Pragmatic | For small fixed sets (Role, PaymentStatus), Postgres enums are simpler than lookup tables. If values need to change at runtime, promote to a table. |
 
 ### Documented Denormalizations
@@ -963,6 +931,8 @@ The schema is in **Third Normal Form (3NF)** with documented pragmatic exception
 | What                                                                 | Why It's Acceptable                                                                                                |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `address` + `city` on User (not a separate Address table)        | Single-institute system with ~1,200 users. A JOIN on every student fetch for zero cardinality benefit is wasteful. |
+| `Exam.mcqPayload Json?`                                          | MCQ questions+options as JSONB. Prevents bloat: 50 questions × 4 options = 200 rows per exam avoided. Validated via Zod at service layer. |
+| `Submission.answers Json?`                                       | Student MCQ answers as JSONB. Prevents bloat: 1,200 students × 50 questions = 60,000 rows per exam avoided. Single row per submission. |
 | `AuditLog.metadata Json?`                                          | Before/after snapshots are inherently unstructured (different shapes per action). JSON is the correct type here.   |
 | `IdempotencyRecord.responseBody Json`                              | Caching arbitrary HTTP responses — structure varies per endpoint.                                                 |
-| `Exam.totalMarks` stored (vs. computed from McqQuestion.marks sum) | Written exams don't have McqQuestion rows. Storing it avoids branching logic on exam type.                         |
+| `Exam.totalMarks` stored (vs. computed from mcqPayload)            | Written exams don't have mcqPayload. Storing it avoids branching logic on exam type.                               |
