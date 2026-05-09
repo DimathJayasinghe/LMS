@@ -77,7 +77,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ## Step 1 — Database + Prisma Schema
 
-**Branch:** `feature/database-setup`
+**Branch:** 
 **Depends on:** Step 0
 **Objective:** Full Prisma schema from the plan doc, database connection, and first migration.
 
