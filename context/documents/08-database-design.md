@@ -1,23 +1,23 @@
 # 08 — Database Design
 
-> Production-ready PostgreSQL schema via Prisma ORM.  
+> Production-ready PostgreSQL schema via Prisma ORM.
 > Every table, relation, index, and constraint is here with the **why** behind each decision.
 
 ---
 
 ## 1. Design Principles
 
-| Principle | Rule |
-|-----------|------|
-| **Soft deletes** | Models with child relations use `deletedAt DateTime?` — never hard delete. Nullable timestamp > boolean: it tells you *when* it was deleted. |
-| **Restrict cascades** | All FK `onDelete` rules are `Restrict` (block) or `SetNull`. Never `Cascade` in production. |
-| **UUID primary keys** | `@default(uuid())` — non-sequential, safe to expose in URLs, no ID enumeration attacks. |
-| **Auto-increment index** | Every user gets a sequential `indexNumber` (Postgres `SERIAL`). Formatted as `LMS-0001` at the application layer for human-readable reference. UUID remains the internal FK. |
-| **Consistent timestamps** | Every model gets `createdAt` + `updatedAt`. No exceptions. |
-| **Indexed foreign keys** | Every FK column is indexed for JOIN performance. Prisma doesn't auto-index FKs. |
-| **Composite unique constraints** | Used to enforce business rules at the DB level (one submission per student per exam, one attendance per student per class). |
-| **Enums for fixed states** | Role, status fields use Postgres enums — not raw strings. Type-safe and self-documenting. |
-| **Normalized schema (3NF)** | No transitive dependencies, no repeating groups, atomic fields. See §11 for full analysis. |
+| Principle                              | Rule                                                                                                                                                                               |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Soft deletes**                 | Models with child relations use `deletedAt DateTime?` — never hard delete. Nullable timestamp > boolean: it tells you *when* it was deleted.                                  |
+| **Restrict cascades**            | All FK `onDelete` rules are `Restrict` (block) or `SetNull`. Never `Cascade` in production.                                                                                |
+| **UUID primary keys**            | `@default(uuid())` — non-sequential, safe to expose in URLs, no ID enumeration attacks.                                                                                         |
+| **Auto-increment index**         | Every user gets a sequential `indexNumber` (Postgres `SERIAL`). Formatted as `LMS-0001` at the application layer for human-readable reference. UUID remains the internal FK. |
+| **Consistent timestamps**        | Every model gets `createdAt` + `updatedAt`. No exceptions.                                                                                                                     |
+| **Indexed foreign keys**         | Every FK column is indexed for JOIN performance. Prisma doesn't auto-index FKs.                                                                                                    |
+| **Composite unique constraints** | Used to enforce business rules at the DB level (one submission per student per exam, one attendance per student per class).                                                        |
+| **Enums for fixed states**       | Role, status fields use Postgres enums — not raw strings. Type-safe and self-documenting.                                                                                         |
+| **Normalized schema (3NF)**      | No transitive dependencies, no repeating groups, atomic fields. See §11 for full analysis.                                                                                        |
 
 ---
 
@@ -27,9 +27,15 @@
 erDiagram
     %% ─── CORE IDENTITY ───
     USER ||--o{ REFRESH_TOKEN : "owns"
-    USER ||--o{ PAYMENT : "makes"
+    USER ||--o{ ENROLLMENT : "enrolls in"
     USER ||--o{ AUDIT_LOG : "creates as admin"
     USER |o--o{ SMS_LOG : "receives"
+
+    %% ─── COURSES + ENROLLMENT ───
+    COURSE ||--o{ ENROLLMENT : "has students"
+    COURSE ||--o{ CLASS_SESSION : "schedules"
+    COURSE ||--o{ EXAM : "assigns"
+    ENROLLMENT ||--o{ PAYMENT : "pays for"
 
     %% ─── ACADEMICS ───
     USER ||--o{ ATTENDANCE : "logs"
@@ -73,6 +79,27 @@ erDiagram
         datetime createdAt
     }
 
+    COURSE {
+        uuid id PK
+        string name "e.g. 2026 Theory"
+        int year "e.g. 2026"
+        decimal monthlyFee "default fee per class type"
+        string description "nullable"
+        boolean isActive "default true"
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    ENROLLMENT {
+        uuid id PK
+        uuid userId FK "references User"
+        uuid courseId FK "references Course"
+        enum classType "ONLINE PHYSICAL_RATHNAPURA PHYSICAL_NUGEGODA"
+        boolean isActive "default true"
+        datetime createdAt
+        datetime updatedAt
+    }
+
     PAYMENT {
         uuid id PK
         decimal amount "Decimal 10 and 2 - never Float"
@@ -80,7 +107,7 @@ erDiagram
         string payhereId UK "nullable - PayHere txn ref"
         string paymentMonth "format YYYY-MM"
         string note "nullable - admin override reason"
-        uuid userId FK "references User"
+        uuid enrollmentId FK "references Enrollment"
         datetime createdAt
         datetime updatedAt
     }
@@ -98,6 +125,8 @@ erDiagram
         uuid id PK
         string title "class name"
         string description "nullable - topic details"
+        uuid courseId FK "references Course"
+        enum classType "nullable - null means all types"
         datetime date "scheduled date and time"
         int durationMinutes "default 60"
         string zoomLink "nullable - live class URL"
@@ -215,18 +244,21 @@ erDiagram
 
 ## 3. Enums
 
-| Enum | Values | Used By |
-|------|--------|---------|
-| `Role` | `SUPER_ADMIN`, `ADMIN`, `MARKER`, `STUDENT` | User |
-| `PaymentStatus` | `PENDING`, `SUCCESS`, `FAILED` | Payment |
-| `SubmissionStatus` | `UPLOADING`, `COMPLETED` | Submission |
-| `AttendanceSource` | `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL` | Attendance |
-| `SmsStatus` | `PENDING`, `SENT`, `FAILED` | SmsLog |
-| `ExamType` | `MCQ`, `WRITTEN`, `HYBRID` | Exam |
+| Enum                 | Values                                              | Used By                  |
+| -------------------- | --------------------------------------------------- | ------------------------ |
+| `Role`             | `SUPER_ADMIN`, `ADMIN`, `MARKER`, `STUDENT` | User                     |
+| `ClassType`        | `ONLINE`, `PHYSICAL`                            | Enrollment, ClassSession |
+| `PaymentStatus`    | `PENDING`, `SUCCESS`, `FAILED`                | Payment                  |
+| `SubmissionStatus` | `UPLOADING`, `COMPLETED`                        | Submission               |
+| `AttendanceSource` | `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`           | Attendance               |
+| `SmsStatus`        | `PENDING`, `SENT`, `FAILED`                   | SmsLog                   |
+| `ExamType`         | `MCQ`, `WRITTEN`, `HYBRID,INCLASS`            | Exam                     |
 
 ### Changes from original plan
+
 - **`AttendanceStatus` → `AttendanceSource`**: The original had `PRESENT`/`ABSENT`. But if a record exists, the student IS present. Absence is the *absence* of a record. What we actually need to track is *how* attendance was recorded (barcode scan vs Zoom webhook vs manual admin entry). This is far more useful for debugging and audit.
 - **`ExamType` added**: The plan mentions "online MCQ papers" and "essay/PDF exams" as separate features. The exam type determines which submission flow to use.
+- **`ClassType` added**: Students can enroll in the same course via different delivery modes (online, Rathnapura physical, Nugegoda physical). Each enrollment has its own monthly payment cycle.
 
 ---
 
@@ -250,7 +282,7 @@ model User {
   deletedAt   DateTime?                        // Soft delete — null means active
 
   // Relations
-  payments          Payment[]
+  enrollments       Enrollment[]
   attendance        Attendance[]
   submissions       Submission[]
   mcqAnswers        McqAnswer[]
@@ -270,6 +302,7 @@ model User {
 ```
 
 **Design decisions:**
+
 - **`indexNumber`** — Auto-incrementing integer managed by Postgres. Formatted as `"LMS-0001"` at the application layer. This gives every user a stable, human-readable reference number for receipts, ID cards, and support calls. The UUID remains the internal primary key (safe for URLs, no enumeration).
 - **`nic`** — Sri Lankan National Identity Card. Unique-indexed. Nullable because not all roles require it (admins may not need one on file). Validated in Zod: accepts old format (`982345678V`) or new format (`200012345678`).
 - **`address` / `city`** — Kept as atomic fields directly on User (not a separate table). For a single-institute system with ~1,200 students, a normalized Address table would add a JOIN to every student fetch for zero benefit. Nullable because staff/markers may not need addresses.
@@ -294,6 +327,7 @@ model RefreshToken {
 ```
 
 **Why a separate table?**
+
 - The plan specifies JWT refresh token rotation (§1, JWT Expiration Trap). Storing tokens in a DB table allows:
   - **Token revocation** on logout (delete the row).
   - **Family detection** — if a stolen refresh token is reused, revoke the entire family.
@@ -317,10 +351,76 @@ model IdempotencyRecord {
 ```
 
 **Changes from plan:**
+
 - `route` field added — same idempotency key could theoretically be used across different endpoints. Scoping by route prevents cross-endpoint collisions.
 - `@@index([createdAt])` — idempotency records are ephemeral. A BullMQ job should clean up records older than 24 hours.
 
-### 4.4 Payment
+### 4.4 Course (New)
+
+```prisma
+model Course {
+  id          String    @id @default(uuid())
+  name        String                           // e.g., "2026 Theory", "2026 Revision"
+  year        Int                              // Academic year
+  description String?
+  monthlyFee  Decimal   @db.Decimal(10, 2)     // Default fee (can vary by class type)
+  isActive    Boolean   @default(true)
+
+  // Relations
+  enrollments   Enrollment[]
+  classSessions ClassSession[]
+  exams         Exam[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, year])                       // No duplicate course names per year
+  @@index([year])
+  @@index([isActive])
+}
+```
+
+**Design decisions:**
+
+- **`name` + `year` unique** — Prevents creating "2026 Theory" twice.
+- **`monthlyFee`** — Default fee for the course. The actual amount on each Payment can differ (discounts, overrides).
+- **`isActive`** — Boolean here instead of `deletedAt` because courses are never "deleted" — they just stop accepting enrollments for the next year.
+
+### 4.5 Enrollment (New)
+
+```prisma
+model Enrollment {
+  id        String    @id @default(uuid())
+  classType ClassType                          // ONLINE, PHYSICAL_RATHNAPURA, PHYSICAL_NUGEGODA
+  isActive  Boolean   @default(true)           // Can be deactivated if student leaves
+
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  // Relations
+  payments  Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId, classType])       // One enrollment per student per course per class type
+  @@index([userId])
+  @@index([courseId])
+  @@index([classType])
+}
+```
+
+**Why Enrollment is needed:**
+
+- A student can enroll in **multiple courses**: e.g., "2026 Theory" (Online) + "2026 Revision" (Nugegoda Physical).
+- Each enrollment is independently payable — paying for "2026 Theory" does NOT grant access to "2026 Revision".
+- `@@unique([userId, courseId, classType])` — A student can enroll in the same course via different delivery modes (e.g., both online and physical), but cannot duplicate the exact same enrollment.
+- **Access control**: A student can only view class sessions and videos for courses they have an **active enrollment with a paid current month**.
+
+### 4.6 Payment
 
 ```prisma
 model Payment {
@@ -331,37 +431,43 @@ model Payment {
   paymentMonth String                           // Format: "2026-05"
   note         String?                          // Admin notes for manual overrides
 
-  userId       String
-  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollmentId String
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([userId, paymentMonth])             // One payment per student per month
-  @@index([userId])
+  @@unique([enrollmentId, paymentMonth])        // One payment per enrollment per month
+  @@index([enrollmentId])
   @@index([status])
   @@index([paymentMonth])
 }
 ```
 
-**Critical changes:**
-- **`Decimal` instead of `Float`** — The original plan used `Float`. This is a serious bug in financial systems. `Float` has IEEE 754 rounding errors (`0.1 + 0.2 = 0.30000000000000004`). `Decimal(10,2)` stores exact monetary values. Non-negotiable for a payment system.
-- **`@@unique([userId, paymentMonth])`** — Enforces at the DB level that a student can only have one payment per month. Prevents duplicates even if the application layer has bugs.
-- **`note` field** — When Super Admin overrides a payment status, the audit trail needs a reason.
+**Critical changes from previous version:**
 
-### 4.5 ClassSession
+- **`enrollmentId` instead of `userId`** — Payment is now tied to a specific enrollment (student + course + class type), not just a student. This means a student enrolled in two courses has two independent payment tracks.
+- **`@@unique([enrollmentId, paymentMonth])`** — One payment per enrollment per month. A student enrolled in "2026 Theory" and "2026 Revision" will have separate payment records for each.
+- To query "all payments for student X": `JOIN Enrollment ON enrollment.userId = X`.
+- To check "has student X paid for Theory this month?": `WHERE enrollment.userId = X AND enrollment.courseId = theoryId AND paymentMonth = '2026-05' AND status = 'SUCCESS'`.
+
+### 4.7 ClassSession
 
 ```prisma
 model ClassSession {
-  id              String    @id @default(uuid())
+  id              String     @id @default(uuid())
   title           String
   description     String?
+  classType       ClassType?                    // Null = available to all class types
   date            DateTime
-  durationMinutes Int       @default(60)
+  durationMinutes Int        @default(60)
   zoomLink        String?
-  zoomMeetingId   String?                      // For webhook matching
+  zoomMeetingId   String?                       // For webhook matching
 
-  deletedAt       DateTime?                    // Soft delete
+  courseId        String
+  course          Course     @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  deletedAt       DateTime?                     // Soft delete
 
   attendance      Attendance[]
   videoRecordings VideoRecording[]
@@ -369,17 +475,19 @@ model ClassSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([courseId])
+  @@index([courseId, classType])
   @@index([date])
   @@index([deletedAt])
 }
 ```
 
 **Changes:**
+
+- **`courseId`** — Every class session now belongs to a course. This ties classes to "2026 Theory" or "2026 Revision".
+- **`classType` (nullable)** — If `null`, the session is available to ALL enrolled students regardless of their class type (e.g., a shared online session). If set to `PHYSICAL_RATHNAPURA`, only students enrolled with that class type should see it.
 - `durationMinutes` — Needed for the schedule display. Not all classes are the same length.
-- `zoomMeetingId` — When a Zoom webhook arrives, it contains the meeting ID, not a URL. We need this to match the webhook to the correct class session.
-- `description` — Optional context about the class topic.
-- `@@index([date])` — Students query "upcoming classes" sorted by date constantly.
-- `@@index([deletedAt])` — The `WHERE deletedAt IS NULL` filter runs on every query.
+- `zoomMeetingId` — When a Zoom webhook arrives, it contains the meeting ID. We need this to match the webhook to the correct class session.
 
 ### 4.6 Attendance
 
@@ -406,6 +514,7 @@ model Attendance {
 ```
 
 **Key design decisions:**
+
 - **`source` instead of `status`** — A record existing = PRESENT. No record = ABSENT. What matters is *how* attendance was logged (barcode scan, Zoom webhook, or manual admin entry).
 - **`lastSeenAt`** — Solves the Zoom webhook storm (plan §10). When a student reconnects 45 times, the `upsert` just updates `lastSeenAt` instead of creating duplicates.
 - **`onDelete: Restrict`** — Prevents the accidental cascade delete described in plan §12. You cannot delete a ClassSession that has attendance records.
@@ -444,6 +553,9 @@ model Exam {
   totalMarks  Int       @default(100)          // Maximum marks for this exam
   isPublished Boolean   @default(false)        // Results published?
 
+  courseId     String
+  course       Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
   deletedAt   DateTime?                        // Soft delete
 
   submissions       Submission[]
@@ -453,6 +565,7 @@ model Exam {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([courseId])
   @@index([startTime])
   @@index([endTime])
   @@index([deletedAt])
@@ -461,6 +574,8 @@ model Exam {
 ```
 
 **Changes:**
+
+- **`courseId`** — Every exam now belongs to a course. "2026 Theory" students only see Theory exams.
 - **`type ExamType`** — Distinguishes MCQ, WRITTEN (PDF upload), and HYBRID (both). Determines which submission flow the frontend uses.
 - **`totalMarks`** — Markers need to know the maximum. Percentage calculation needs this.
 - **`isPublished`** — Controls whether students can see their results. Super Admin flips this to `true` after all marking is done, which triggers the SSE broadcast.
@@ -523,19 +638,23 @@ model McqAnswer {
 ```
 
 **Why these models are needed:**
+
 - The plan explicitly mentions "online MCQ papers" as a core feature. The original schema had no MCQ support — it only supported PDF upload/download.
 
 **Multi-select design (multiple correct answers):**
+
 - `McqOption.isCorrect` — Multiple options per question can be `true`. Example: *"Which are prime numbers? A) 2 B) 4 C) 7 D) 9"* → Both A and C are correct.
 - `McqAnswer` is a **join table** — one row per selected option per student per question. If a student selects options A and C, that's 2 rows in `McqAnswer`.
 - `@@unique([userId, questionId, selectedOptionId])` — Prevents selecting the same option twice, but allows selecting multiple different options for the same question.
 
 **Cascade rules:**
+
 - `McqOption.onDelete: Cascade` on the question FK — This is the ONE exception to our "no cascade" rule. If a question is deleted (before the exam starts), its options are meaningless without it.
 - `McqQuestion.onDelete: Restrict` on the exam FK — Cannot delete questions that have student answers.
 - `McqAnswer.selectedOption onDelete: Restrict` — Cannot delete an option that students have selected.
 
 **Auto-grading logic (service layer):**
+
 ```
 For each question:
   correctSet  = { optionId WHERE isCorrect = true }
@@ -574,6 +693,7 @@ model Submission {
 ```
 
 **Changes:**
+
 - **`feedback`** — Markers should be able to leave comments, not just a number.
 - **`gradedAt`** — Timestamp of when the marks were assigned. Useful for audit and dispute resolution.
 - **`@@index([status])`** — Admin queries like "show all UPLOADING submissions" need this.
@@ -622,6 +742,7 @@ model AuditLog {
 ```
 
 **Changes:**
+
 - **`targetType`** — Without this, `targetId` is meaningless. Is it a User ID? A Payment ID? Now you can filter: "show all changes to payments."
 - **`metadata Json?`** — For critical changes (role change, payment override), store the before/after values. Example: `{ "before": "STUDENT", "after": "ADMIN" }`. This is forensic-level audit.
 - **`@@index([createdAt])`** — Audit logs are queried by date range for monthly reports.
@@ -650,6 +771,7 @@ model SmsLog {
 ```
 
 **Changes:**
+
 - `errorDetail` — When SMS fails, store the reason for debugging.
 - `Decimal` for cost — same reasoning as Payment.
 - `onDelete: SetNull` — If a user is soft-deleted, their SMS history should remain for accounting. The FK becomes null but the log survives.
@@ -658,23 +780,27 @@ model SmsLog {
 
 ## 5. Cascade Rules Summary
 
-| Parent | Child | onDelete | Reason |
-|--------|-------|----------|--------|
-| User → Payment | Restrict | Cannot delete a user who has payment records |
-| User → Attendance | Restrict | Attendance history must survive |
-| User → Submission | Restrict | Exam submissions are permanent records |
-| User → RefreshToken | Restrict | Tokens cleaned up separately |
-| User → AuditLog | Restrict | Audit trail is sacrosanct |
-| User → MarkerAssignment | Restrict | Assignment history matters |
-| User → SmsLog | SetNull | SMS history survives, FK nulled |
-| ClassSession → Attendance | Restrict | Cannot delete class with attendance records |
-| ClassSession → VideoRecording | Restrict | Cannot delete class with videos |
-| Exam → Submission | Restrict | Cannot delete exam with submissions |
-| Exam → MarkerAssignment | Restrict | Cannot delete exam with markers assigned |
-| Exam → McqQuestion | Restrict | Cannot delete exam with questions that have answers |
-| McqQuestion → McqOption | Cascade | Options are meaningless without their question |
-| McqQuestion → McqAnswer | Restrict | Cannot delete question with student answers |
-| McqOption → McqAnswer | Restrict | Cannot delete an option that students have selected |
+| Parent                         | Child    | onDelete                                            | Reason |
+| ------------------------------ | -------- | --------------------------------------------------- | ------ |
+| User → Enrollment             | Restrict | Cannot delete a user who has enrollments            |        |
+| User → Attendance             | Restrict | Attendance history must survive                     |        |
+| User → Submission             | Restrict | Exam submissions are permanent records              |        |
+| User → RefreshToken           | Restrict | Tokens cleaned up separately                        |        |
+| User → AuditLog               | Restrict | Audit trail is sacrosanct                           |        |
+| User → MarkerAssignment       | Restrict | Assignment history matters                          |        |
+| User → SmsLog                 | SetNull  | SMS history survives, FK nulled                     |        |
+| Course → Enrollment           | Restrict | Cannot delete course with enrolled students         |        |
+| Course → ClassSession         | Restrict | Cannot delete course with scheduled classes         |        |
+| Course → Exam                 | Restrict | Cannot delete course with exams                     |        |
+| Enrollment → Payment          | Restrict | Cannot delete enrollment with payment records       |        |
+| ClassSession → Attendance     | Restrict | Cannot delete class with attendance records         |        |
+| ClassSession → VideoRecording | Restrict | Cannot delete class with videos                     |        |
+| Exam → Submission             | Restrict | Cannot delete exam with submissions                 |        |
+| Exam → MarkerAssignment       | Restrict | Cannot delete exam with markers assigned            |        |
+| Exam → McqQuestion            | Restrict | Cannot delete exam with questions that have answers |        |
+| McqQuestion → McqOption       | Cascade  | Options are meaningless without their question      |        |
+| McqQuestion → McqAnswer       | Restrict | Cannot delete question with student answers         |        |
+| McqOption → McqAnswer         | Restrict | Cannot delete an option that students have selected |        |
 
 ---
 
@@ -682,24 +808,31 @@ model SmsLog {
 
 ### Query-Driven Indexes
 
-| Index | Query Pattern |
-|-------|--------------|
-| `User.indexNumber` | Unique constraint — human-readable lookup ("LMS-0042") |
-| `User.email` | Login lookup |
-| `User.nic` | Admin verification during registration |
-| `User.barcode` | Barcode scan attendance |
-| `User.role` | Admin dashboard user filtering |
-| `Payment(userId, paymentMonth)` | Unique constraint + "has student paid for May?" |
-| `Payment.status` | "Show all pending payments" |
-| `ClassSession.date` | "Upcoming classes" sorted by date |
-| `ClassSession.deletedAt` | Filter out soft-deleted in every query |
-| `Attendance(userId, classSessionId)` | Unique constraint + upsert on webhook |
-| `Exam.startTime` / `Exam.endTime` | "Currently active exams" time-range query |
-| `Submission(userId, examId)` | Unique constraint + "has student submitted?" |
-| `AuditLog(targetType, targetId)` | "All changes to this entity" |
-| `AuditLog.createdAt` | Date-range audit reports |
-| `RefreshToken.expiresAt` | Cleanup job: `DELETE WHERE expiresAt < NOW()` |
-| `IdempotencyRecord.createdAt` | Cleanup job: `DELETE WHERE createdAt < NOW() - 24h` |
+| Index                                       | Query Pattern                                                |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `User.indexNumber`                        | Unique constraint — human-readable lookup ("LMS-0042")      |
+| `User.email`                              | Login lookup                                                 |
+| `User.nic`                                | Admin verification during registration                       |
+| `User.barcode`                            | Barcode scan attendance                                      |
+| `User.role`                               | Admin dashboard user filtering                               |
+| `Course(name, year)`                      | Unique constraint — no duplicate course names per year      |
+| `Course.isActive`                         | Filter active courses for enrollment                         |
+| `Enrollment(userId, courseId, classType)` | Unique constraint — one enrollment per type                 |
+| `Enrollment.userId`                       | "Show all enrollments for student X"                         |
+| `Enrollment.courseId`                     | "Show all students in this course"                           |
+| `Payment(enrollmentId, paymentMonth)`     | Unique constraint + "has this enrollment been paid for May?" |
+| `Payment.status`                          | "Show all pending payments"                                  |
+| `ClassSession.courseId`                   | "All classes for this course"                                |
+| `ClassSession(courseId, classType)`       | "All Nugegoda physical classes for Theory"                   |
+| `ClassSession.date`                       | "Upcoming classes" sorted by date                            |
+| `ClassSession.deletedAt`                  | Filter out soft-deleted in every query                       |
+| `Attendance(userId, classSessionId)`      | Unique constraint + upsert on webhook                        |
+| `Exam.startTime` / `Exam.endTime`       | "Currently active exams" time-range query                    |
+| `Submission(userId, examId)`              | Unique constraint + "has student submitted?"                 |
+| `AuditLog(targetType, targetId)`          | "All changes to this entity"                                 |
+| `AuditLog.createdAt`                      | Date-range audit reports                                     |
+| `RefreshToken.expiresAt`                  | Cleanup job:`DELETE WHERE expiresAt < NOW()`               |
+| `IdempotencyRecord.createdAt`             | Cleanup job:`DELETE WHERE createdAt < NOW() - 24h`         |
 
 ---
 
@@ -707,34 +840,36 @@ model SmsLog {
 
 These constraints can't be expressed purely in the schema. The service layer must enforce them:
 
-| Rule | Enforcement |
-|------|-------------|
-| At least one `McqOption` per question must have `isCorrect = true` | Service-level validation on exam creation |
-| `Exam.endTime` must be after `Exam.startTime` | Zod schema validation |
-| `Submission` rejected if `server_time > exam.endTime` | Server-authoritative time check in service |
-| `MarkerAssignment.marker` must have role `MARKER` | Service checks `user.role` before creating |
-| `Attendance` via barcode requires user to have a non-null `barcode` | Service validates barcode existence |
-| `Payment.amount` must be positive | Zod schema: `z.number().positive()` |
+| Rule                                                                    | Enforcement                                  |
+| ----------------------------------------------------------------------- | -------------------------------------------- |
+| At least one `McqOption` per question must have `isCorrect = true`  | Service-level validation on exam creation    |
+| `Exam.endTime` must be after `Exam.startTime`                       | Zod schema validation                        |
+| `Submission` rejected if `server_time > exam.endTime`               | Server-authoritative time check in service   |
+| `MarkerAssignment.marker` must have role `MARKER`                   | Service checks `user.role` before creating |
+| `Attendance` via barcode requires user to have a non-null `barcode` | Service validates barcode existence          |
+| `Payment.amount` must be positive                                     | Zod schema:`z.number().positive()`         |
 
 ---
 
 ## 8. Cleanup Jobs (BullMQ)
 
-| Job | Schedule | Query |
-|-----|----------|-------|
-| Expire refresh tokens | Every 6 hours | `DELETE FROM RefreshToken WHERE expiresAt < NOW()` |
-| Expire idempotency records | Every 1 hour | `DELETE FROM IdempotencyRecord WHERE createdAt < NOW() - INTERVAL '24 hours'` |
-| Flag stale uploads | Every 30 min | `UPDATE Submission SET status = 'FAILED' WHERE status = 'UPLOADING' AND createdAt < NOW() - INTERVAL '2 hours'` |
+| Job                        | Schedule      | Query                                                                                                             |
+| -------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Expire refresh tokens      | Every 6 hours | `DELETE FROM RefreshToken WHERE expiresAt < NOW()`                                                              |
+| Expire idempotency records | Every 1 hour  | `DELETE FROM IdempotencyRecord WHERE createdAt < NOW() - INTERVAL '24 hours'`                                   |
+| Flag stale uploads         | Every 30 min  | `UPDATE Submission SET status = 'FAILED' WHERE status = 'UPLOADING' AND createdAt < NOW() - INTERVAL '2 hours'` |
 
 ---
 
 ## 9. Migration Strategy
 
 ### Initial Migration
+
 - Run `prisma migrate dev --name init` to create all tables at once.
 - This is a clean start — no existing data to worry about.
 
 ### Future Migrations (Post-Launch)
+
 - **Never rename columns** — add new column, migrate data, drop old column in separate deploys.
 - **Never drop columns** in a single step — the previous app version might still be reading it (during zero-downtime deploys).
 - **Always add columns as nullable first** — backfill data, then add `NOT NULL` constraint in a follow-up migration.
@@ -748,22 +883,24 @@ Prisma does not support PostgreSQL Row-Level Security natively. Access control i
 
 ### Access Matrix
 
-| Table | SUPER_ADMIN | ADMIN | MARKER | STUDENT |
-|-------|:-----------:|:-----:|:------:|:-------:|
-| **User** | CRUD + role change | Read all, activate/deactivate | Read own profile | Read own profile |
-| **Payment** | CRUD + override status | Read all, bulk upload | ❌ | Read own |
-| **ClassSession** | CRUD (soft delete) | Read all | Read all | Read non-deleted |
-| **Attendance** | Read all | Read all, scan barcode | Read own | Read own |
-| **VideoRecording** | CRUD | Read all | Read all | Read non-deleted |
-| **Exam** | CRUD (soft delete) | Read all | Read assigned exams | Read non-deleted, within time window |
-| **McqQuestion/Option** | CRUD (before exam starts) | ❌ | ❌ | Read during exam only |
-| **McqAnswer** | Read all (for grading reports) | ❌ | ❌ | Create own (during exam) |
-| **Submission** | Read all, publish results | Read all | Read + grade assigned | Create own, read own |
-| **MarkerAssignment** | CRUD | Read all | Read own | ❌ |
-| **AuditLog** | Read all | Read own | ❌ | ❌ |
-| **SmsLog** | Read all | Read all | ❌ | ❌ |
-| **RefreshToken** | (system-managed) | (system-managed) | (system-managed) | (system-managed) |
-| **IdempotencyRecord** | (system-managed) | (system-managed) | (system-managed) | (system-managed) |
+| Table                        |          SUPER_ADMIN          |             ADMIN             |        MARKER        |                    STUDENT                    |
+| ---------------------------- | :----------------------------: | :---------------------------: | :-------------------: | :--------------------------------------------: |
+| **User**               |       CRUD + role change       | Read all, activate/deactivate |   Read own profile   |                Read own profile                |
+| **Course**             |              CRUD              |           Read all           |       Read all       |                Read active only                |
+| **Enrollment**         |              CRUD              |       Create + Read all       |          ❌          |                    Read own                    |
+| **Payment**            |     CRUD + override status     |     Read all, bulk upload     |          ❌          |           Read own (via enrollment)           |
+| **ClassSession**       |       CRUD (soft delete)       |           Read all           |       Read all       |    Read non-deleted, enrolled courses only    |
+| **Attendance**         |            Read all            |    Read all, scan barcode    |       Read own       |                    Read own                    |
+| **VideoRecording**     |              CRUD              |           Read all           |       Read all       | Read non-deleted, enrolled + paid courses only |
+| **Exam**               |       CRUD (soft delete)       |           Read all           |  Read assigned exams  |    Read non-deleted, enrolled courses only    |
+| **McqQuestion/Option** |   CRUD (before exam starts)   |              ❌              |          ❌          |             Read during exam only             |
+| **McqAnswer**          | Read all (for grading reports) |              ❌              |          ❌          |            Create own (during exam)            |
+| **Submission**         |   Read all, publish results   |           Read all           | Read + grade assigned |              Create own, read own              |
+| **MarkerAssignment**   |              CRUD              |           Read all           |       Read own       |                       ❌                       |
+| **AuditLog**           |            Read all            |           Read own           |          ❌          |                       ❌                       |
+| **SmsLog**             |            Read all            |           Read all           |          ❌          |                       ❌                       |
+| **RefreshToken**       |        (system-managed)        |       (system-managed)       |   (system-managed)   |                (system-managed)                |
+| **IdempotencyRecord**  |        (system-managed)        |       (system-managed)       |   (system-managed)   |                (system-managed)                |
 
 ### Enforcement Pattern
 
@@ -781,15 +918,15 @@ export const getPayments = async (user: AuthUser): Promise<Payment[]> => {
 
 ### Key Restrictions
 
-| Restriction | How It's Enforced |
-|-------------|------------------|
-| Only SUPER_ADMIN can change roles | `role.middleware.ts` — `requireRole('SUPER_ADMIN')` on the route |
-| Only SUPER_ADMIN can override payments | Route-level role guard + idempotency middleware |
-| Students see exam papers only within time window | Service checks `server_time >= startTime && server_time <= endTime` |
-| Markers only see exams they're assigned to | Service JOINs `MarkerAssignment` to filter by `markerId` |
-| MCQ correct answers hidden from students | Service strips `isCorrect` from response during exam |
-| Soft-deleted records hidden from STUDENT role | Service appends `WHERE deletedAt IS NULL` for student queries |
-| ADMIN/MARKER never access AuditLog writes | Only services triggered by SUPER_ADMIN/ADMIN actions create audit entries |
+| Restriction                                      | How It's Enforced                                                         |
+| ------------------------------------------------ | ------------------------------------------------------------------------- |
+| Only SUPER_ADMIN can change roles                | `role.middleware.ts` — `requireRole('SUPER_ADMIN')` on the route     |
+| Only SUPER_ADMIN can override payments           | Route-level role guard + idempotency middleware                           |
+| Students see exam papers only within time window | Service checks `server_time >= startTime && server_time <= endTime`     |
+| Markers only see exams they're assigned to       | Service JOINs `MarkerAssignment` to filter by `markerId`              |
+| MCQ correct answers hidden from students         | Service strips `isCorrect` from response during exam                    |
+| Soft-deleted records hidden from STUDENT role    | Service appends `WHERE deletedAt IS NULL` for student queries           |
+| ADMIN/MARKER never access AuditLog writes        | Only services triggered by SUPER_ADMIN/ADMIN actions create audit entries |
 
 ---
 
@@ -799,33 +936,33 @@ The schema is in **Third Normal Form (3NF)** with documented pragmatic exception
 
 ### 1NF — Atomic Values
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| All fields contain single atomic values | ✅ | No comma-separated lists, no arrays for structured data |
-| No repeating groups | ✅ | MCQ options are a separate table, not JSON arrays |
-| Every row is uniquely identifiable | ✅ | UUID PK on every table |
+| Check                                   | Status | Notes                                                   |
+| --------------------------------------- | ------ | ------------------------------------------------------- |
+| All fields contain single atomic values | ✅     | No comma-separated lists, no arrays for structured data |
+| No repeating groups                     | ✅     | MCQ options are a separate table, not JSON arrays       |
+| Every row is uniquely identifiable      | ✅     | UUID PK on every table                                  |
 
 ### 2NF — No Partial Dependencies
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| No composite PKs in the schema | ✅ | All PKs are single-column UUIDs |
-| Composite unique constraints are not PKs | ✅ | e.g., `@@unique([userId, examId])` is a business constraint, not a key |
-| Every non-key column depends on the entire PK | ✅ | No partial dependencies exist |
+| Check                                         | Status | Notes                                                                   |
+| --------------------------------------------- | ------ | ----------------------------------------------------------------------- |
+| No composite PKs in the schema                | ✅     | All PKs are single-column UUIDs                                         |
+| Composite unique constraints are not PKs      | ✅     | e.g.,`@@unique([userId, examId])` is a business constraint, not a key |
+| Every non-key column depends on the entire PK | ✅     | No partial dependencies exist                                           |
 
 ### 3NF — No Transitive Dependencies
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| No field depends on another non-key field | ✅ | Example: `Payment.amount` depends on the payment itself, not on `userId` |
-| Derived data is not stored | ✅ | MCQ scores computed at runtime, not stored on McqAnswer |
-| Enums are DB-level, not lookup tables | ✅ Pragmatic | For small fixed sets (Role, PaymentStatus), Postgres enums are simpler than lookup tables. If values need to change at runtime, promote to a table. |
+| Check                                     | Status       | Notes                                                                                                                                               |
+| ----------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No field depends on another non-key field | ✅           | Example:`Payment.amount` depends on the payment itself, not on `userId`                                                                         |
+| Derived data is not stored                | ✅           | MCQ scores computed at runtime, not stored on McqAnswer                                                                                             |
+| Enums are DB-level, not lookup tables     | ✅ Pragmatic | For small fixed sets (Role, PaymentStatus), Postgres enums are simpler than lookup tables. If values need to change at runtime, promote to a table. |
 
 ### Documented Denormalizations
 
-| What | Why It's Acceptable |
-|------|--------------------|
-| `address` + `city` on User (not a separate Address table) | Single-institute system with ~1,200 users. A JOIN on every student fetch for zero cardinality benefit is wasteful. |
-| `AuditLog.metadata Json?` | Before/after snapshots are inherently unstructured (different shapes per action). JSON is the correct type here. |
-| `IdempotencyRecord.responseBody Json` | Caching arbitrary HTTP responses — structure varies per endpoint. |
-| `Exam.totalMarks` stored (vs. computed from McqQuestion.marks sum) | Written exams don't have McqQuestion rows. Storing it avoids branching logic on exam type. |
+| What                                                                 | Why It's Acceptable                                                                                                |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `address` + `city` on User (not a separate Address table)        | Single-institute system with ~1,200 users. A JOIN on every student fetch for zero cardinality benefit is wasteful. |
+| `AuditLog.metadata Json?`                                          | Before/after snapshots are inherently unstructured (different shapes per action). JSON is the correct type here.   |
+| `IdempotencyRecord.responseBody Json`                              | Caching arbitrary HTTP responses — structure varies per endpoint.                                                 |
+| `Exam.totalMarks` stored (vs. computed from McqQuestion.marks sum) | Written exams don't have McqQuestion rows. Storing it avoids branching logic on exam type.                         |
