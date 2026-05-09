@@ -11,6 +11,15 @@ All API responses must follow the standard response structure below.
 
 ---
 
+### Response Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `status` | `"success"` \| `"error"` | Indicates whether the request was successful or failed. |
+| `data` | `array` \| `object` \| `string` | Contains the response payload. |
+| `count` | `number` | Required only when `data` is an array. Represents the total number of items. |
+| `message` | `string` | Human-readable response message. |
+
 ### Standard Response Structure
 
 ```json
