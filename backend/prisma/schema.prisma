@@ -342,8 +342,12 @@ model SmsLog {
 model Permission {
   id String @id @default(uuid())
 
-  editStudent Boolean @default(false)
-  markStudent Boolean @default(false)
+  permissions Json
+  // Example:
+  // {
+  //   "editStudent": true,
+  //   "markStudent": false
+  // }
 
   userId String @unique
   user   User   @relation("UserPermission", fields: [userId], references: [id], onDelete: Cascade)
