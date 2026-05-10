@@ -9,9 +9,9 @@
 | Field | Value |
 |-------|-------|
 | **Current Phase** | Phase 0 — Project Setup |
-| **Last Updated** | 2026-05-09 |
-| **Last Completed Task** | Documentation scaffold (6 context documents) |
-| **Next Task** | Initialize backend and frontend projects |
+| **Last Updated** | 2026-05-10 |
+| **Last Completed Task** | Step 2 — Auth System (JWT) |
+| **Next Task** | Step 3 — Core Middleware (rate-limiting, idempotency, Redis config) |
 | **Blockers** | None |
 
 ---
@@ -40,14 +40,14 @@
 
 - [x] Create project documentation (`context/documents/` — 6 files)
 - [ ] Initialize Next.js frontend (`/frontend`) with TypeScript + Tailwind + App Router
-- [ ] Initialize Node.js backend (`/backend`) with TypeScript + Express
-- [ ] Configure Prisma with schema from plan document
+- [x] Initialize Node.js backend (`/backend`) with TypeScript + Express
+- [x] Configure Prisma with schema from plan document
 - [ ] Set up shared Zod schemas
 - [ ] Configure ESLint + Prettier for both projects
-- [ ] Create `.env.example` files with all required variables
+- [x] Create `.env.example` files with all required variables
 - [ ] Set up Redis connection config
-- [ ] Set up Pino logger
-- [ ] Set up global error handler
+- [x] Set up Pino logger
+- [x] Set up global error handler
 - [ ] Create base Axios instance (frontend)
 - [ ] Set up Zustand store skeleton (auth store)
 - [ ] Create base UI component library (Button, Input, Badge, Card, Modal, Toast)
@@ -69,10 +69,10 @@
 
 ### Tasks
 
-- [ ] Create `auth.routes.ts`, `auth.controller.ts`, `auth.service.ts`
-- [ ] Implement JWT access + refresh token flow
-- [ ] Create `verifyToken` middleware
-- [ ] Create `requireRole` middleware
+- [x] Create `auth.routes.ts`, `auth.controller.ts`, `auth.service.ts`
+- [x] Implement JWT access + refresh token flow
+- [x] Create `verifyToken` middleware
+- [x] Create `requireRole` middleware
 - [ ] Create `user.routes.ts`, `user.controller.ts`, `user.service.ts`
 - [ ] Implement user CRUD (Super Admin only for role changes)
 - [ ] Implement barcode assignment + validation
@@ -225,6 +225,10 @@
 | 2026-05-09 | Server-authoritative exam timers | Prevents time-traveler exploit where students manipulate system clocks |
 | 2026-05-09 | Zustand with BroadcastChannel | Prevents multi-tab overwrite bug during exams |
 | 2026-05-09 | Pino over console.log | Structured JSON logging searchable across auto-scaled instances |
+| 2026-05-10 | Hash refresh tokens before DB storage | If DB leaks, raw tokens are useless — SHA-256 hash stored, raw token only lives in the HTTP-only cookie |
+| 2026-05-10 | Refresh token reuse detection | On reuse, revoke ALL tokens for that user — protects against refresh token theft (silent rotation per plan §1) |
+| 2026-05-10 | Vague login error messages | `INVALID_CREDENTIALS` for both wrong email AND wrong password — prevents email enumeration attacks |
+| 2026-05-10 | Restrict refresh cookie path to `/api/auth` | Prevents the browser sending the refresh token on every API request — reduces attack surface |
 
 ---
 

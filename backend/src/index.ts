@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { errorHandler } from './middleware/error.middleware';
+import authRoutes from './routes/auth.routes';
 
 const app = express();
 
@@ -13,7 +14,7 @@ app.use(helmet());
 app.use(
   cors({
     origin: env.FRONTEND_URL,
-    credentials: true, // Allow HTTP-only cookies
+    credentials: true, // Required for HTTP-only cookies
   }),
 );
 
@@ -24,12 +25,13 @@ app.use(cookieParser());
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'success', data: { timestamp: new Date().toISOString() } });
 });
 
 // ─── API Routes ──────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+
 // Routes will be mounted here as they are implemented:
-// app.use('/api/auth', authRoutes);
 // app.use('/api/users', userRoutes);
 // app.use('/api/classes', classRoutes);
 // app.use('/api/attendance', attendanceRoutes);

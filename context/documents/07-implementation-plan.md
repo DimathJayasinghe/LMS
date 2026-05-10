@@ -113,7 +113,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 - [X] Implement `src/config/database.ts` — Prisma client singleton
 - [X] Run `prisma migrate dev` to create initial migration
 - [X] Run `prisma generate` to generate the typed client
-- [ ] Verify connection to Neon PostgreSQL (or local Postgres for dev)
+- [X] Verify connection to Neon PostgreSQL (or local Postgres for dev)
 
 ### Files to Implement
 
