@@ -13,12 +13,12 @@ All API responses must follow the standard response structure below.
 
 ### Response Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `status` | `"success"` \| `"error"` | Indicates whether the request was successful or failed. |
-| `data` | `array` \| `object` \| `string` | Contains the response payload. |
-| `count` | `number` | Required only when `data` is an array. Represents the total number of items. |
-| `message` | `string` | Human-readable response message. |
+| Property    | Type                                  | Description                                                                    |
+| ----------- | ------------------------------------- | ------------------------------------------------------------------------------ |
+| `status`  | `"success"` \| `"error"`          | Indicates whether the request was successful or failed.                        |
+| `data`    | `array` \| `object` \| `string` | Contains the response payload.                                                 |
+| `count`   | `number`                            | Required only when `data` is an array. Represents the total number of items. |
+| `message` | `string`                            | Human-readable response message.                                               |
 
 ### Standard Response Structure
 
@@ -30,7 +30,6 @@ All API responses must follow the standard response structure below.
   "message": "Request completed successfully"
 }
 ```
-
 
 ## Dependency Graph
 
@@ -85,7 +84,6 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ---
 
-
 ## Step 0 — Server Foundation ✅ DONE
 
 **Branch:** `feature/server-foundation`
@@ -105,16 +103,16 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ## Step 1 — Database + Prisma Schema
 
-**Branch:** 
+**Branch:**
 **Depends on:** Step 0
 **Objective:** Full Prisma schema from the plan doc, database connection, and first migration.
 
 ### Tasks
 
-- [ ] Write complete `prisma/schema.prisma` (all models, enums, relations from plan)
-- [ ] Implement `src/config/database.ts` — Prisma client singleton
-- [ ] Run `prisma migrate dev` to create initial migration
-- [ ] Run `prisma generate` to generate the typed client
+- [X] Write complete `prisma/schema.prisma` (all models, enums, relations from plan)
+- [X] Implement `src/config/database.ts` — Prisma client singleton
+- [X] Run `prisma migrate dev` to create initial migration
+- [X] Run `prisma generate` to generate the typed client
 - [ ] Verify connection to Neon PostgreSQL (or local Postgres for dev)
 
 ### Files to Implement
