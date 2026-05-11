@@ -9,26 +9,20 @@
 
 All API responses must follow the standard response structure below.
 
----
-
 ### Response Properties
 
-| Property    | Type                                  | Description                                                                    |
-| ----------- | ------------------------------------- | ------------------------------------------------------------------------------ |
-| `status`  | `"success"` \| `"error"`          | Indicates whether the request was successful or failed.                        |
-| `data`    | `array` \| `object` \| `string` | Contains the response payload.                                                 |
-| `count`   | `number`                            | Required only when `data` is an array. Represents the total number of items. |
-| `message` | `string`                            | Human-readable response message.                                               |
+| Property | Type | Description |
+| --- | --- | --- |
+| `status` | `"success"` \| `"error"` | Indicates whether the request was successful or failed. |
+| `data` | `array` \| `object` \| `string` \| `null` | Response payload. Optional on errors when no structured payload is needed. |
+| `count` | `number` | Required only when `data` is an array. Total items returned. |
+| `message` | `string` | Human-readable response message. |
+| `code` | `string` | Optional error code (only for `status: "error"`). |
 
-### Standard Response Structure
+### Standard Response Examples
 
 ```json
-{
-  "status": "success",
-  "data": {},
-  "count": 0,
-  "message": "Request completed successfully"
-}
+{ "status": "success", "data": {}, "message": "Request completed successfully" }
 ```
 
 ## Dependency Graph
@@ -137,11 +131,11 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ### Tasks
 
-- [ ] Implement `src/schemas/auth.schema.ts` — Zod schemas for login/register input
-- [ ] Implement `src/services/auth.service.ts` — password hashing (bcrypt), JWT sign/verify, refresh token rotation
-- [ ] Implement `src/controllers/auth.controller.ts` — extract credentials, call service, set cookies
-- [ ] Implement `src/routes/auth.routes.ts` — POST `/login`, `/register`, `/refresh`, `/logout`
-- [ ] Mount auth routes in `src/index.ts`
+- [X] Implement `src/schemas/auth.schema.ts` — Zod schemas for login/register input
+- [X] Implement `src/services/auth.service.ts` — password hashing (bcrypt), JWT sign/verify, refresh token rotation
+- [X] Implement `src/controllers/auth.controller.ts` — extract credentials, call service, set cookies
+- [X] Implement `src/routes/auth.routes.ts` — POST `/login`, `/register`, `/refresh`, `/logout`
+- [X] Mount auth routes in `src/index.ts`
 
 ### Endpoints
 
@@ -178,12 +172,12 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ### Tasks
 
-- [x] Implement `src/middleware/auth.middleware.ts` — `verifyToken` (extract JWT from cookie, verify, attach `req.user`)
-- [x] Implement `src/middleware/role.middleware.ts` — `requireRole(...roles)` (check `req.user.role` against allowed roles)
-- [x] Implement `src/middleware/validate.middleware.ts` — `validateBody(schema)` / `validateParams(schema)` / `validateQuery(schema)`
-- [x] Implement `src/middleware/idempotency.middleware.ts` — check/create `IdempotencyRecord` via Prisma
-- [x] Implement `src/config/redis.ts` — Redis client connection (needed for rate limiter)
-- [x] Add `express-rate-limit` with Redis store to `src/index.ts`
+- [X] Implement `src/middleware/auth.middleware.ts` — `verifyToken` (extract JWT from cookie, verify, attach `req.user`)
+- [X] Implement `src/middleware/role.middleware.ts` — `requireRole(...roles)` (check `req.user.role` against allowed roles)
+- [X] Implement `src/middleware/validate.middleware.ts` — `validateBody(schema)` / `validateParams(schema)` / `validateQuery(schema)`
+- [X] Implement `src/middleware/idempotency.middleware.ts` — check/create `IdempotencyRecord` via Prisma
+- [X] Implement `src/config/redis.ts` — Redis client connection (needed for rate limiter)
+- [X] Add `express-rate-limit` with Redis store to `src/index.ts`
 
 ### Files to Implement
 

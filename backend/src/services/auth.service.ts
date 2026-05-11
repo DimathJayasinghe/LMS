@@ -48,18 +48,15 @@ const parseDurationToSeconds = (duration: string): number => {
   return value * (multipliers[unit] ?? 0);
 };
 
+// in backend/src/services/auth.service.ts
 const signAccessToken = (payload: JwtPayload): string => {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
-  });
+  const expiresInSeconds = parseDurationToSeconds(env.JWT_ACCESS_EXPIRES_IN);
+  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: expiresInSeconds });
 };
 
 const signRefreshToken = (payload: JwtPayload): string => {
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expiresIn: env.JWT_REFRESH_EXPIRES_IN as any,
-  });
+  const expiresInSeconds = parseDurationToSeconds(env.JWT_REFRESH_EXPIRES_IN);
+  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: expiresInSeconds });
 };
 
 /**
