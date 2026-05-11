@@ -10,7 +10,7 @@
 |-------|-------|
 | **Current Phase** | Phase 0 — Project Setup |
 | **Last Updated** | 2026-05-11 |
-| **Last Completed Task** | Step 3 — Core Middleware (rate-limiting, idempotency, Redis) |
+| **Last Completed Task** | Docker setup (backend + postgres + redis) |
 | **Next Task** | Step 4 — User Management |
 | **Blockers** | None |
 
@@ -48,6 +48,7 @@
 - [x] Set up Redis connection config
 - [x] Set up Pino logger
 - [x] Set up global error handler
+- [x] Set up Docker (backend + postgres + redis)
 - [ ] Create base Axios instance (frontend)
 - [ ] Set up Zustand store skeleton (auth store)
 - [ ] Create base UI component library (Button, Input, Badge, Card, Modal, Toast)

@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      CHOKIDAR_USEPOLLING: "1"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    command: sh ./scripts/docker-dev.sh
