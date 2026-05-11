@@ -178,12 +178,12 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ### Tasks
 
-- [ ] Implement `src/middleware/auth.middleware.ts` — `verifyToken` (extract JWT from cookie, verify, attach `req.user`)
-- [ ] Implement `src/middleware/role.middleware.ts` — `requireRole(...roles)` (check `req.user.role` against allowed roles)
-- [ ] Implement `src/middleware/validate.middleware.ts` — `validateBody(schema)` / `validateParams(schema)` / `validateQuery(schema)`
-- [ ] Implement `src/middleware/idempotency.middleware.ts` — check/create `IdempotencyRecord` via Prisma
-- [ ] Implement `src/config/redis.ts` — Redis client connection (needed for rate limiter)
-- [ ] Add `express-rate-limit` with Redis store to `src/index.ts`
+- [x] Implement `src/middleware/auth.middleware.ts` — `verifyToken` (extract JWT from cookie, verify, attach `req.user`)
+- [x] Implement `src/middleware/role.middleware.ts` — `requireRole(...roles)` (check `req.user.role` against allowed roles)
+- [x] Implement `src/middleware/validate.middleware.ts` — `validateBody(schema)` / `validateParams(schema)` / `validateQuery(schema)`
+- [x] Implement `src/middleware/idempotency.middleware.ts` — check/create `IdempotencyRecord` via Prisma
+- [x] Implement `src/config/redis.ts` — Redis client connection (needed for rate limiter)
+- [x] Add `express-rate-limit` with Redis store to `src/index.ts`
 
 ### Files to Implement
 

@@ -1,4 +1,7 @@
-// Shared constants (limits, durations, etc.)
+// ─── Shared Constants ────────────────────────────────────────
+// All magic values live here. Nothing is hardcoded inline.
+
+// ─── Auth ────────────────────────────────────────────────────
 
 /** bcrypt salt rounds — 12 is a good balance between security and speed */
 export const BCRYPT_SALT_ROUNDS = 12;
@@ -15,5 +18,24 @@ export const COOKIE_OPTIONS = {
   path: '/',
 };
 
-/** Max login attempts per minute per IP before rate limiting */
-export const MAX_LOGIN_ATTEMPTS_PER_MINUTE = 10;
+// ─── Rate Limiting ───────────────────────────────────────────
+
+/** Global API rate limit: requests per window */
+export const RATE_LIMIT_GLOBAL_MAX = 100;
+
+/** Global rate limit window in milliseconds (1 minute) */
+export const RATE_LIMIT_GLOBAL_WINDOW_MS = 60 * 1000;
+
+/** Auth endpoints: stricter limit to prevent brute-force */
+export const RATE_LIMIT_AUTH_MAX = 20;
+
+/** Auth rate limit window in milliseconds (1 minute) */
+export const RATE_LIMIT_AUTH_WINDOW_MS = 60 * 1000;
+
+// ─── Idempotency ────────────────────────────────────────────
+
+/** HTTP header name for the client-provided idempotency key */
+export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
+
+/** How long to keep idempotency records before cleanup (24 hours in ms) */
+export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;

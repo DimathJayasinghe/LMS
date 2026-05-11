@@ -9,9 +9,9 @@
 | Field | Value |
 |-------|-------|
 | **Current Phase** | Phase 0 — Project Setup |
-| **Last Updated** | 2026-05-10 |
-| **Last Completed Task** | Step 2 — Auth System (JWT) |
-| **Next Task** | Step 3 — Core Middleware (rate-limiting, idempotency, Redis config) |
+| **Last Updated** | 2026-05-11 |
+| **Last Completed Task** | Step 3 — Core Middleware (rate-limiting, idempotency, Redis) |
+| **Next Task** | Step 4 — User Management |
 | **Blockers** | None |
 
 ---
@@ -45,7 +45,7 @@
 - [ ] Set up shared Zod schemas
 - [ ] Configure ESLint + Prettier for both projects
 - [x] Create `.env.example` files with all required variables
-- [ ] Set up Redis connection config
+- [x] Set up Redis connection config
 - [x] Set up Pino logger
 - [x] Set up global error handler
 - [ ] Create base Axios instance (frontend)
