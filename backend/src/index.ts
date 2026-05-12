@@ -8,6 +8,7 @@ import { connectRedis } from './config/redis';
 import { createRateLimiters } from './config/rate-limiter';
 import { errorHandler } from './middleware/error.middleware';
 import { createAuthRouter } from './routes/auth.routes';
+import { userRoutes } from './routes/user.routes';
 
 const app = express();
 
@@ -45,8 +46,8 @@ const bootstrap = async (): Promise<void> => {
   // ─── API Routes ──────────────────────────────────────────────
   app.use('/api/auth', createAuthRouter(authLimiter));
 
-  // Routes will be mounted here as they are implemented:
-  // app.use('/api/users', userRoutes);
+  // ─── User Management ─────────────────────────────────────────
+  app.use('/api/users', userRoutes);
   // app.use('/api/classes', classRoutes);
   // app.use('/api/attendance', attendanceRoutes);
   // app.use('/api/exams', examRoutes);
