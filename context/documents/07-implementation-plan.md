@@ -231,34 +231,43 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ---
 
-## Step 5 — Class Sessions
+## Step 5 — Classes + Class Sessions
 
 **Branch:** `feature/class-sessions`
 **Depends on:** Step 4
-**Objective:** CRUD for class sessions (with soft delete), Zoom link management.
+**Objective:** CRUD for classes (courses) and class sessions (lessons), with soft delete for sessions.
 
 ### Tasks
 
-- [ ] Implement `src/services/class.service.ts` — create, update, soft-delete, list, getById
+- [ ] Implement `src/schemas/class.schema.ts` — class (course) validation
+- [ ] Implement `src/schemas/class-session.schema.ts` — class session validation
+- [ ] Implement `src/services/class.service.ts` — create, update, list, getById
+- [ ] Implement `src/services/class-session.service.ts` — create, update, soft-delete, list, getById
 - [ ] Implement `src/controllers/class.controller.ts`
+- [ ] Implement `src/controllers/class-session.controller.ts`
 - [ ] Implement `src/routes/class.routes.ts`
+- [ ] Implement `src/routes/class-session.routes.ts`
 - [ ] Mount class routes in `src/index.ts`
 
 ### Endpoints
 
-| Method | Path                 | Roles             | Description           |
-| ------ | -------------------- | ----------------- | --------------------- |
-| POST   | `/api/classes`     | SUPER_ADMIN       | Create class session  |
-| GET    | `/api/classes`     | Any authenticated | List upcoming classes |
-| GET    | `/api/classes/:id` | Any authenticated | Get class detail      |
-| PATCH  | `/api/classes/:id` | SUPER_ADMIN       | Update class          |
-| DELETE | `/api/classes/:id` | SUPER_ADMIN       | Soft delete           |
+| Method | Path | Roles | Description |
+| ------ | ---- | ----- | ----------- |
+| POST | `/api/classes` | SUPER_ADMIN, ADMIN | Create a class (course). |
+| GET | `/api/classes` | Any authenticated | List classes. |
+| GET | `/api/classes/:classId` | Any authenticated | Get class detail. |
+| PATCH | `/api/classes/:classId` | SUPER_ADMIN, ADMIN | Update class (including active status). |
+| POST | `/api/classes/:classId/sessions` | SUPER_ADMIN, ADMIN | Create class session. |
+| GET | `/api/classes/:classId/sessions` | Any authenticated | List class sessions. |
+| GET | `/api/classes/:classId/sessions/:sessionId` | Any authenticated | Get class session detail. |
+| PATCH | `/api/classes/:classId/sessions/:sessionId` | SUPER_ADMIN, ADMIN | Update class session. |
+| DELETE | `/api/classes/:classId/sessions/:sessionId` | SUPER_ADMIN, ADMIN | Soft delete class session. |
 
 ### Acceptance Criteria
 
-- Deleted classes have `isDeleted: true`, not removed from DB
-- Students see only non-deleted classes
-- Super Admin sees all (with deleted flag visible)
+- Deleted class sessions have `deletedAt` set (not removed from DB)
+- Students see only non-deleted sessions
+- Super Admin sees all sessions (with deleted flag visible)
 
 ---
 

@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 1 — Auth & User Management |
-| **Last Updated** | 2026-05-12 |
-| **Last Completed Task** | Step 4 — User Management (backend) |
-| **Next Task** | Step 5 — Class Sessions |
+| **Current Phase** | Phase 2 — Class Management |
+| **Last Updated** | 2026-05-13 |
+| **Last Completed Task** | Step 5 — Classes + Class Sessions (backend) |
+| **Next Task** | Step 6 — Attendance |
 | **Blockers** | None |
 
 ---
@@ -22,7 +22,7 @@
 |-------|------|--------|-------------|
 | 0 | Project Setup | 🟡 In Progress | Repo init, package scaffolds, env config, Prisma schema, CI/CD skeleton |
 | 1 | Auth & User Management | 🟡 In Progress | JWT auth, role-based access, user CRUD, barcode assignment |
-| 2 | Class Management | ⬜ Not Started | Class sessions, attendance (barcode + Zoom webhook), video recordings |
+| 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | ⬜ Not Started | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | ⬜ Not Started | Marker assignment, grading UI, result publishing, SSE broadcast |
 | 5 | Payments | ⬜ Not Started | PayHere integration, idempotency, Excel bulk upload, payment dashboard |
@@ -68,6 +68,16 @@
 | `backend/src/controllers/user.controller.ts` | User management HTTP handlers |
 | `backend/src/routes/user.routes.ts` | User management API routes |
 | `backend/src/scripts/test-users.ts` | Smoke test for user management endpoints |
+| `backend/src/schemas/class.schema.ts` | Zod validation for class (course) endpoints |
+| `backend/src/schemas/class-session.schema.ts` | Zod validation for class session endpoints |
+| `backend/src/services/class.service.ts` | Class (course) CRUD logic |
+| `backend/src/services/class-session.service.ts` | Class session CRUD logic |
+| `backend/src/controllers/class.controller.ts` | Class (course) HTTP handlers |
+| `backend/src/controllers/class-session.controller.ts` | Class session HTTP handlers |
+| `backend/src/routes/class.routes.ts` | Class (course) API routes |
+| `backend/src/routes/class-session.routes.ts` | Class session API routes |
+| `backend/src/scripts/test-classes.ts` | Smoke test for class and session endpoints |
+| `context/api_endpoints/classes.endpoints.md` | Class and class session API documentation |
 
 ---
 
@@ -93,8 +103,8 @@
 
 ### Tasks
 
-- [ ] Create `class.routes.ts`, `class.controller.ts`, `class.service.ts`
-- [ ] Implement class session CRUD (with soft delete)
+- [x] Create `class.routes.ts`, `class.controller.ts`, `class.service.ts`
+- [x] Implement class session CRUD (with soft delete)
 - [ ] Create `attendance.routes.ts`, `attendance.controller.ts`, `attendance.service.ts`
 - [ ] Implement barcode scanning attendance endpoint
 - [ ] Implement Zoom webhook handler (upsert attendance)
@@ -236,6 +246,7 @@
 | 2026-05-10 | Vague login error messages | `INVALID_CREDENTIALS` for both wrong email AND wrong password — prevents email enumeration attacks |
 | 2026-05-10 | Restrict refresh cookie path to `/api/auth` | Prevents the browser sending the refresh token on every API request — reduces attack surface |
 | 2026-05-12 | Map `Role.ADMIN` as Super Admin, `Role.STAFF` as Admin | Prisma enum lacks `SUPER_ADMIN`; route guards follow this temporary mapping for Step 4 |
+| 2026-05-13 | Treat "classes" as courses; sessions are nested resources | Classes map to Course model; sessions live under `/api/classes/:classId/sessions` |
 
 ---
 
