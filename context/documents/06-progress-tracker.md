@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 0 — Project Setup |
-| **Last Updated** | 2026-05-11 |
-| **Last Completed Task** | Docker setup (backend + postgres + redis) |
-| **Next Task** | Step 4 — User Management |
+| **Current Phase** | Phase 1 — Auth & User Management |
+| **Last Updated** | 2026-05-12 |
+| **Last Completed Task** | Step 4 — User Management (backend) |
+| **Next Task** | Step 5 — Class Sessions |
 | **Blockers** | None |
 
 ---
@@ -21,7 +21,7 @@
 | Phase | Name | Status | Description |
 |-------|------|--------|-------------|
 | 0 | Project Setup | 🟡 In Progress | Repo init, package scaffolds, env config, Prisma schema, CI/CD skeleton |
-| 1 | Auth & User Management | ⬜ Not Started | JWT auth, role-based access, user CRUD, barcode assignment |
+| 1 | Auth & User Management | 🟡 In Progress | JWT auth, role-based access, user CRUD, barcode assignment |
 | 2 | Class Management | ⬜ Not Started | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | ⬜ Not Started | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | ⬜ Not Started | Marker assignment, grading UI, result publishing, SSE broadcast |
@@ -63,6 +63,11 @@
 | `context/documents/04-ai-workflow-rules.md` | Agent scoping and decision-making rules |
 | `context/documents/05-ui-context.md` | Design tokens, component conventions, layout patterns |
 | `context/documents/06-progress-tracker.md` | This file — the living progress document |
+| `backend/src/schemas/user.schema.ts` | Zod validation for user management endpoints |
+| `backend/src/services/user.service.ts` | User list, lookup, role, status, and barcode logic |
+| `backend/src/controllers/user.controller.ts` | User management HTTP handlers |
+| `backend/src/routes/user.routes.ts` | User management API routes |
+| `backend/src/scripts/test-users.ts` | Smoke test for user management endpoints |
 
 ---
 
@@ -74,9 +79,9 @@
 - [x] Implement JWT access + refresh token flow
 - [x] Create `verifyToken` middleware
 - [x] Create `requireRole` middleware
-- [ ] Create `user.routes.ts`, `user.controller.ts`, `user.service.ts`
-- [ ] Implement user CRUD (Super Admin only for role changes)
-- [ ] Implement barcode assignment + validation
+- [x] Create `user.routes.ts`, `user.controller.ts`, `user.service.ts`
+- [x] Implement user CRUD (Super Admin only for role changes)
+- [x] Implement barcode assignment + validation
 - [ ] Build login page (Next.js)
 - [ ] Build registration flow (pending → Admin approval)
 - [ ] Set up Zustand `useAuthStore` with cross-tab sync
@@ -230,6 +235,7 @@
 | 2026-05-10 | Refresh token reuse detection | On reuse, revoke ALL tokens for that user — protects against refresh token theft (silent rotation per plan §1) |
 | 2026-05-10 | Vague login error messages | `INVALID_CREDENTIALS` for both wrong email AND wrong password — prevents email enumeration attacks |
 | 2026-05-10 | Restrict refresh cookie path to `/api/auth` | Prevents the browser sending the refresh token on every API request — reduces attack surface |
+| 2026-05-12 | Map `Role.ADMIN` as Super Admin, `Role.STAFF` as Admin | Prisma enum lacks `SUPER_ADMIN`; route guards follow this temporary mapping for Step 4 |
 
 ---
 

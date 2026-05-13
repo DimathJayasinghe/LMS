@@ -71,7 +71,7 @@ export const validateQuery = (schema: ZodSchema) => {
       return;
     }
 
-    req.query = result.data as Record<string, string>;
+    Object.assign(req.query, result.data as Record<string, unknown>);
     next();
   };
 };
