@@ -65,8 +65,13 @@ export const generateBunnyStreamUrl = (
     .replace(/=+$/, '');
 
   // Build the full CDN URL — query-string format (not directory-based)
+  // Normalize: ensure the hostname always has an https:// protocol prefix.
+  const cdnBase = env.BUNNY_CDN_HOSTNAME.startsWith('http')
+    ? env.BUNNY_CDN_HOSTNAME
+    : `https://${env.BUNNY_CDN_HOSTNAME}`;
+
   const streamUrl =
-    `${env.BUNNY_CDN_HOSTNAME}${signaturePath}` +
+    `${cdnBase}${signaturePath}` +
     `?token=${token}` +
     `&expires=${expires}`;
 
