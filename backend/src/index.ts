@@ -9,6 +9,8 @@ import { createRateLimiters } from './config/rate-limiter';
 import { errorHandler } from './middleware/error.middleware';
 import { createAuthRouter } from './routes/auth.routes';
 import { userRoutes } from './routes/user.routes';
+import { classRoutes } from './routes/class.routes';
+import { attendanceRoutes } from './routes/attendance.routes';
 
 const app = express();
 
@@ -48,8 +50,8 @@ const bootstrap = async (): Promise<void> => {
 
   // ─── User Management ─────────────────────────────────────────
   app.use('/api/users', userRoutes);
-  // app.use('/api/classes', classRoutes);
-  // app.use('/api/attendance', attendanceRoutes);
+  app.use('/api/classes', classRoutes);
+  app.use('/api/attendance', attendanceRoutes);
   // app.use('/api/exams', examRoutes);
   // app.use('/api/submissions', submissionRoutes);
   // app.use('/api/payments', paymentRoutes);
