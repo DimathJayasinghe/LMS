@@ -11,6 +11,7 @@ import { createAuthRouter } from './routes/auth.routes';
 import { userRoutes } from './routes/user.routes';
 import { classRoutes } from './routes/class.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
+import { videoRoutes } from './routes/video.routes';
 
 const app = express();
 
@@ -52,10 +53,10 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/users', userRoutes);
   app.use('/api/classes', classRoutes);
   app.use('/api/attendance', attendanceRoutes);
+  app.use('/api/videos', videoRoutes);
   // app.use('/api/exams', examRoutes);
   // app.use('/api/submissions', submissionRoutes);
   // app.use('/api/payments', paymentRoutes);
-  // app.use('/api/videos', videoRoutes);
 
   // ─── Global Error Handler (must be last) ─────────────────────
   app.use(errorHandler);
