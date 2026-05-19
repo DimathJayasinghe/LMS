@@ -5,6 +5,26 @@
 
 ---
 
+## API Response Format Documentation
+
+All API responses must follow the standard response structure below.
+
+### Response Properties
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `status` | `"success"` \| `"error"` | Indicates whether the request was successful or failed. |
+| `data` | `array` \| `object` \| `string` \| `null` | Response payload. Optional on errors when no structured payload is needed. |
+| `count` | `number` | Required only when `data` is an array. Total items returned. |
+| `message` | `string` | Human-readable response message. |
+| `code` | `string` | Optional error code (only for `status: "error"`). |
+
+### Standard Response Examples
+
+```json
+{ "status": "success", "data": {}, "message": "Request completed successfully" }
+```
+
 ## Dependency Graph
 
 ```mermaid
@@ -77,17 +97,17 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ## Step 1 — Database + Prisma Schema
 
-**Branch:** `feature/database-setup`
+**Branch:**
 **Depends on:** Step 0
 **Objective:** Full Prisma schema from the plan doc, database connection, and first migration.
 
 ### Tasks
 
-- [ ] Write complete `prisma/schema.prisma` (all models, enums, relations from plan)
-- [ ] Implement `src/config/database.ts` — Prisma client singleton
-- [ ] Run `prisma migrate dev` to create initial migration
-- [ ] Run `prisma generate` to generate the typed client
-- [ ] Verify connection to Neon PostgreSQL (or local Postgres for dev)
+- [X] Write complete `prisma/schema.prisma` (all models, enums, relations from plan)
+- [X] Implement `src/config/database.ts` — Prisma client singleton
+- [X] Run `prisma migrate dev` to create initial migration
+- [X] Run `prisma generate` to generate the typed client
+- [X] Verify connection to Neon PostgreSQL (or local Postgres for dev)
 
 ### Files to Implement
 
@@ -111,11 +131,11 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ### Tasks
 
-- [ ] Implement `src/schemas/auth.schema.ts` — Zod schemas for login/register input
-- [ ] Implement `src/services/auth.service.ts` — password hashing (bcrypt), JWT sign/verify, refresh token rotation
-- [ ] Implement `src/controllers/auth.controller.ts` — extract credentials, call service, set cookies
-- [ ] Implement `src/routes/auth.routes.ts` — POST `/login`, `/register`, `/refresh`, `/logout`
-- [ ] Mount auth routes in `src/index.ts`
+- [X] Implement `src/schemas/auth.schema.ts` — Zod schemas for login/register input
+- [X] Implement `src/services/auth.service.ts` — password hashing (bcrypt), JWT sign/verify, refresh token rotation
+- [X] Implement `src/controllers/auth.controller.ts` — extract credentials, call service, set cookies
+- [X] Implement `src/routes/auth.routes.ts` — POST `/login`, `/register`, `/refresh`, `/logout`
+- [X] Mount auth routes in `src/index.ts`
 
 ### Endpoints
 
@@ -152,12 +172,12 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ### Tasks
 
-- [ ] Implement `src/middleware/auth.middleware.ts` — `verifyToken` (extract JWT from cookie, verify, attach `req.user`)
-- [ ] Implement `src/middleware/role.middleware.ts` — `requireRole(...roles)` (check `req.user.role` against allowed roles)
-- [ ] Implement `src/middleware/validate.middleware.ts` — `validateBody(schema)` / `validateParams(schema)` / `validateQuery(schema)`
-- [ ] Implement `src/middleware/idempotency.middleware.ts` — check/create `IdempotencyRecord` via Prisma
-- [ ] Implement `src/config/redis.ts` — Redis client connection (needed for rate limiter)
-- [ ] Add `express-rate-limit` with Redis store to `src/index.ts`
+- [X] Implement `src/middleware/auth.middleware.ts` — `verifyToken` (extract JWT from cookie, verify, attach `req.user`)
+- [X] Implement `src/middleware/role.middleware.ts` — `requireRole(...roles)` (check `req.user.role` against allowed roles)
+- [X] Implement `src/middleware/validate.middleware.ts` — `validateBody(schema)` / `validateParams(schema)` / `validateQuery(schema)`
+- [X] Implement `src/middleware/idempotency.middleware.ts` — check/create `IdempotencyRecord` via Prisma
+- [X] Implement `src/config/redis.ts` — Redis client connection (needed for rate limiter)
+- [X] Add `express-rate-limit` with Redis store to `src/index.ts`
 
 ### Files to Implement
 
@@ -211,34 +231,43 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ---
 
-## Step 5 — Class Sessions
+## Step 5 — Classes + Class Sessions
 
 **Branch:** `feature/class-sessions`
 **Depends on:** Step 4
-**Objective:** CRUD for class sessions (with soft delete), Zoom link management.
+**Objective:** CRUD for classes (courses) and class sessions (lessons), with soft delete for sessions.
 
 ### Tasks
 
-- [ ] Implement `src/services/class.service.ts` — create, update, soft-delete, list, getById
+- [ ] Implement `src/schemas/class.schema.ts` — class (course) validation
+- [ ] Implement `src/schemas/class-session.schema.ts` — class session validation
+- [ ] Implement `src/services/class.service.ts` — create, update, list, getById
+- [ ] Implement `src/services/class-session.service.ts` — create, update, soft-delete, list, getById
 - [ ] Implement `src/controllers/class.controller.ts`
+- [ ] Implement `src/controllers/class-session.controller.ts`
 - [ ] Implement `src/routes/class.routes.ts`
+- [ ] Implement `src/routes/class-session.routes.ts`
 - [ ] Mount class routes in `src/index.ts`
 
 ### Endpoints
 
-| Method | Path                 | Roles             | Description           |
-| ------ | -------------------- | ----------------- | --------------------- |
-| POST   | `/api/classes`     | SUPER_ADMIN       | Create class session  |
-| GET    | `/api/classes`     | Any authenticated | List upcoming classes |
-| GET    | `/api/classes/:id` | Any authenticated | Get class detail      |
-| PATCH  | `/api/classes/:id` | SUPER_ADMIN       | Update class          |
-| DELETE | `/api/classes/:id` | SUPER_ADMIN       | Soft delete           |
+| Method | Path | Roles | Description |
+| ------ | ---- | ----- | ----------- |
+| POST | `/api/classes` | SUPER_ADMIN, ADMIN | Create a class (course). |
+| GET | `/api/classes` | Any authenticated | List classes. |
+| GET | `/api/classes/:classId` | Any authenticated | Get class detail. |
+| PATCH | `/api/classes/:classId` | SUPER_ADMIN, ADMIN | Update class (including active status). |
+| POST | `/api/classes/:classId/sessions` | SUPER_ADMIN, ADMIN | Create class session. |
+| GET | `/api/classes/:classId/sessions` | Any authenticated | List class sessions. |
+| GET | `/api/classes/:classId/sessions/:sessionId` | Any authenticated | Get class session detail. |
+| PATCH | `/api/classes/:classId/sessions/:sessionId` | SUPER_ADMIN, ADMIN | Update class session. |
+| DELETE | `/api/classes/:classId/sessions/:sessionId` | SUPER_ADMIN, ADMIN | Soft delete class session. |
 
 ### Acceptance Criteria
 
-- Deleted classes have `isDeleted: true`, not removed from DB
-- Students see only non-deleted classes
-- Super Admin sees all (with deleted flag visible)
+- Deleted class sessions have `deletedAt` set (not removed from DB)
+- Students see only non-deleted sessions
+- Super Admin sees all sessions (with deleted flag visible)
 
 ---
 

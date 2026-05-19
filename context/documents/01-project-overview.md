@@ -57,7 +57,8 @@ The system is designed for **~1,200 registered students** with spikes of **1,200
 
 ### Super Admin Flows
 1. **Manage Users** — Create accounts, assign roles (Admin / Marker / Student), activate/deactivate.
-2. **Schedule Classes** — Create class sessions with date, Zoom link, and attach video recordings post-session.
+2. **Manage Classes** — Create classes (courses like Grade 8, 2025 A/L Theory) and schedule class sessions.
+3. **Schedule Sessions** — Create class sessions with date, Zoom link, and attach video recordings post-session.
 3. **Create Exams** — Upload paper PDF to R2, set start/end times, assign markers.
 4. **Publish Results** — Review marked submissions, publish batch results (triggers SSE + optional SMS).
 5. **Financial Overview** — View payment dashboards, override payment statuses, generate reports.
@@ -108,7 +109,9 @@ The following features are **explicitly excluded** from the initial release:
 | **SSE** | Server-Sent Events — one-way HTTP stream from server to client |
 | **Presigned URL** | Time-limited, pre-authenticated URL for direct client-to-cloud file transfer |
 | **Idempotency Key** | Client-generated UUID ensuring duplicate requests produce the same result |
-| **Soft Delete** | Setting an `isDeleted` timestamp instead of physically removing a database row |
+| **Class (Course)** | A paid class such as "Grade 8" or "2025 A/L Theory" that contains many class sessions |
+| **Class Session** | A scheduled lesson under a class, with date/time and optional Zoom link |
+| **Soft Delete** | Setting a `isDeleted` timestamp instead of physically removing a database row |
 | **Upsert** | Create-if-absent, update-if-exists database operation |
 | **HLS** | HTTP Live Streaming — adaptive bitrate video delivery in small chunks |
 | **PgBouncer** | Connection pooler sitting in front of PostgreSQL to manage concurrent connections |

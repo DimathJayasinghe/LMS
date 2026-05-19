@@ -1,2 +1,361 @@
-// Prisma schema — to be populated from plan document
-// See: context/plan/Whiteboard (DATABASE section)
+// Prisma schema — generated from context/documents/08-database-design.md
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  MARKER
+  STUDENT
+}
+
+enum ClassType {
+  ONLINE
+  PHYSICAL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum SubmissionStatus {
+  UPLOADING
+  COMPLETED
+}
+
+enum AttendanceSource {
+  BARCODE
+  ZOOM_WEBHOOK
+  MANUAL
+}
+
+enum SmsStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ExamType {
+  MCQ
+  WRITTEN
+  HYBRID
+  INCLASS
+}
+
+model User {
+  id          String   @id @default(uuid())
+  indexNumber Int      @unique @default(autoincrement())
+  email       String   @unique
+  name        String
+  nic         String?  @unique
+  phone       String?
+  address     String?
+  city        String?
+  password    String
+  barcode     String?  @unique
+  role        Role     @default(STUDENT)
+  deletedAt   DateTime?
+
+  enrollments       Enrollment[]
+  attendance        Attendance[]
+  submissions       Submission[]
+  auditLogs         AuditLog[]         @relation("AuditAdmin")
+  markerAssignments MarkerAssignment[] @relation("AssignedMarker")
+  permission        Permission?        @relation("UserPermission")
+  smsLogs           SmsLog[]
+  refreshTokens     RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([nic])
+  @@index([barcode])
+  @@index([role])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model IdempotencyRecord {
+  id           String   @id @default(uuid())
+  key          String   @unique
+  route        String
+  responseCode Int
+  responseBody Json
+  createdAt    DateTime @default(now())
+
+  @@index([key])
+  @@index([createdAt])
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  name        String
+  year        Int
+  description String?
+  monthlyFee  Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+
+  enrollments   Enrollment[]
+  classSessions ClassSession[]
+  exams         Exam[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, year])
+  @@index([year])
+  @@index([isActive])
+}
+
+model Enrollment {
+  id        String    @id @default(uuid())
+  classType ClassType
+  isActive  Boolean   @default(true)
+
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId, classType])
+  @@index([userId])
+  @@index([courseId])
+  @@index([classType])
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  amount       Decimal       @db.Decimal(10, 2)
+  status       PaymentStatus @default(PENDING)
+  payhereId    String?       @unique
+  paymentMonth String
+  note         String?
+
+  enrollmentId String
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([enrollmentId, paymentMonth])
+  @@index([enrollmentId])
+  @@index([status])
+  @@index([paymentMonth])
+}
+
+model ClassSession {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  classType       ClassType?
+  date            DateTime
+  durationMinutes Int       @default(60)
+  zoomLink        String?
+  zoomMeetingId   String?
+
+  courseId String
+  course   Course  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  deletedAt DateTime?
+
+  attendance      Attendance[]
+  videoRecordings VideoRecording[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([courseId, classType])
+  @@index([date])
+  @@index([deletedAt])
+}
+
+model Attendance {
+  id         String           @id @default(uuid())
+  source     AttendanceSource @default(BARCODE)
+  scannedAt  DateTime         @default(now())
+  lastSeenAt DateTime         @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  classSessionId String
+  classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, classSessionId])
+  @@index([userId])
+  @@index([classSessionId])
+}
+
+model VideoRecording {
+  id              String @id @default(uuid())
+  title           String
+  bunnyVideoId    String
+  durationSeconds Int?
+
+  classSessionId String
+  classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([classSessionId])
+}
+
+model Exam {
+  id          String   @id @default(uuid())
+  title       String
+  type        ExamType @default(WRITTEN)
+  paperPdfUrl String?
+  mcqPayload  Json?
+  startTime   DateTime
+  endTime     DateTime
+  totalMarks  Int      @default(100)
+  isPublished Boolean  @default(false)
+
+  courseId String
+  course   Course  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  deletedAt DateTime?
+
+  submissions       Submission[]
+  markerAssignments MarkerAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([deletedAt])
+  @@index([type])
+}
+
+model Submission {
+  id           String           @id @default(uuid())
+  status       SubmissionStatus @default(UPLOADING)
+  answerPdfUrl String?
+  answers      Json?
+  marks        Int?
+  feedback     String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Restrict)
+
+  submittedAt DateTime @default(now())
+  gradedAt    DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, examId])
+  @@index([userId])
+  @@index([examId])
+  @@index([status])
+}
+
+model MarkerAssignment {
+  id       String @id @default(uuid())
+
+  markerId String
+  marker   User   @relation("AssignedMarker", fields: [markerId], references: [id], onDelete: Restrict)
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Restrict)
+
+  assignedAt DateTime @default(now())
+
+  @@unique([markerId, examId])
+  @@index([markerId])
+  @@index([examId])
+}
+
+model AuditLog {
+  id          String  @id @default(uuid())
+  action      String
+  description String?
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+
+  adminId String
+  admin   User   @relation("AuditAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+
+
+model SmsLog {
+  id          String    @id @default(uuid())
+  phoneNumber String
+  message     String
+  status      SmsStatus @default(PENDING)
+  cost        Decimal?  @db.Decimal(6, 2)
+  errorDetail String?
+
+  userId String?
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+
+model Permission {
+  id String @id @default(uuid())
+
+  permissions Json
+  // Example:
+  // {
+  //   "editStudent": true,
+  //   "markStudent": false
+  // }
+
+  userId String @unique
+  user   User   @relation("UserPermission", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+
