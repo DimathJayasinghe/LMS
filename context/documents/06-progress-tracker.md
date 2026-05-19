@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 2 — Class Management |
-| **Last Updated** | 2026-05-13 |
-| **Last Completed Task** | Step 5 — Classes + Class Sessions (backend) |
-| **Next Task** | Step 6 — Attendance |
+| **Current Phase** | Phase 3 — Exam System |
+| **Last Updated** | 2026-05-19 |
+| **Last Completed Task** | Step 8 — Exam System (backend) |
+| **Next Task** | Step 9 — Submissions + Marking |
 | **Blockers** | None |
 
 ---
@@ -23,7 +23,7 @@
 | 0 | Project Setup | 🟡 In Progress | Repo init, package scaffolds, env config, Prisma schema, CI/CD skeleton |
 | 1 | Auth & User Management | 🟡 In Progress | JWT auth, role-based access, user CRUD, barcode assignment |
 | 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
-| 3 | Exam System | ⬜ Not Started | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
+| 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | ⬜ Not Started | Marker assignment, grading UI, result publishing, SSE broadcast |
 | 5 | Payments | ⬜ Not Started | PayHere integration, idempotency, Excel bulk upload, payment dashboard |
 | 6 | Notifications & Real-Time | ⬜ Not Started | SSE infrastructure, SMS via Notify.lk, BullMQ background jobs |
@@ -78,6 +78,9 @@
 | `backend/src/routes/class-session.routes.ts` | Class session API routes |
 | `backend/src/scripts/test-classes.ts` | Smoke test for class and session endpoints |
 | `context/api_endpoints/classes.endpoints.md` | Class and class session API documentation |
+| `backend/src/utils/r2.ts` | Cloudflare R2 presigned URL helper |
+| `backend/src/scripts/test-exams.ts` | Smoke test for exam endpoints |
+| `context/api_endpoints/exams.endpoints.md` | Exam API documentation |
 
 ---
 
@@ -120,12 +123,12 @@
 
 ### Tasks
 
-- [ ] Create `exam.routes.ts`, `exam.controller.ts`, `exam.service.ts`
-- [ ] Implement exam CRUD with R2 presigned URL generation
+- [x] Create `exam.routes.ts`, `exam.controller.ts`, `exam.service.ts`
+- [x] Implement exam CRUD with R2 presigned URL generation
 - [ ] Implement MCQ question model and answer engine
 - [ ] Create `submission.routes.ts`, `submission.controller.ts`, `submission.service.ts`
 - [ ] Implement multipart PDF upload with token refresh
-- [ ] Implement server-authoritative exam timer validation
+- [x] Implement server-authoritative exam timer validation
 - [ ] Build exam list page (student view)
 - [ ] Build exam taking page with countdown timer
 - [ ] Build MCQ exam component with localStorage auto-save
