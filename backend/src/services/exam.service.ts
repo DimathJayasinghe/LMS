@@ -85,6 +85,13 @@ const examDetailSelect = {
 	mcqPayload: true,
 } satisfies Prisma.ExamSelect;
 
+const normalizeExamDetail = (
+	exam: Prisma.ExamGetPayload<{ select: typeof examDetailSelect }>,
+): ExamDetail => ({
+	...exam,
+	mcqPayload: exam.mcqPayload ? (exam.mcqPayload as McqPayload) : null,
+});
+
 // ─── Helpers ───────────────────────────────────────────────
 
 const ensureCourseExists = async (courseId: string): Promise<void> => {
@@ -116,7 +123,8 @@ const validateMcqPayload = (payload: unknown): McqPayload => {
 		throw new AppError('INVALID_MCQ_PAYLOAD', 400, 'MCQ payload is invalid.');
 	}
 
-	const missingCorrect = parsed.data.questions.find(
+	const parsedPayload = parsed.data as McqPayload;
+	const missingCorrect = parsedPayload.questions.find(
 		(question) => !question.options.some((option) => option.isCorrect),
 	);
 
@@ -128,7 +136,7 @@ const validateMcqPayload = (payload: unknown): McqPayload => {
 		);
 	}
 
-	return parsed.data as McqPayload;
+	return parsedPayload;
 };
 
 const resolveMcqPayload = (
@@ -188,7 +196,7 @@ export const createExam = async (input: CreateExamInput): Promise<ExamDetail> =>
 	const mcqPayload = resolveMcqPayload(input.type, input.mcqPayload);
 	const paperPdfUrl = resolvePaperKey(input.type, input.paperPdfUrl);
 
-	return prisma.exam.create({
+	const created = await prisma.exam.create({
 		data: {
 			title: input.title,
 			type: input.type,
@@ -197,10 +205,12 @@ export const createExam = async (input: CreateExamInput): Promise<ExamDetail> =>
 			endTime: input.endTime,
 			totalMarks: input.totalMarks,
 			paperPdfUrl,
-			mcqPayload,
+			mcqPayload: mcqPayload ?? Prisma.JsonNull,
 		},
 		select: examDetailSelect,
 	});
+
+	return normalizeExamDetail(created);
 };
 
 export const listExams = async (query: ListExamsQuery, role: Role): Promise<ExamListItem[]> => {
@@ -281,7 +291,7 @@ export const updateExam = async (examId: string, input: UpdateExamInput): Promis
 	const mcqPayload = resolveMcqPayload(nextType, nextMcqPayload);
 	const paperPdfUrl = resolvePaperKey(nextType, nextPaperPdfUrl);
 
-	return prisma.exam.update({
+	const updated = await prisma.exam.update({
 		where: { id: examId },
 		data: {
 			title: input.title,
@@ -291,24 +301,28 @@ export const updateExam = async (examId: string, input: UpdateExamInput): Promis
 			endTime: input.endTime,
 			totalMarks: input.totalMarks,
 			paperPdfUrl,
-			mcqPayload,
+			mcqPayload: mcqPayload ?? Prisma.JsonNull,
 		},
 		select: examDetailSelect,
 	});
+
+	return normalizeExamDetail(updated);
 };
 
 export const deleteExam = async (examId: string): Promise<ExamDetail> => {
 	const existing = await ensureExamExists(examId);
 
 	if (existing.deletedAt) {
-		return existing;
+		return normalizeExamDetail(existing);
 	}
 
-	return prisma.exam.update({
+	const deleted = await prisma.exam.update({
 		where: { id: examId },
 		data: { deletedAt: new Date() },
 		select: examDetailSelect,
 	});
+
+	return normalizeExamDetail(deleted);
 };
 
 // ─── Paper Upload URL ──────────────────────────────────────

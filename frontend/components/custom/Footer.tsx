@@ -1,4 +1,5 @@
-import { Play , ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -50,7 +51,12 @@ function FooterColumn({ title , links } : {title : string , links : string[]}) {
   );
 }
 
-function SocialIcon({ children, href = "#" }) {
+type SocialIconProps = {
+  children: ReactNode;
+  href?: string;
+};
+
+function SocialIcon({ children, href = "#" }: SocialIconProps) {
   return (
     <a
       href={href}
@@ -61,7 +67,13 @@ function SocialIcon({ children, href = "#" }) {
   );
 }
 
-function ProductLogo({ name, color, children }) {
+type ProductLogoProps = {
+  name: string;
+  color?: string;
+  children?: ReactNode;
+};
+
+function ProductLogo({ name, color, children }: ProductLogoProps) {
   return (
     <span
       className="text-sm font-bold tracking-tight"
