@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   nginx:
     image: nginx:1.27-alpine
@@ -15,6 +13,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: lms-frontend-prod
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -29,6 +28,7 @@ services:
     restart: unless-stopped
 
   backend:
+    image: lms-backend-prod
     build:
       context: ./backend
       dockerfile: Dockerfile
