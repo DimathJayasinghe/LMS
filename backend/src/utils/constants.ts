@@ -47,3 +47,17 @@ export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
  * Long enough to watch a full lecture; short enough to limit replay attacks.
  */
 export const BUNNY_TOKEN_TTL_SECONDS = 4 * 60 * 60;
+
+// ─── Exams + R2 (Paper PDFs) ───────────────────────────────
+
+/** Allowed MIME type for exam paper uploads */
+export const EXAM_PDF_CONTENT_TYPE = 'application/pdf';
+
+/** Max upload size for exam PDFs (50 MB) */
+export const EXAM_PDF_MAX_SIZE_BYTES = 50 * 1024 * 1024;
+
+/** Presigned URL lifetime for uploads/downloads (15 minutes) */
+export const EXAM_PDF_URL_TTL_SECONDS = 15 * 60;
+
+/** R2 object key prefix for exam papers */
+export const EXAM_PDF_KEY_PREFIX = 'exams';

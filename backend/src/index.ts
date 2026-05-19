@@ -12,6 +12,7 @@ import { userRoutes } from './routes/user.routes';
 import { classRoutes } from './routes/class.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
+import { examRoutes } from './routes/exam.routes';
 
 const app = express();
 
@@ -54,7 +55,7 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/classes', classRoutes);
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/videos', videoRoutes);
-  // app.use('/api/exams', examRoutes);
+  app.use('/api/exams', examRoutes);
   // app.use('/api/submissions', submissionRoutes);
   // app.use('/api/payments', paymentRoutes);
 

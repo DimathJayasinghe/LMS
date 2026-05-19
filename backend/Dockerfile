@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN apt-get update -y \
 	&& apt-get install -y openssl \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN npm install
+RUN npm install --no-audit --no-fund
 
 COPY . .
 
