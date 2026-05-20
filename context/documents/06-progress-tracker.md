@@ -9,7 +9,7 @@
 | Field | Value |
 |-------|-------|
 | **Current Phase** | Phase 3 — Exam System |
-| **Last Updated** | 2026-05-19 |
+| **Last Updated** | 2026-05-20 |
 | **Last Completed Task** | Step 8 — Exam System (backend) |
 | **Next Task** | Step 9 — Submissions + Marking |
 | **Blockers** | None |
@@ -250,6 +250,7 @@
 | 2026-05-10 | Restrict refresh cookie path to `/api/auth` | Prevents the browser sending the refresh token on every API request — reduces attack surface |
 | 2026-05-12 | Map `Role.ADMIN` as Super Admin, `Role.STAFF` as Admin | Prisma enum lacks `SUPER_ADMIN`; route guards follow this temporary mapping for Step 4 |
 | 2026-05-13 | Treat "classes" as courses; sessions are nested resources | Classes map to Course model; sessions live under `/api/classes/:classId/sessions` |
+| 2026-05-20 | Accept R2 endpoint + legacy env keys | Align local env vars with R2 client configuration without renaming existing secrets |
 
 ---
 
