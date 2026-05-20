@@ -13,6 +13,7 @@ import { classRoutes } from './routes/class.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
+import { submissionRoutes } from './routes/submission.routes';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -57,7 +58,7 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/videos', videoRoutes);
   app.use('/api/exams', examRoutes);
-  // app.use('/api/submissions', submissionRoutes);
+  app.use('/api/submissions', submissionRoutes);
   // app.use('/api/payments', paymentRoutes);
 
   // ─── Global Error Handler (must be last) ─────────────────────

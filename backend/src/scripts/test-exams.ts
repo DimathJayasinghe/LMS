@@ -109,13 +109,14 @@ const requireEnv = (): void => {
   }
 };
 
-const hasR2Config = (): boolean =>
-  Boolean(
-    process.env.R2_ACCOUNT_ID &&
-      process.env.R2_ACCESS_KEY_ID &&
-      process.env.R2_SECRET_ACCESS_KEY &&
-      process.env.R2_BUCKET_NAME,
-  );
+const hasR2Config = (): boolean => {
+  const accessKey = process.env.R2_ACCESS_KEY_ID ?? process.env.R2_ACCESS_KEY;
+  const secretKey = process.env.R2_SECRET_ACCESS_KEY ?? process.env.R2_SECRET_KEY;
+  const endpoint = process.env.R2_ENDPOINT ?? '';
+  const accountId = process.env.R2_ACCOUNT_ID ?? '';
+
+  return Boolean(accessKey && secretKey && process.env.R2_BUCKET_NAME && (endpoint || accountId));
+};
 
 const runTests = async (): Promise<void> => {
   requireEnv();
