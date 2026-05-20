@@ -15,6 +15,7 @@ import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ─── Security ────────────────────────────────────────────────
 app.use(helmet());
