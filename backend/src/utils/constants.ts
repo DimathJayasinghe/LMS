@@ -61,3 +61,17 @@ export const EXAM_PDF_URL_TTL_SECONDS = 15 * 60;
 
 /** R2 object key prefix for exam papers */
 export const EXAM_PDF_KEY_PREFIX = 'exams';
+
+// ─── Submissions + Answers (R2 PDFs) ───────────────────────
+
+/** Allowed MIME type for answer PDF uploads */
+export const ANSWER_PDF_CONTENT_TYPE = 'application/pdf';
+
+/** Max upload size for answer PDFs (50 MB) */
+export const ANSWER_PDF_MAX_SIZE_BYTES = 50 * 1024 * 1024;
+
+/** Presigned URL lifetime for answer uploads/downloads (15 minutes) */
+export const ANSWER_PDF_URL_TTL_SECONDS = 15 * 60;
+
+/** R2 object key prefix for student answer PDFs */
+export const ANSWER_PDF_KEY_PREFIX = 'answers';
