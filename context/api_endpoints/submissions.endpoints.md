@@ -1,0 +1,254 @@
+# Submissions + Marking API Endpoints
+
+> Step 9 — Students submit answers, markers grade, admin publishes results.
+
+---
+
+## Endpoints Overview
+
+| Method | Path | Roles | Description |
+|--------|------|-------|-------------|
+| POST | `/api/submissions` | STUDENT | Start submission (get upload URL or submit MCQ) |
+| PATCH | `/api/submissions/:id/complete` | STUDENT | Mark PDF upload as complete |
+| GET | `/api/submissions/exam/:examId` | ADMIN, MARKER (assigned) | List submissions for an exam |
+| PATCH | `/api/submissions/:id/marks` | MARKER (assigned) | Submit marks (idempotent) |
+| POST | `/api/submissions/exam/:examId/publish` | ADMIN | Publish results for an exam |
+
+---
+
+## POST `/api/submissions`
+
+**Start Submission** — Students call this to begin their exam submission.
+
+- **MCQ exams**: Answers are submitted inline and auto-graded immediately
+- **WRITTEN exams**: Returns a presigned R2 upload URL for the answer PDF
+- **HYBRID exams**: MCQ answers inline + upload URL for written portion
+
+### Auth
+- Requires: `access_token` cookie
+- Role: `STUDENT`
+
+### Request Body
+
+```json
+{
+  "examId": "uuid",
+  "fileName": "my-answers.pdf",          // Required for WRITTEN/HYBRID
+  "contentType": "application/pdf",       // Required for WRITTEN/HYBRID
+  "fileSizeBytes": 5242880,              // Required for WRITTEN/HYBRID (max 50MB)
+  "answers": {                           // Required for MCQ/HYBRID
+    "q1": ["o1", "o3"],
+    "q2": ["o2"]
+  }
+}
+```
+
+### Success Response (201)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "submission": {
+      "id": "uuid",
+      "status": "UPLOADING",
+      "answerPdfUrl": "answers/examId/userId/file.pdf",
+      "answers": null,
+      "marks": null,
+      "feedback": null,
+      "examId": "uuid",
+      "userId": "uuid",
+      "submittedAt": "2026-05-20T08:00:00.000Z",
+      "gradedAt": null,
+      "updatedAt": "2026-05-20T08:00:00.000Z"
+    },
+    "uploadUrl": "https://r2-presigned-url...",
+    "uploadKey": "answers/examId/userId/file.pdf",
+    "uploadExpiresAt": "2026-05-20T08:15:00.000Z"
+  },
+  "message": "Submission started successfully."
+}
+```
+
+### Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `EXAM_NOT_FOUND` | 404 | Exam doesn't exist or is deleted |
+| `EXAM_NOT_STARTED` | 400 | Server time is before exam start |
+| `EXAM_ENDED` | 400 | Server time is after exam end |
+| `ALREADY_SUBMITTED` | 409 | Student already has a submission |
+| `MCQ_ANSWERS_REQUIRED` | 400 | MCQ/HYBRID exam but no answers provided |
+| `FILE_NAME_REQUIRED` | 400 | WRITTEN/HYBRID exam but no file name |
+| `INVALID_QUESTION_ID` | 400 | Answer references unknown question |
+| `INVALID_OPTION_ID` | 400 | Answer references unknown option |
+
+---
+
+## PATCH `/api/submissions/:id/complete`
+
+**Complete Upload** — Called after the browser finishes uploading the PDF to R2.
+
+### Auth
+- Requires: `access_token` cookie
+- Role: `STUDENT`
+
+### URL Params
+- `id` — Submission UUID
+
+### Success Response (200)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "status": "COMPLETED",
+    "answerPdfUrl": "answers/examId/userId/file.pdf",
+    "marks": null,
+    "feedback": null,
+    "submittedAt": "2026-05-20T08:00:00.000Z",
+    "gradedAt": null
+  },
+  "message": "Submission marked as complete."
+}
+```
+
+### Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `SUBMISSION_NOT_FOUND` | 404 | Submission doesn't exist |
+| `FORBIDDEN` | 403 | Not the student's own submission |
+| `EXAM_ENDED` | 400 | Exam window + grace period expired |
+
+---
+
+## GET `/api/submissions/exam/:examId`
+
+**List Submissions** — View all submissions for a specific exam.
+
+### Auth
+- Requires: `access_token` cookie
+- Role: `ADMIN` or `MARKER` (must be assigned to the exam)
+
+### URL Params
+- `examId` — Exam UUID
+
+### Query Params
+
+| Param | Type | Default | Options |
+|-------|------|---------|---------|
+| `status` | string | `all` | `all`, `UPLOADING`, `COMPLETED` |
+| `graded` | string | `all` | `all`, `graded`, `ungraded` |
+
+### Success Response (200)
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "status": "COMPLETED",
+      "answerPdfUrl": "https://presigned-download-url...",
+      "marks": 85,
+      "feedback": "Good work",
+      "submittedAt": "2026-05-20T08:00:00.000Z",
+      "gradedAt": "2026-05-20T10:00:00.000Z",
+      "user": {
+        "id": "uuid",
+        "name": "John Doe",
+        "email": "john@example.com",
+        "indexNumber": 42
+      }
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+## PATCH `/api/submissions/:id/marks`
+
+**Submit Marks** — Marker grades a specific submission.
+
+### Auth
+- Requires: `access_token` cookie
+- Role: `MARKER` (must be assigned to the exam)
+- Requires: `Idempotency-Key` header (UUID)
+
+### URL Params
+- `id` — Submission UUID
+
+### Request Body
+
+```json
+{
+  "marks": 85,
+  "feedback": "Good work on the essay section."
+}
+```
+
+### Success Response (200)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "status": "COMPLETED",
+    "marks": 85,
+    "feedback": "Good work on the essay section.",
+    "gradedAt": "2026-05-20T10:00:00.000Z"
+  },
+  "message": "Marks submitted successfully."
+}
+```
+
+### Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `SUBMISSION_NOT_FOUND` | 404 | Submission doesn't exist |
+| `MARKER_NOT_ASSIGNED` | 403 | Marker not assigned to this exam |
+| `SUBMISSION_INCOMPLETE` | 400 | Submission still uploading |
+| `MARKS_EXCEED_TOTAL` | 400 | Marks > exam.totalMarks |
+
+---
+
+## POST `/api/submissions/exam/:examId/publish`
+
+**Publish Results** — Makes marks visible to students.
+
+### Auth
+- Requires: `access_token` cookie
+- Role: `ADMIN` (Super Admin)
+
+### URL Params
+- `examId` — Exam UUID
+
+### Success Response (200)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "examId": "uuid",
+    "examTitle": "Physics Midterm",
+    "publishedAt": "2026-05-20T14:00:00.000Z",
+    "totalSubmissions": 120,
+    "gradedSubmissions": 118
+  },
+  "message": "Results published successfully."
+}
+```
+
+### Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `EXAM_NOT_FOUND` | 404 | Exam doesn't exist or is deleted |
+| `ALREADY_PUBLISHED` | 400 | Results already published |
+| `EXAM_STILL_ACTIVE` | 400 | Exam hasn't ended yet |
