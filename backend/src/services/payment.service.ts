@@ -170,7 +170,7 @@ const splitName = (fullName: string): { firstName: string; lastName: string } =>
 		return { firstName: parts[0] ?? 'Student', lastName: 'Student' };
 	}
 	return {
-		firstName: parts[0],
+		firstName: parts[0]!,
 		lastName: parts.slice(1).join(' '),
 	};
 };
@@ -490,8 +490,6 @@ const normalizePaymentMonth = (raw: unknown): string | null => {
 	return null;
 };
 
-const normalizeBulkRow = (raw: Record<string, unknown>): BulkPaymentRow | null => {
-	const resolveValue = (value: unknown): unknown => {
 const normalizeBulkRow = (raw: Record<string, any>): BulkPaymentRow | null => {
 	const resolveValue = (value: any): any => {
 		if (value === null || value === undefined) {
@@ -583,6 +581,9 @@ export const bulkUploadPayments = async (
 	}
 
 	const sheet = workbook.Sheets[sheetName];
+	if (!sheet) {
+		throw new AppError('BULK_UPLOAD_EMPTY', 400, 'Sheet not found.');
+	}
 	const rows = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
 
 	if (!rows.length) {
