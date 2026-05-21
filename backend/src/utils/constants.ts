@@ -75,3 +75,27 @@ export const ANSWER_PDF_URL_TTL_SECONDS = 15 * 60;
 
 /** R2 object key prefix for student answer PDFs */
 export const ANSWER_PDF_KEY_PREFIX = 'answers';
+
+// ─── Payments + PayHere ───────────────────────────────────
+
+/** PayHere checkout path appended to PAYHERE_BASE_URL */
+export const PAYHERE_CHECKOUT_PATH = '/pay/checkout';
+
+/** PayHere default currency code */
+export const PAYHERE_CURRENCY = 'LKR';
+
+/** Default country value for PayHere customer payload */
+export const PAYHERE_COUNTRY = 'Sri Lanka';
+
+/** PayHere status codes */
+export const PAYHERE_STATUS_SUCCESS = 2;
+export const PAYHERE_STATUS_PENDING = 0;
+export const PAYHERE_STATUS_CANCELED = -1;
+export const PAYHERE_STATUS_FAILED = -2;
+export const PAYHERE_STATUS_CHARGEDBACK = -3;
+
+/** Payment month format: YYYY-MM */
+export const PAYMENT_MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Max upload size for payment bulk upload files (5 MB) */
+export const PAYMENTS_BULK_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;

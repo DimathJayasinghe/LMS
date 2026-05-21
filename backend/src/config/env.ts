@@ -47,6 +47,15 @@ const envSchema = z.object({
   BUNNY_LIBRARY_ID: z.string().default(''),
   // The pull-zone CDN base URL, e.g. https://vz-xxxxxxxx.b-cdn.net
   BUNNY_CDN_HOSTNAME: z.string().default(''),
+
+  // PayHere (Payments)
+  // Optional at boot — validated at runtime when checkout is requested.
+  PAYHERE_MERCHANT_ID: z.string().default(''),
+  PAYHERE_MERCHANT_SECRET: z.string().default(''),
+  PAYHERE_BASE_URL: z.string().default('https://sandbox.payhere.lk'),
+  PAYHERE_RETURN_URL: z.string().default(''),
+  PAYHERE_CANCEL_URL: z.string().default(''),
+  PAYHERE_NOTIFY_URL: z.string().default(''),
 });
 
 // Fail fast — crash on boot if env is invalid
