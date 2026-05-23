@@ -34,6 +34,9 @@ export const registerSchema = z.object({
       'Invalid NIC format. Use old (9 digits + V/X) or new (12 digits)',
     )
     .optional(),
+
+  address: z.string().trim().max(500, 'Address must be under 500 characters').optional(),
+  city: z.string().trim().max(100, 'City must be under 100 characters').optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
