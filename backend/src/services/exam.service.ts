@@ -11,6 +11,7 @@ import {
 	type ListExamsQuery,
 	type UpdateExamInput,
 } from '@/schemas/exam.schema';
+import * as StreamService from '@/services/stream.service';
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -306,7 +307,21 @@ export const updateExam = async (examId: string, input: UpdateExamInput): Promis
 		select: examDetailSelect,
 	});
 
-	return normalizeExamDetail(updated);
+	const normalized = normalizeExamDetail(updated);
+
+	const timeChanged =
+		(input.startTime !== undefined && input.startTime.getTime() !== existing.startTime.getTime()) ||
+		(input.endTime !== undefined && input.endTime.getTime() !== existing.endTime.getTime());
+
+	await StreamService.broadcastExamControl({
+		examId,
+		courseId: normalized.courseId,
+		action: timeChanged ? 'time_changed' : 'updated',
+		startTime: normalized.startTime.toISOString(),
+		endTime: normalized.endTime.toISOString(),
+	});
+
+	return normalized;
 };
 
 export const deleteExam = async (examId: string): Promise<ExamDetail> => {
@@ -322,7 +337,15 @@ export const deleteExam = async (examId: string): Promise<ExamDetail> => {
 		select: examDetailSelect,
 	});
 
-	return normalizeExamDetail(deleted);
+	const normalized = normalizeExamDetail(deleted);
+
+	await StreamService.broadcastExamControl({
+		examId,
+		courseId: normalized.courseId,
+		action: 'deleted',
+	});
+
+	return normalized;
 };
 
 // ─── Paper Upload URL ──────────────────────────────────────

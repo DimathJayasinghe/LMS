@@ -10,6 +10,7 @@ import type {
   ListSubmissionsQuery,
   McqAnswersInput,
 } from '@/schemas/submission.schema';
+import * as StreamService from '@/services/stream.service';
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -126,6 +127,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
   select: {
     id: true; title: true; type: true; startTime: true; endTime: true;
     totalMarks: true; isPublished: true; deletedAt: true; mcqPayload: true;
+    courseId: true;
   };
 }>> => {
   const exam = await prisma.exam.findUnique({
@@ -133,6 +135,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
     select: {
       id: true, title: true, type: true, startTime: true, endTime: true,
       totalMarks: true, isPublished: true, deletedAt: true, mcqPayload: true,
+      courseId: true,
     },
   });
 
@@ -440,15 +443,24 @@ export const publishResults = async (examId: string): Promise<PublishResult> => 
     prisma.submission.count({ where: { examId, marks: { not: null } } }),
   ]);
 
+  const publishedAt = new Date();
+
   await prisma.exam.update({
     where: { id: examId },
     data: { isPublished: true },
   });
 
+  await StreamService.broadcastResultsPublished({
+    examId,
+    courseId: exam.courseId,
+    examTitle: exam.title,
+    publishedAt: publishedAt.toISOString(),
+  });
+
   return {
     examId,
     examTitle: exam.title,
-    publishedAt: new Date(),
+    publishedAt,
     totalSubmissions,
     gradedSubmissions,
   };
