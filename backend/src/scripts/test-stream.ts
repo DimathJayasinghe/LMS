@@ -2,9 +2,12 @@
  * SSE — Smoke Test
  * Run: npx tsx src/scripts/test-stream.ts
  * Requires the API server and Redis to be running.
+ *
+ * Docker Compose routes API traffic through nginx on port 80, so the default
+ * base URL targets /api on localhost rather than the backend container port.
  */
 
-const API_BASE = process.env.LMS_API_BASE ?? 'http://localhost:5000/api';
+const API_BASE = process.env.LMS_API_BASE ?? 'http://localhost/api';
 
 const COOKIE_ACCESS = 'access_token';
 
