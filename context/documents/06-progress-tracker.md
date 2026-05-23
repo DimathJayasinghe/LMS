@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 3 — Exam System |
-| **Last Updated** | 2026-05-20 |
-| **Last Completed Task** | Step 8 — Exam System (backend) |
-| **Next Task** | Step 9 — Submissions + Marking |
+| **Current Phase** | Phase 5 — Payments |
+| **Last Updated** | 2026-05-21 |
+| **Last Completed Task** | Step 10 — Payments (backend) |
+| **Next Task** | Step 11 — Real-Time (SSE) |
 | **Blockers** | None |
 
 ---
@@ -81,6 +81,11 @@
 | `backend/src/utils/r2.ts` | Cloudflare R2 presigned URL helper |
 | `backend/src/scripts/test-exams.ts` | Smoke test for exam endpoints |
 | `context/api_endpoints/exams.endpoints.md` | Exam API documentation |
+| `backend/src/schemas/payment.schema.ts` | Zod validation for payment endpoints |
+| `backend/src/services/payment.service.ts` | PayHere + payment processing logic |
+| `backend/src/controllers/payment.controller.ts` | Payment HTTP handlers |
+| `backend/src/routes/payment.routes.ts` | Payment API routes |
+| `backend/src/utils/payhere.ts` | PayHere hash/signature helpers |
 
 ---
 
@@ -154,10 +159,10 @@
 
 ### Tasks
 
-- [ ] Create `payment.routes.ts`, `payment.controller.ts`, `payment.service.ts`
-- [ ] Implement PayHere payment initiation + webhook handler
-- [ ] Implement idempotency middleware for payment routes
-- [ ] Implement Excel bulk payment upload (Admin)
+- [x] Create `payment.routes.ts`, `payment.controller.ts`, `payment.service.ts`
+- [x] Implement PayHere payment initiation + webhook handler
+- [x] Implement idempotency middleware for payment routes
+- [x] Implement Excel bulk payment upload (Admin)
 - [ ] Build payment page (student view)
 - [ ] Build payment dashboard (admin view)
 - [ ] Build payment override UI (super admin)

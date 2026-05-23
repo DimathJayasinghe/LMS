@@ -11,6 +11,8 @@ interface SafeUser {
 	role: Role;
 	phone: string | null;
 	nic: string | null;
+	address: string | null;
+	city: string | null;
 	barcode: string | null;
 	deletedAt: Date | null;
 	createdAt: Date;
@@ -29,6 +31,8 @@ const userSelect = {
 	role: true,
 	phone: true,
 	nic: true,
+	address: true,
+	city: true,
 	barcode: true,
 	deletedAt: true,
 	createdAt: true,

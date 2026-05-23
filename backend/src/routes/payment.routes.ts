@@ -1,1 +1,100 @@
-// Payment routes
+import { Router } from 'express';
+import multer from 'multer';
+import { Role } from '@prisma/client';
+import * as PaymentController from '@/controllers/payment.controller';
+import { verifyToken } from '@/middleware/auth.middleware';
+import { requireRole } from '@/middleware/role.middleware';
+import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import {
+	initiatePaymentSchema,
+	listMyPaymentsQuerySchema,
+	listPaymentsQuerySchema,
+	overridePaymentSchema,
+	paymentIdParamSchema,
+} from '@/schemas/payment.schema';
+import { PAYMENTS_BULK_UPLOAD_MAX_BYTES } from '@/utils/constants';
+
+export const paymentRoutes = Router();
+
+const upload = multer({
+	storage: multer.memoryStorage(),
+	limits: { fileSize: PAYMENTS_BULK_UPLOAD_MAX_BYTES },
+});
+
+// ─── PayHere Checkout (Student) ───────────────────────────
+paymentRoutes.post(
+	'/initiate',
+	verifyToken,
+	requireRole(Role.STUDENT),
+	validateBody(initiatePaymentSchema),
+	checkIdempotency,
+	PaymentController.initiatePayherePayment,
+);
+
+paymentRoutes.post(
+	'/payhere/checkout',
+	verifyToken,
+	requireRole(Role.STUDENT),
+	validateBody(initiatePaymentSchema),
+	checkIdempotency,
+	PaymentController.initiatePayherePayment,
+);
+
+// ─── PayHere Notify (Webhook) ─────────────────────────────
+paymentRoutes.post('/payhere/notify', PaymentController.handlePayhereNotify);
+
+// ─── PayHere Status (Student/Admin) ───────────────────────
+paymentRoutes.get(
+	'/payhere/status/:id',
+	verifyToken,
+	requireRole(Role.STUDENT, Role.ADMIN, Role.STAFF),
+	validateParams(paymentIdParamSchema),
+	PaymentController.getPayhereStatus,
+);
+
+// ─── List Payments (Admin/Staff) ──────────────────────────
+paymentRoutes.get(
+	'/',
+	verifyToken,
+	requireRole(Role.ADMIN, Role.STAFF),
+	validateQuery(listPaymentsQuerySchema),
+	PaymentController.listPayments,
+);
+
+// ─── List My Payments (Student) ───────────────────────────
+paymentRoutes.get(
+	'/my',
+	verifyToken,
+	requireRole(Role.STUDENT),
+	validateQuery(listMyPaymentsQuerySchema),
+	PaymentController.listMyPayments,
+);
+
+// ─── Get Payment by Id (Owner/Admin/Staff) ────────────────
+paymentRoutes.get(
+	'/:id',
+	verifyToken,
+	requireRole(Role.STUDENT, Role.ADMIN, Role.STAFF),
+	validateParams(paymentIdParamSchema),
+	PaymentController.getPaymentById,
+);
+
+// ─── Override Payment (Admin) ─────────────────────────────
+paymentRoutes.patch(
+	'/:id/override',
+	verifyToken,
+	requireRole(Role.ADMIN),
+	validateParams(paymentIdParamSchema),
+	validateBody(overridePaymentSchema),
+	PaymentController.overridePayment,
+);
+
+// ─── Bulk Upload (Admin/Staff) ────────────────────────────
+paymentRoutes.post(
+	'/bulk-upload',
+	verifyToken,
+	requireRole(Role.ADMIN, Role.STAFF),
+	upload.single('file'),
+	PaymentController.bulkUploadPayments,
+);
