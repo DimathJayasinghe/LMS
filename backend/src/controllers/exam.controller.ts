@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as ExamService from '@/services/exam.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	assignMarkersSchema,
 	createExamSchema,
@@ -13,6 +16,14 @@ import {
 export const createExam = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const input = createExamSchema.parse(req.body);
 	const exam = await ExamService.createExam(input);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.EXAM_CREATED,
+		description: `Exam "${exam.title}" created`,
+		targetType: 'Exam',
+		targetId: exam.id,
+		context: extractAuditContext(req),
+	});
 
 	res.status(201).json({
 		status: 'success',
@@ -47,6 +58,13 @@ export const updateExam = asyncHandler(async (req: Request, res: Response): Prom
 	const input = updateExamSchema.parse(req.body);
 	const exam = await ExamService.updateExam(id, input);
 
+	void AuditService.log({
+		action: AUDIT_ACTION.EXAM_UPDATED,
+		targetType: 'Exam',
+		targetId: id,
+		context: extractAuditContext(req),
+	});
+
 	res.status(200).json({
 		status: 'success',
 		data: exam,
@@ -57,6 +75,14 @@ export const updateExam = asyncHandler(async (req: Request, res: Response): Prom
 export const deleteExam = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = examIdParamSchema.parse(req.params);
 	const exam = await ExamService.deleteExam(id);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.EXAM_DELETED,
+		description: `Exam "${exam.title}" soft-deleted`,
+		targetType: 'Exam',
+		targetId: id,
+		context: extractAuditContext(req),
+	});
 
 	res.status(200).json({
 		status: 'success',
@@ -70,6 +96,13 @@ export const getPaperUploadUrl = asyncHandler(
 		const { id } = examIdParamSchema.parse(req.params);
 		const input = examUploadUrlSchema.parse(req.body);
 		const upload = await ExamService.generateExamPaperUploadUrl(id, input);
+
+		void AuditService.log({
+			action: AUDIT_ACTION.EXAM_UPLOAD_URL,
+			targetType: 'Exam',
+			targetId: id,
+			context: extractAuditContext(req),
+		});
 
 		res.status(200).json({
 			status: 'success',
@@ -85,6 +118,15 @@ export const assignMarkers = asyncHandler(
 		const input = assignMarkersSchema.parse(req.body);
 		const result = await ExamService.assignMarkersToExam(id, input);
 
+		void AuditService.log({
+			action: AUDIT_ACTION.MARKERS_ASSIGNED,
+			description: `${result.assignedCount} markers assigned`,
+			targetType: 'Exam',
+			targetId: id,
+			metadata: { markerIds: result.assignedMarkerIds },
+			context: extractAuditContext(req),
+		});
+
 		res.status(200).json({
 			status: 'success',
 			data: result,
@@ -92,3 +134,4 @@ export const assignMarkers = asyncHandler(
 		});
 	},
 );
+

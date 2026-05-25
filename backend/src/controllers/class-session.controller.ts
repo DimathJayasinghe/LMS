@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as ClassSessionService from '@/services/class-session.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import {
   classSessionParamsSchema,
   createClassSessionSchema,
@@ -14,6 +17,14 @@ export const createClassSession = asyncHandler(
     const { classId } = classIdParamSchema.parse(req.params);
     const input = createClassSessionSchema.parse(req.body);
     const session = await ClassSessionService.createClassSession(classId, input);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.SESSION_CREATED,
+      description: `Session "${session.title}" created`,
+      targetType: 'ClassSession',
+      targetId: session.id,
+      context: extractAuditContext(req),
+    });
 
     res.status(201).json({
       status: 'success',
@@ -59,6 +70,13 @@ export const updateClassSession = asyncHandler(
     const input = updateClassSessionSchema.parse(req.body);
     const session = await ClassSessionService.updateClassSession(classId, sessionId, input);
 
+    void AuditService.log({
+      action: AUDIT_ACTION.SESSION_UPDATED,
+      targetType: 'ClassSession',
+      targetId: sessionId,
+      context: extractAuditContext(req),
+    });
+
     res.status(200).json({
       status: 'success',
       data: session,
@@ -72,6 +90,14 @@ export const deleteClassSession = asyncHandler(
     const { classId, sessionId } = classSessionParamsSchema.parse(req.params);
     const session = await ClassSessionService.deleteClassSession(classId, sessionId);
 
+    void AuditService.log({
+      action: AUDIT_ACTION.SESSION_DELETED,
+      description: `Session "${session.title}" soft-deleted`,
+      targetType: 'ClassSession',
+      targetId: sessionId,
+      context: extractAuditContext(req),
+    });
+
     res.status(200).json({
       status: 'success',
       data: session,
@@ -79,3 +105,4 @@ export const deleteClassSession = asyncHandler(
     });
   },
 );
+

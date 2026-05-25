@@ -67,6 +67,7 @@ model User {
   attendance        Attendance[]
   submissions       Submission[]
   auditLogs         AuditLog[]         @relation("AuditAdmin")
+  actorAuditLogs    AuditLog[]         @relation("AuditActor")
   markerAssignments MarkerAssignment[] @relation("AssignedMarker")
   permission        Permission?        @relation("UserPermission")
   smsLogs           SmsLog[]
@@ -305,12 +306,21 @@ model AuditLog {
   targetType  String?
   targetId    String?
   metadata    Json?
+  ip          String?
+  userAgent   String?
 
-  adminId String
-  admin   User   @relation("AuditAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  // Actor — the user who performed the action (any role)
+  actorId   String
+  actor     User   @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  actorRole String // Denormalized role at the time of action for historical accuracy
+
+  // Legacy admin FK — optional, only set for ADMIN/STAFF actions
+  adminId String?
+  admin   User?  @relation("AuditAdmin", fields: [adminId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
 
+  @@index([actorId])
   @@index([adminId])
   @@index([action])
   @@index([targetType, targetId])
