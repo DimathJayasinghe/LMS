@@ -111,8 +111,8 @@ export const SSE_HEARTBEAT_MS = 30 * 1000;
 // ─── BullMQ Jobs ───────────────────────────────────────────
 
 /** Queue names for background jobs */
-export const JOB_QUEUE_SMS = 'lms:sms';
-export const JOB_QUEUE_EMAIL = 'lms:email';
+export const JOB_QUEUE_SMS = 'lms_sms';
+export const JOB_QUEUE_EMAIL = 'lms_email';
 
 /** Job names per queue */
 export const JOB_NAME_SEND_SMS = 'send_sms';

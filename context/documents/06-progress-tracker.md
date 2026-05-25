@@ -80,6 +80,7 @@
 | `context/api_endpoints/classes.endpoints.md` | Class and class session API documentation |
 | `backend/src/utils/r2.ts` | Cloudflare R2 presigned URL helper |
 | `backend/src/scripts/test-exams.ts` | Smoke test for exam endpoints |
+| `backend/src/scripts/test-worker.ts` | Smoke test for BullMQ worker jobs |
 | `context/api_endpoints/exams.endpoints.md` | Exam API documentation |
 | `backend/src/schemas/payment.schema.ts` | Zod validation for payment endpoints |
 | `backend/src/services/payment.service.ts` | PayHere + payment processing logic |
