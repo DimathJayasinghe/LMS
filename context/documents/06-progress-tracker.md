@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 5 — Payments |
-| **Last Updated** | 2026-05-21 |
-| **Last Completed Task** | Step 10 — Payments (backend) |
-| **Next Task** | Step 12 — Background Jobs (BullMQ) |
+| **Current Phase** | Phase 6 — Notifications & Real-Time |
+| **Last Updated** | 2026-05-25 |
+| **Last Completed Task** | Step 12 — Background Jobs (BullMQ) |
+| **Next Task** | Step 13 — Audit Logs + SMS |
 | **Blockers** | None |
 
 ---
@@ -26,7 +26,7 @@
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | ⬜ Not Started | Marker assignment, grading UI, result publishing, SSE broadcast |
 | 5 | Payments | ⬜ Not Started | PayHere integration, idempotency, Excel bulk upload, payment dashboard |
-| 6 | Notifications & Real-Time | ⬜ Not Started | SSE infrastructure, SMS via Notify.lk, BullMQ background jobs |
+| 6 | Notifications & Real-Time | 🟡 In Progress | SSE infrastructure, SMS via Notify.lk, BullMQ background jobs |
 | 7 | Admin Dashboard | ⬜ Not Started | Audit logs, user management UI, financial reports, support tools |
 | 8 | Student Dashboard | ⬜ Not Started | Home view, class schedule, results, payments, video player |
 | 9 | Polish & Hardening | ⬜ Not Started | Error handling UX, loading states, dark mode, performance, SEO |
@@ -86,6 +86,8 @@
 | `backend/src/controllers/payment.controller.ts` | Payment HTTP handlers |
 | `backend/src/routes/payment.routes.ts` | Payment API routes |
 | `backend/src/utils/payhere.ts` | PayHere hash/signature helpers |
+| `backend/src/jobs/notification.queue.ts` | BullMQ queues + enqueue helpers |
+| `backend/src/types/job.types.ts` | Job payload types for BullMQ |
 
 ---
 
@@ -175,9 +177,9 @@
 
 - [x] Set up SSE endpoint (`/api/stream`)
 - [x] Implement Redis Pub/Sub for cross-instance SSE broadcasting
-- [ ] Create BullMQ worker entry point (`worker.ts`)
-- [ ] Implement SMS job (Notify.lk integration)
-- [ ] Implement email notification job (optional)
+- [x] Create BullMQ worker entry point (`worker.ts`)
+- [x] Implement SMS job (Notify.lk integration)
+- [x] Implement email notification job (optional)
 - [ ] Build notification bell component (frontend)
 
 ---

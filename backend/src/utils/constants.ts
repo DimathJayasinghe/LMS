@@ -107,3 +107,27 @@ export const SSE_REDIS_CHANNEL = 'lms:sse:events';
 
 /** Heartbeat interval to keep proxies from closing idle streams (30s) */
 export const SSE_HEARTBEAT_MS = 30 * 1000;
+
+// ─── BullMQ Jobs ───────────────────────────────────────────
+
+/** Queue names for background jobs */
+export const JOB_QUEUE_SMS = 'lms:sms';
+export const JOB_QUEUE_EMAIL = 'lms:email';
+
+/** Job names per queue */
+export const JOB_NAME_SEND_SMS = 'send_sms';
+export const JOB_NAME_SEND_EMAIL = 'send_email';
+
+/** Default retry attempts for background jobs */
+export const JOB_DEFAULT_ATTEMPTS = 3;
+
+/** Default backoff delay for retries (ms) */
+export const JOB_DEFAULT_BACKOFF_MS = 5000;
+
+/** Worker concurrency per queue */
+export const JOB_SMS_CONCURRENCY = 5;
+export const JOB_EMAIL_CONCURRENCY = 5;
+
+/** Cleanup behavior for completed/failed jobs */
+export const JOB_REMOVE_ON_COMPLETE = true;
+export const JOB_REMOVE_ON_FAIL = false;
