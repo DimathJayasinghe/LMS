@@ -11,7 +11,7 @@
 | **Current Phase** | Phase 5 — Payments |
 | **Last Updated** | 2026-05-21 |
 | **Last Completed Task** | Step 10 — Payments (backend) |
-| **Next Task** | Step 11 — Real-Time (SSE) |
+| **Next Task** | Step 12 — Background Jobs (BullMQ) |
 | **Blockers** | None |
 
 ---
@@ -151,7 +151,7 @@
 - [ ] Implement result publishing (batch)
 - [ ] Build marking interface (marker view — PDF viewer + mark input)
 - [ ] Build results page (student view)
-- [ ] Implement SSE broadcast for result publication
+- [x] Implement SSE broadcast for result publication
 
 ---
 
@@ -173,8 +173,8 @@
 
 ### Tasks
 
-- [ ] Set up SSE endpoint (`/api/stream`)
-- [ ] Implement Redis Pub/Sub for cross-instance SSE broadcasting
+- [x] Set up SSE endpoint (`/api/stream`)
+- [x] Implement Redis Pub/Sub for cross-instance SSE broadcasting
 - [ ] Create BullMQ worker entry point (`worker.ts`)
 - [ ] Implement SMS job (Notify.lk integration)
 - [ ] Implement email notification job (optional)

@@ -99,3 +99,11 @@ export const PAYMENT_MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Max upload size for payment bulk upload files (5 MB) */
 export const PAYMENTS_BULK_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+// ─── Server-Sent Events (SSE) ───────────────────────────────
+
+/** Redis Pub/Sub channel for cross-instance SSE delivery */
+export const SSE_REDIS_CHANNEL = 'lms:sse:events';
+
+/** Heartbeat interval to keep proxies from closing idle streams (30s) */
+export const SSE_HEARTBEAT_MS = 30 * 1000;

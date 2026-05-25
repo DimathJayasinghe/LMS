@@ -4,7 +4,7 @@
  * The server must be running on port 5000.
  */
 
-const DEFAULT_BASE = 'http://localhost:5000/api/auth';
+const DEFAULT_BASE = 'http://localhost:80/api/auth';
 const BASE = process.env.LMS_AUTH_BASE ?? DEFAULT_BASE;
 
 const HTTP_OK = 200;
