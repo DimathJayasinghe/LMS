@@ -56,6 +56,19 @@ const envSchema = z.object({
   PAYHERE_RETURN_URL: z.string().default(''),
   PAYHERE_CANCEL_URL: z.string().default(''),
   PAYHERE_NOTIFY_URL: z.string().default(''),
+
+  // Notify.lk (SMS)
+  // Optional at boot — validated when jobs are enqueued or processed.
+  NOTIFY_SEND_URL: z.string().url().default('https://app.notify.lk/api/v1/send'),
+  NOTIFY_API_KEY: z.string().default(''),
+  NOTIFY_USER_ID: z.string().default(''),
+  NOTIFY_SENDER_ID: z.string().default(''),
+
+  // Resend (Email)
+  // Optional at boot — validated when jobs are enqueued or processed.
+  RESEND_API_KEY: z.string().default(''),
+  RESEND_FROM_EMAIL: z.string().default(''),
+  RESEND_REPLY_TO_EMAIL: z.string().default(''),
 });
 
 // Fail fast — crash on boot if env is invalid
