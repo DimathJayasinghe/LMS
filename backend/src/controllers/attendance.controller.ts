@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as AttendanceService from '@/services/attendance.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import {
   scanBarcodeSchema,
   zoomWebhookPayloadSchema,
@@ -19,6 +22,14 @@ export const scanBarcode = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = scanBarcodeSchema.parse(req.body);
     const attendance = await AttendanceService.scanBarcode(input);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.ATTENDANCE_BARCODE,
+      targetType: 'Attendance',
+      targetId: attendance.id,
+      metadata: { barcode: input.barcode, classSessionId: input.classSessionId },
+      context: extractAuditContext(req),
+    });
 
     res.status(200).json({
       status: 'success',
@@ -78,6 +89,15 @@ export const markManualAttendance = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = manualAttendanceSchema.parse(req.body);
     const attendance = await AttendanceService.markManualAttendance(input);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.ATTENDANCE_MANUAL,
+      description: 'Manual attendance recorded',
+      targetType: 'Attendance',
+      targetId: attendance.id,
+      metadata: { userId: input.userId, classSessionId: input.classSessionId },
+      context: extractAuditContext(req),
+    });
 
     res.status(200).json({
       status: 'success',

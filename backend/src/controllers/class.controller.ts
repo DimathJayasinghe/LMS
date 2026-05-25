@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as ClassService from '@/services/class.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	classIdParamSchema,
 	createClassSchema,
@@ -11,6 +14,14 @@ import {
 export const createClass = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const input = createClassSchema.parse(req.body);
 	const classData = await ClassService.createClass(input);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.CLASS_CREATED,
+		description: `Class "${classData.name} ${classData.year}" created`,
+		targetType: 'Course',
+		targetId: classData.id,
+		context: extractAuditContext(req),
+	});
 
 	res.status(201).json({
 		status: 'success',
@@ -45,9 +56,17 @@ export const updateClass = asyncHandler(async (req: Request, res: Response): Pro
 	const input = updateClassSchema.parse(req.body);
 	const classData = await ClassService.updateClass(classId, input);
 
+	void AuditService.log({
+		action: AUDIT_ACTION.CLASS_UPDATED,
+		targetType: 'Course',
+		targetId: classId,
+		context: extractAuditContext(req),
+	});
+
 	res.status(200).json({
 		status: 'success',
 		data: classData,
 		message: 'Class updated successfully.',
 	});
 });
+

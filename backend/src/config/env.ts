@@ -64,6 +64,12 @@ const envSchema = z.object({
   NOTIFY_USER_ID: z.string().default(''),
   NOTIFY_SENDER_ID: z.string().default(''),
 
+  // SMS toggles
+  SMS_BULK_PAYMENT_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
   // Resend (Email)
   // Optional at boot — validated when jobs are enqueued or processed.
   RESEND_API_KEY: z.string().default(''),
