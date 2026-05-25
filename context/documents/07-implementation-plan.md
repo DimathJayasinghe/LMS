@@ -435,9 +435,9 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 ### Tasks
 
-- [ ] Create `src/routes/stream.routes.ts` — SSE connection endpoint
-- [ ] Create `src/services/stream.service.ts` — manage connections, broadcast via Redis Pub/Sub
-- [ ] Wire Redis Pub/Sub so broadcasts work across auto-scaled instances
+- [x] Create `src/routes/stream.routes.ts` — SSE connection endpoint
+- [x] Create `src/services/stream.service.ts` — manage connections, broadcast via Redis Pub/Sub
+- [x] Wire Redis Pub/Sub so broadcasts work across auto-scaled instances
 
 ### Endpoints
 

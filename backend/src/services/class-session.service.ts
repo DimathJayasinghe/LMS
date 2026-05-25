@@ -6,6 +6,7 @@ import type {
   ListClassSessionsQuery,
   UpdateClassSessionInput,
 } from '@/schemas/class-session.schema';
+import * as StreamService from '@/services/stream.service';
 
 interface ClassSessionSummary {
   id: string;
@@ -50,7 +51,7 @@ export const createClassSession = async (
 ): Promise<ClassSessionSummary> => {
   await ensureClassExists(classId);
 
-  return prisma.classSession.create({
+  const session = await prisma.classSession.create({
     data: {
       title: input.title,
       description: input.description ?? null,
@@ -63,6 +64,14 @@ export const createClassSession = async (
     },
     select: classSessionSelect,
   });
+
+  await StreamService.broadcastTimetableUpdated({
+    courseId: classId,
+    sessionId: session.id,
+    action: 'created',
+  });
+
+  return session;
 };
 
 export const listClassSessions = async (
@@ -117,7 +126,7 @@ export const updateClassSession = async (
     throw new AppError('CLASS_SESSION_NOT_FOUND', 404, 'Class session not found.');
   }
 
-  return prisma.classSession.update({
+  const updated = await prisma.classSession.update({
     where: { id: sessionId },
     data: {
       title: input.title,
@@ -130,6 +139,14 @@ export const updateClassSession = async (
     },
     select: classSessionSelect,
   });
+
+  await StreamService.broadcastTimetableUpdated({
+    courseId: classId,
+    sessionId,
+    action: 'updated',
+  });
+
+  return updated;
 };
 
 export const deleteClassSession = async (
@@ -151,9 +168,17 @@ export const deleteClassSession = async (
     });
   }
 
-  return prisma.classSession.update({
+  const deleted = await prisma.classSession.update({
     where: { id: sessionId },
     data: { deletedAt: new Date() },
     select: classSessionSelect,
   });
+
+  await StreamService.broadcastTimetableUpdated({
+    courseId: classId,
+    sessionId,
+    action: 'deleted',
+  });
+
+  return deleted;
 };

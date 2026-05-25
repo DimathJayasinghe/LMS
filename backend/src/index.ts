@@ -4,7 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { logger } from './config/logger';
-import { connectRedis } from './config/redis';
+import { connectRedis, disconnectRedis } from './config/redis';
+import { initStreamService, shutdownStreamService } from './services/stream.service';
 import { createRateLimiters } from './config/rate-limiter';
 import { errorHandler } from './middleware/error.middleware';
 import { createAuthRouter } from './routes/auth.routes';
@@ -13,8 +14,12 @@ import { classRoutes } from './routes/class.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
+import { submissionRoutes } from './routes/submission.routes';
+import { paymentRoutes } from './routes/payment.routes';
+import { streamRoutes } from './routes/stream.routes';
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ─── Security ────────────────────────────────────────────────
 app.use(helmet());
@@ -34,6 +39,7 @@ app.use(cookieParser());
 const bootstrap = async (): Promise<void> => {
   // Attempt Redis connection (non-blocking — app works without it)
   await connectRedis();
+  await initStreamService();
 
   // Create rate limiters AFTER Redis connection attempt
   // so they can detect Redis status and choose the right store
@@ -56,8 +62,9 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/videos', videoRoutes);
   app.use('/api/exams', examRoutes);
-  // app.use('/api/submissions', submissionRoutes);
-  // app.use('/api/payments', paymentRoutes);
+  app.use('/api/submissions', submissionRoutes);
+  app.use('/api/payments', paymentRoutes);
+  app.use('/api/stream', streamRoutes);
 
   // ─── Global Error Handler (must be last) ─────────────────────
   app.use(errorHandler);
@@ -67,6 +74,21 @@ const bootstrap = async (): Promise<void> => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server is running');
   });
 };
+
+const shutdown = async (signal: string): Promise<void> => {
+  logger.info({ signal }, 'Shutting down');
+  await shutdownStreamService();
+  await disconnectRedis();
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
+
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
+});
 
 bootstrap().catch((err) => {
   logger.error({ err }, 'Failed to start server');

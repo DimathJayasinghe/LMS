@@ -26,6 +26,8 @@ interface SafeUser {
   role: string;
   phone: string | null;
   nic: string | null;
+  address: string | null;
+  city: string | null;
   createdAt: Date;
 }
 
@@ -76,6 +78,8 @@ const toSafeUser = (user: {
   role: string;
   phone: string | null;
   nic: string | null;
+  address: string | null;
+  city: string | null;
   createdAt: Date;
 }): SafeUser => ({
   id: user.id,
@@ -85,6 +89,8 @@ const toSafeUser = (user: {
   role: user.role,
   phone: user.phone,
   nic: user.nic,
+  address: user.address,
+  city: user.city,
   createdAt: user.createdAt,
 });
 
@@ -127,6 +133,8 @@ export const register = async (
       password: hashedPassword,
       phone: data.phone ?? null,
       nic: data.nic ?? null,
+      address: data.address ?? null,
+      city: data.city ?? null,
       // role defaults to STUDENT (schema default)
       // deletedAt defaults to null (active)
     },
@@ -278,6 +286,8 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
       role: true,
       phone: true,
       nic: true,
+      address: true,
+      city: true,
       createdAt: true,
     },
   });

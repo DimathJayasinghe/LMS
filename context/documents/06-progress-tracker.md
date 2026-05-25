@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 3 — Exam System |
-| **Last Updated** | 2026-05-19 |
-| **Last Completed Task** | Step 8 — Exam System (backend) |
-| **Next Task** | Step 9 — Submissions + Marking |
+| **Current Phase** | Phase 5 — Payments |
+| **Last Updated** | 2026-05-21 |
+| **Last Completed Task** | Step 10 — Payments (backend) |
+| **Next Task** | Step 12 — Background Jobs (BullMQ) |
 | **Blockers** | None |
 
 ---
@@ -81,6 +81,11 @@
 | `backend/src/utils/r2.ts` | Cloudflare R2 presigned URL helper |
 | `backend/src/scripts/test-exams.ts` | Smoke test for exam endpoints |
 | `context/api_endpoints/exams.endpoints.md` | Exam API documentation |
+| `backend/src/schemas/payment.schema.ts` | Zod validation for payment endpoints |
+| `backend/src/services/payment.service.ts` | PayHere + payment processing logic |
+| `backend/src/controllers/payment.controller.ts` | Payment HTTP handlers |
+| `backend/src/routes/payment.routes.ts` | Payment API routes |
+| `backend/src/utils/payhere.ts` | PayHere hash/signature helpers |
 
 ---
 
@@ -146,7 +151,7 @@
 - [ ] Implement result publishing (batch)
 - [ ] Build marking interface (marker view — PDF viewer + mark input)
 - [ ] Build results page (student view)
-- [ ] Implement SSE broadcast for result publication
+- [x] Implement SSE broadcast for result publication
 
 ---
 
@@ -154,10 +159,10 @@
 
 ### Tasks
 
-- [ ] Create `payment.routes.ts`, `payment.controller.ts`, `payment.service.ts`
-- [ ] Implement PayHere payment initiation + webhook handler
-- [ ] Implement idempotency middleware for payment routes
-- [ ] Implement Excel bulk payment upload (Admin)
+- [x] Create `payment.routes.ts`, `payment.controller.ts`, `payment.service.ts`
+- [x] Implement PayHere payment initiation + webhook handler
+- [x] Implement idempotency middleware for payment routes
+- [x] Implement Excel bulk payment upload (Admin)
 - [ ] Build payment page (student view)
 - [ ] Build payment dashboard (admin view)
 - [ ] Build payment override UI (super admin)
@@ -168,8 +173,8 @@
 
 ### Tasks
 
-- [ ] Set up SSE endpoint (`/api/stream`)
-- [ ] Implement Redis Pub/Sub for cross-instance SSE broadcasting
+- [x] Set up SSE endpoint (`/api/stream`)
+- [x] Implement Redis Pub/Sub for cross-instance SSE broadcasting
 - [ ] Create BullMQ worker entry point (`worker.ts`)
 - [ ] Implement SMS job (Notify.lk integration)
 - [ ] Implement email notification job (optional)
@@ -250,6 +255,7 @@
 | 2026-05-10 | Restrict refresh cookie path to `/api/auth` | Prevents the browser sending the refresh token on every API request — reduces attack surface |
 | 2026-05-12 | Map `Role.ADMIN` as Super Admin, `Role.STAFF` as Admin | Prisma enum lacks `SUPER_ADMIN`; route guards follow this temporary mapping for Step 4 |
 | 2026-05-13 | Treat "classes" as courses; sessions are nested resources | Classes map to Course model; sessions live under `/api/classes/:classId/sessions` |
+| 2026-05-20 | Accept R2 endpoint + legacy env keys | Align local env vars with R2 client configuration without renaming existing secrets |
 
 ---
 

@@ -3,6 +3,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const resolvedEnv = {
+  ...process.env,
+  R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? process.env.R2_ACCESS_KEY ?? '',
+  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? process.env.R2_SECRET_KEY ?? '',
+  R2_ENDPOINT: process.env.R2_ENDPOINT ?? '',
+};
+
 const envSchema = z.object({
   // Server
   PORT: z.coerce.number().default(5000),
@@ -28,6 +35,7 @@ const envSchema = z.object({
   R2_ACCOUNT_ID: z.string().default(''),
   R2_ACCESS_KEY_ID: z.string().default(''),
   R2_SECRET_ACCESS_KEY: z.string().default(''),
+  R2_ENDPOINT: z.string().default(''),
   R2_BUCKET_NAME: z.string().default(''),
   R2_PUBLIC_URL: z.string().default(''),
 
@@ -39,10 +47,19 @@ const envSchema = z.object({
   BUNNY_LIBRARY_ID: z.string().default(''),
   // The pull-zone CDN base URL, e.g. https://vz-xxxxxxxx.b-cdn.net
   BUNNY_CDN_HOSTNAME: z.string().default(''),
+
+  // PayHere (Payments)
+  // Optional at boot — validated at runtime when checkout is requested.
+  PAYHERE_MERCHANT_ID: z.string().default(''),
+  PAYHERE_MERCHANT_SECRET: z.string().default(''),
+  PAYHERE_BASE_URL: z.string().default('https://sandbox.payhere.lk'),
+  PAYHERE_RETURN_URL: z.string().default(''),
+  PAYHERE_CANCEL_URL: z.string().default(''),
+  PAYHERE_NOTIFY_URL: z.string().default(''),
 });
 
 // Fail fast — crash on boot if env is invalid
-const parsed = envSchema.safeParse(process.env);
+const parsed = envSchema.safeParse(resolvedEnv);
 
 if (!parsed.success) {
   console.error('❌ Invalid environment variables:', parsed.error.flatten().fieldErrors);
