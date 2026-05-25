@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
+import { PaymentStatus } from '@prisma/client';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as PaymentService from '@/services/payment.service';
+import * as AuditService from '@/services/audit.service';
+import * as SmsNotificationService from '@/services/sms-notification.service';
+import { AUDIT_ACTION } from '@/utils/constants';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import { prisma } from '@/config/database';
 import {
 	initiatePaymentSchema,
 	listMyPaymentsQuerySchema,
@@ -29,6 +37,11 @@ export const handlePayhereNotify = asyncHandler(
 	async (req: Request, res: Response): Promise<void> => {
 		const input = payhereNotifySchema.parse(req.body);
 		const payment = await PaymentService.handlePayhereNotify(input);
+
+		// SMS on successful payment confirmation
+		if (payment.status === PaymentStatus.SUCCESS) {
+			void sendPaymentConfirmationSms(payment.id);
+		}
 
 		res.status(200).json({
 			status: 'success',
@@ -92,7 +105,26 @@ export const overridePayment = asyncHandler(
 	async (req: Request, res: Response): Promise<void> => {
 		const { id } = paymentIdParamSchema.parse(req.params);
 		const input = overridePaymentSchema.parse(req.body);
+
+		// Fetch before state for audit
+		const before = await PaymentService.getPaymentById(id, req.user!.userId, req.user!.role);
 		const payment = await PaymentService.overridePayment(id, input);
+
+		void AuditService.log({
+			action: AUDIT_ACTION.PAYMENT_OVERRIDDEN,
+			description: `Payment status changed from ${before.status} to ${input.status}`,
+			targetType: 'Payment',
+			targetId: id,
+			metadata: {
+				before: { status: before.status, amount: before.amount.toString() },
+				after: { status: input.status, amount: input.amount?.toString() },
+				note: input.note,
+			},
+			context: extractAuditContext(req),
+		});
+
+		// SMS to the student about payment status change
+		void sendPaymentOverrideSms(payment.id, input.status);
 
 		res.status(200).json({
 			status: 'success',
@@ -115,6 +147,24 @@ export const bulkUploadPayments = asyncHandler(
 
 		const result = await PaymentService.bulkUploadPayments(file);
 
+		void AuditService.log({
+			action: AUDIT_ACTION.PAYMENT_BULK_UPLOAD,
+			description: `Bulk upload: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors.length} errors`,
+			metadata: {
+				total: result.total,
+				created: result.created,
+				updated: result.updated,
+				skipped: result.skipped,
+				errorCount: result.errors.length,
+			},
+			context: extractAuditContext(req),
+		});
+
+		// SMS for bulk uploads is toggleable via env var
+		if (env.SMS_BULK_PAYMENT_ENABLED && result.created + result.updated > 0) {
+			void sendBulkPaymentSms();
+		}
+
 		res.status(200).json({
 			status: 'success',
 			data: result,
@@ -122,3 +172,87 @@ export const bulkUploadPayments = asyncHandler(
 		});
 	},
 );
+
+// ─── SMS Helpers ──────────────────────────────────────────
+
+/**
+ * Send payment confirmation SMS after PayHere webhook confirms success.
+ */
+const sendPaymentConfirmationSms = async (paymentId: string): Promise<void> => {
+	try {
+		const payment = await prisma.payment.findUnique({
+			where: { id: paymentId },
+			select: {
+				paymentMonth: true,
+				enrollment: {
+					select: {
+						user: { select: { id: true, phone: true } },
+						course: { select: { name: true } },
+					},
+				},
+			},
+		});
+
+		if (!payment?.enrollment.user.phone) return;
+
+		await SmsNotificationService.sendSms({
+			phoneNumber: payment.enrollment.user.phone,
+			templateKey: 'PAYMENT_CONFIRMED',
+			variables: {
+				courseName: payment.enrollment.course.name,
+				paymentMonth: payment.paymentMonth,
+			},
+			userId: payment.enrollment.user.id,
+		});
+	} catch (err) {
+		logger.error({ err, paymentId }, 'Failed to send payment confirmation SMS — non-blocking');
+	}
+};
+
+/**
+ * Send SMS when an admin overrides a payment status.
+ */
+const sendPaymentOverrideSms = async (paymentId: string, status: string): Promise<void> => {
+	try {
+		const payment = await prisma.payment.findUnique({
+			where: { id: paymentId },
+			select: {
+				paymentMonth: true,
+				enrollment: {
+					select: {
+						user: { select: { id: true, phone: true } },
+						course: { select: { name: true } },
+					},
+				},
+			},
+		});
+
+		if (!payment?.enrollment.user.phone) return;
+
+		await SmsNotificationService.sendSms({
+			phoneNumber: payment.enrollment.user.phone,
+			templateKey: 'PAYMENT_OVERRIDE',
+			variables: {
+				courseName: payment.enrollment.course.name,
+				paymentMonth: payment.paymentMonth,
+				status,
+			},
+			userId: payment.enrollment.user.id,
+		});
+	} catch (err) {
+		logger.error({ err, paymentId }, 'Failed to send payment override SMS — non-blocking');
+	}
+};
+
+/**
+ * Placeholder for bulk payment SMS.
+ * Called only when SMS_BULK_PAYMENT_ENABLED is true.
+ * In a production scenario, this would need to track which specific
+ * students were affected by the upload. Currently logs intent.
+ */
+const sendBulkPaymentSms = async (): Promise<void> => {
+	logger.info('Bulk payment SMS trigger — would send per-student notifications');
+	// Future: Track affected enrollment IDs during bulkUploadPayments
+	// and send SMS to each student with their payment details.
+};
+

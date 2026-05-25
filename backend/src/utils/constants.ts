@@ -131,3 +131,56 @@ export const JOB_EMAIL_CONCURRENCY = 5;
 /** Cleanup behavior for completed/failed jobs */
 export const JOB_REMOVE_ON_COMPLETE = true;
 export const JOB_REMOVE_ON_FAIL = false;
+
+// ─── Audit Actions ─────────────────────────────────────────
+// All action names are centralised here for consistency and grep-ability.
+
+export const AUDIT_ACTION = {
+	// User management
+	ROLE_CHANGED: 'ROLE_CHANGED',
+	USER_ACTIVATED: 'USER_ACTIVATED',
+	USER_DEACTIVATED: 'USER_DEACTIVATED',
+	BARCODE_ASSIGNED: 'BARCODE_ASSIGNED',
+
+	// Classes (courses)
+	CLASS_CREATED: 'CLASS_CREATED',
+	CLASS_UPDATED: 'CLASS_UPDATED',
+
+	// Class sessions
+	SESSION_CREATED: 'SESSION_CREATED',
+	SESSION_UPDATED: 'SESSION_UPDATED',
+	SESSION_DELETED: 'SESSION_DELETED',
+
+	// Exams
+	EXAM_CREATED: 'EXAM_CREATED',
+	EXAM_UPDATED: 'EXAM_UPDATED',
+	EXAM_DELETED: 'EXAM_DELETED',
+	MARKERS_ASSIGNED: 'MARKERS_ASSIGNED',
+	EXAM_UPLOAD_URL: 'EXAM_UPLOAD_URL',
+
+	// Submissions + marking
+	MARKS_SUBMITTED: 'MARKS_SUBMITTED',
+	RESULTS_PUBLISHED: 'RESULTS_PUBLISHED',
+
+	// Payments
+	PAYMENT_OVERRIDDEN: 'PAYMENT_OVERRIDDEN',
+	PAYMENT_BULK_UPLOAD: 'PAYMENT_BULK_UPLOAD',
+
+	// Attendance
+	ATTENDANCE_MANUAL: 'ATTENDANCE_MANUAL',
+	ATTENDANCE_BARCODE: 'ATTENDANCE_BARCODE',
+} as const;
+
+export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
+
+// ─── SMS Templates ─────────────────────────────────────────
+// Mustache-style placeholders. New events require only a new entry here.
+
+export const SMS_TEMPLATES = {
+	RESULTS_PUBLISHED: 'Results published for {examTitle}. Log in to view.',
+	PAYMENT_CONFIRMED: 'Payment received for {courseName} {paymentMonth}. Thank you.',
+	PAYMENT_OVERRIDE: 'Payment for {courseName} {paymentMonth} has been updated. Status: {status}.',
+} as const;
+
+export type SmsTemplateKey = keyof typeof SMS_TEMPLATES;
+

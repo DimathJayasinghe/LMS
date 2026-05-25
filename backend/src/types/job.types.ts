@@ -3,6 +3,7 @@ export interface SmsJobData {
 	message: string;
 	senderId?: string;
 	isUnicode?: boolean;
+	smsLogId?: string;
 }
 
 export interface EmailJobData {

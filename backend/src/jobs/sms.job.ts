@@ -1,6 +1,7 @@
 // BullMQ job: Send SMS via Notify.lk
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
+import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import type { SmsJobData } from '@/types/job.types';
 
@@ -69,6 +70,27 @@ const buildNotifyParams = (config: NotifyConfig, data: SmsJobData): URLSearchPar
 	return params;
 };
 
+/**
+ * Update the SmsLog row after a send attempt.
+ * Non-blocking — errors are logged but never propagated.
+ */
+const updateSmsLog = (
+	smsLogId: string | undefined,
+	status: 'SENT' | 'FAILED',
+	errorDetail?: string,
+): void => {
+	if (!smsLogId) return;
+
+	prisma.smsLog
+		.update({
+			where: { id: smsLogId },
+			data: { status, errorDetail: errorDetail ?? null },
+		})
+		.catch((err: unknown) => {
+			logger.error({ err, smsLogId }, 'Failed to update SmsLog — non-blocking');
+		});
+};
+
 export const processSmsJob = async (data: SmsJobData): Promise<void> => {
 	if (!data.to?.trim()) {
 		throw new AppError('SMS_TO_REQUIRED', 400, 'SMS recipient is required.');
@@ -81,18 +103,28 @@ export const processSmsJob = async (data: SmsJobData): Promise<void> => {
 	const config = getNotifyConfig();
 	const params = buildNotifyParams(config, data);
 
-	const response = await fetch(config.sendUrl, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-		body: params,
-	});
+	try {
+		const response = await fetch(config.sendUrl, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: params,
+		});
 
-	const raw = await response.text();
-	const payload = parseNotifyResponse(raw);
+		const raw = await response.text();
+		const payload = parseNotifyResponse(raw);
 
-	if (!response.ok || payload.status !== 'success') {
-		throw new Error(payload.message ?? raw ?? 'Notify.lk SMS send failed.');
+		if (!response.ok || payload.status !== 'success') {
+			const errorMsg = payload.message ?? raw ?? 'Notify.lk SMS send failed.';
+			updateSmsLog(data.smsLogId, 'FAILED', errorMsg);
+			throw new Error(errorMsg);
+		}
+
+		updateSmsLog(data.smsLogId, 'SENT');
+		logger.info({ to: data.to }, 'SMS sent');
+	} catch (err) {
+		const errorMsg = err instanceof Error ? err.message : 'Unknown SMS error';
+		updateSmsLog(data.smsLogId, 'FAILED', errorMsg);
+		throw err;
 	}
-
-	logger.info({ to: data.to }, 'SMS sent');
 };
+

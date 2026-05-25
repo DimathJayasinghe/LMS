@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as UserService from '@/services/user.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	listUsersQuerySchema,
 	userIdParamSchema,
@@ -33,7 +36,19 @@ export const getUserById = asyncHandler(async (req: Request, res: Response): Pro
 export const updateRole = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = userIdParamSchema.parse(req.params);
 	const input = req.body as UpdateRoleInput;
+
+	// Fetch before state for audit metadata
+	const before = await UserService.getUserById(id);
 	const user = await UserService.updateRole(id, input);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.ROLE_CHANGED,
+		description: `Role changed from ${before.role} to ${input.role}`,
+		targetType: 'User',
+		targetId: id,
+		metadata: { before: { role: before.role }, after: { role: input.role } },
+		context: extractAuditContext(req),
+	});
 
 	res.status(200).json({
 		status: 'success',
@@ -47,6 +62,14 @@ export const updateStatus = asyncHandler(async (req: Request, res: Response): Pr
 	const input = req.body as UpdateStatusInput;
 	const user = await UserService.updateStatus(id, input);
 
+	void AuditService.log({
+		action: input.isActive ? AUDIT_ACTION.USER_ACTIVATED : AUDIT_ACTION.USER_DEACTIVATED,
+		description: input.isActive ? 'Account activated' : 'Account deactivated',
+		targetType: 'User',
+		targetId: id,
+		context: extractAuditContext(req),
+	});
+
 	res.status(200).json({
 		status: 'success',
 		data: user,
@@ -57,7 +80,18 @@ export const updateStatus = asyncHandler(async (req: Request, res: Response): Pr
 export const assignBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = userIdParamSchema.parse(req.params);
 	const input = req.body as AssignBarcodeInput;
+
+	const before = await UserService.getUserById(id);
 	const user = await UserService.assignBarcode(id, input);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.BARCODE_ASSIGNED,
+		description: `Barcode ${before.barcode ? 'changed' : 'assigned'}`,
+		targetType: 'User',
+		targetId: id,
+		metadata: { before: { barcode: before.barcode }, after: { barcode: input.barcode } },
+		context: extractAuditContext(req),
+	});
 
 	res.status(200).json({
 		status: 'success',
@@ -74,3 +108,4 @@ export const getMe = asyncHandler(async (req: Request, res: Response): Promise<v
 		data: user,
 	});
 });
+
