@@ -1,9 +1,13 @@
+# Here this exposes 5000 to the host machine
+
 services:
   backend:
     image: lms-backend-prod
     build:
       context: ./backend
       dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
     env_file:
       - ./backend/.env
     environment:
