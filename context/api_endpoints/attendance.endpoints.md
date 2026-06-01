@@ -90,7 +90,7 @@ Admin scans a student's barcode at the physical entrance. Uses upsert to prevent
 
 ### POST `/zoom-webhook`
 
-Zoom webhook endpoint for `meeting.participant_joined`. Uses upsert to handle reconnect storms. No authentication required (secured by Zoom's webhook challenge flow and implicit knowledge of meetings).
+Zoom webhook endpoint for `meeting.participant_joined`. Uses upsert to handle reconnect storms. Verified using Zoom's webhook signature headers (`x-zm-request-timestamp`, `x-zm-signature`) and `ZOOM_WEBHOOK_SECRET`.
 
 **Request body**
 
@@ -120,6 +120,10 @@ Zoom webhook endpoint for `meeting.participant_joined`. Uses upsert to handle re
 }
 ```
 *Note: Always returns 200 OK to Zoom to prevent webhook retries, even if the student or meeting isn't found.*
+
+**Zoom URL validation (endpoint.url_validation)**
+
+Zoom expects a raw response payload with `plainToken` and `encryptedToken` (no standard wrapper).
 
 ### POST `/manual`
 

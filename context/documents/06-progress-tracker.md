@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 6 — Notifications & Real-Time |
-| **Last Updated** | 2026-05-25 |
-| **Last Completed Task** | Step 12 — Background Jobs (BullMQ) |
-| **Next Task** | Step 13 — Audit Logs + SMS |
+| **Current Phase** | Phase 9 — Polish & Hardening |
+| **Last Updated** | 2026-05-29 |
+| **Last Completed Task** | Step 13 — Audit Logs + SMS |
+| **Next Task** | Step 14 — Hardening (Sentry, logging, env validation, smoke tests) |
 | **Blockers** | None |
 
 ---
@@ -24,13 +24,13 @@
 | 1 | Auth & User Management | 🟡 In Progress | JWT auth, role-based access, user CRUD, barcode assignment |
 | 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
-| 4 | Marking & Results | ⬜ Not Started | Marker assignment, grading UI, result publishing, SSE broadcast |
-| 5 | Payments | ⬜ Not Started | PayHere integration, idempotency, Excel bulk upload, payment dashboard |
-| 6 | Notifications & Real-Time | 🟡 In Progress | SSE infrastructure, SMS via Notify.lk, BullMQ background jobs |
+| 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
+| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; UI pending |
+| 6 | Notifications & Real-Time | 🟡 In Progress | Backend done; notification UI pending |
 | 7 | Admin Dashboard | ⬜ Not Started | Audit logs, user management UI, financial reports, support tools |
 | 8 | Student Dashboard | ⬜ Not Started | Home view, class schedule, results, payments, video player |
-| 9 | Polish & Hardening | ⬜ Not Started | Error handling UX, loading states, dark mode, performance, SEO |
-| 10 | Deployment | ⬜ Not Started | Vercel + Render setup, DNS, staging/prod pipeline, monitoring |
+| 9 | Polish & Hardening | 🟡 In Progress | Backend hardening in progress; frontend polish pending |
+| 10 | Deployment | ⬜ Not Started | Vercel + EC2 + Upstash setup, DNS, staging/prod pipeline, monitoring |
 
 ---
 
@@ -39,7 +39,7 @@
 ### Tasks
 
 - [x] Create project documentation (`context/documents/` — 6 files)
-- [ ] Initialize Next.js frontend (`/frontend`) with TypeScript + Tailwind + App Router
+- [x] Initialize Next.js frontend (`/frontend`) with TypeScript + Tailwind + App Router
 - [x] Initialize Node.js backend (`/backend`) with TypeScript + Express
 - [x] Configure Prisma with schema from plan document
 - [ ] Set up shared Zod schemas
@@ -48,7 +48,7 @@
 - [x] Set up Redis connection config
 - [x] Set up Pino logger
 - [x] Set up global error handler
-- [x] Set up Docker (backend + postgres + redis)
+- [x] Set up Docker (backend + redis for local dev)
 - [ ] Create base Axios instance (frontend)
 - [ ] Set up Zustand store skeleton (auth store)
 - [ ] Create base UI component library (Button, Input, Badge, Card, Modal, Toast)
@@ -89,6 +89,9 @@
 | `backend/src/utils/payhere.ts` | PayHere hash/signature helpers |
 | `backend/src/jobs/notification.queue.ts` | BullMQ queues + enqueue helpers |
 | `backend/src/types/job.types.ts` | Job payload types for BullMQ |
+| `backend/src/config/sentry.ts` | Sentry initialization + capture helper |
+| `backend/src/middleware/request-logger.middleware.ts` | Pino HTTP request logging middleware |
+| `backend/src/middleware/zoom-webhook.middleware.ts` | Zoom webhook signature validation |
 
 ---
 
@@ -116,11 +119,11 @@
 
 - [x] Create `class.routes.ts`, `class.controller.ts`, `class.service.ts`
 - [x] Implement class session CRUD (with soft delete)
-- [ ] Create `attendance.routes.ts`, `attendance.controller.ts`, `attendance.service.ts`
-- [ ] Implement barcode scanning attendance endpoint
-- [ ] Implement Zoom webhook handler (upsert attendance)
-- [ ] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
-- [ ] Implement Bunny.net video token generation (IP-bound)
+- [x] Create `attendance.routes.ts`, `attendance.controller.ts`, `attendance.service.ts`
+- [x] Implement barcode scanning attendance endpoint
+- [x] Implement Zoom webhook handler (upsert attendance)
+- [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
+- [x] Implement Bunny.net video token generation (IP-bound)
 - [ ] Build class schedule page (student view)
 - [ ] Build attendance scanner page (admin view)
 - [ ] Build video player component with DRM black-screen detection
@@ -133,8 +136,8 @@
 
 - [x] Create `exam.routes.ts`, `exam.controller.ts`, `exam.service.ts`
 - [x] Implement exam CRUD with R2 presigned URL generation
-- [ ] Implement MCQ question model and answer engine
-- [ ] Create `submission.routes.ts`, `submission.controller.ts`, `submission.service.ts`
+- [x] Implement MCQ question model and answer engine
+- [x] Create `submission.routes.ts`, `submission.controller.ts`, `submission.service.ts`
 - [ ] Implement multipart PDF upload with token refresh
 - [x] Implement server-authoritative exam timer validation
 - [ ] Build exam list page (student view)
@@ -148,10 +151,9 @@
 
 ### Tasks
 
-- [ ] Create `marking.routes.ts`, `marking.controller.ts`, `marking.service.ts`
-- [ ] Implement marker assignment (Super Admin → Marker × Exam)
-- [ ] Implement mark submission (idempotent)
-- [ ] Implement result publishing (batch)
+- [x] Implement marker assignment (Super Admin → Marker × Exam)
+- [x] Implement mark submission (idempotent)
+- [x] Implement result publishing (batch)
 - [ ] Build marking interface (marker view — PDF viewer + mark input)
 - [ ] Build results page (student view)
 - [x] Implement SSE broadcast for result publication
@@ -213,6 +215,12 @@
 
 ### Tasks
 
+- [x] Add Sentry error tracking for API + worker
+- [x] Add Pino HTTP request logging middleware
+- [x] Enforce production env validation for external services
+- [x] Verify Zoom webhook signatures (timestamp + HMAC)
+- [x] Tighten auth rate limit to 10/min
+- [ ] Run backend smoke tests (requires prod-like env)
 - [ ] Implement loading skeletons on all data-fetching pages
 - [ ] Implement empty states with illustrations
 - [ ] Implement toast notifications for all mutations
@@ -229,10 +237,10 @@
 ### Tasks
 
 - [ ] Configure Vercel project + custom domain
-- [ ] Configure Render services (API + Worker)
+- [ ] Provision EC2 instance + PM2 (API + worker)
 - [ ] Set up Cloudflare DNS records
 - [ ] Configure Neon PostgreSQL + PgBouncer pooled URL
-- [ ] Set up Redis instance (Upstash or Render)
+- [ ] Set up Redis instance (Upstash)
 - [ ] Set up Sentry projects (frontend + backend)
 - [ ] Create GitHub Actions CI/CD pipeline (staging → production)
 - [ ] Smoke test full system on staging
@@ -259,6 +267,7 @@
 | 2026-05-12 | Map `Role.ADMIN` as Super Admin, `Role.STAFF` as Admin | Prisma enum lacks `SUPER_ADMIN`; route guards follow this temporary mapping for Step 4 |
 | 2026-05-13 | Treat "classes" as courses; sessions are nested resources | Classes map to Course model; sessions live under `/api/classes/:classId/sessions` |
 | 2026-05-20 | Accept R2 endpoint + legacy env keys | Align local env vars with R2 client configuration without renaming existing secrets |
+| 2026-05-29 | Move backend hosting to EC2 + PM2 | Single-instance deploy with Upstash Redis; frontend stays on Vercel |
 
 ---
 
@@ -271,6 +280,6 @@
 | JWT expiry during long exam | Silent refresh token rotation | ⬜ To implement |
 | R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement |
 | DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ To implement |
-| Webhook spam from flaky student connections | Upsert-based webhook handlers | ⬜ To implement |
-| Database cascade delete | Soft deletes + `onDelete: Restrict` | ⬜ To implement |
-| Multi-server cron job collision | BullMQ distributed queue | ⬜ To implement |
+| Webhook spam from flaky student connections | Upsert-based webhook handlers | ✅ Done |
+| Database cascade delete | Soft deletes + `onDelete: Restrict` | ✅ Done |
+| Multi-server cron job collision | BullMQ distributed queue | ✅ Done |

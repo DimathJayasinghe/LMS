@@ -17,25 +17,16 @@
             │ HTTPS                  │ HTTPS
             ▼                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│  2. COMPUTE LAYER  (Render — Auto-Scaling Group)        │
+│  2. COMPUTE LAYER  (AWS EC2 — Single Instance)          │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │         Load Balancer (round-robin)                │  │
-│  └──────────┬──────────────────────┬──────────────────┘  │
-│       ┌─────▼──────┐        ┌─────▼──────┐              │
-│       │ Node.js #1 │        │ Node.js #N │              │
-│       │ Express    │        │ Express    │              │
-│       │ Prisma ORM │        │ Prisma ORM │              │
-│       └─────┬──────┘        └─────┬──────┘              │
-│             │                     │                      │
-│  ┌──────────▼─────────────────────▼──────────────────┐  │
-│  │        BullMQ Background Worker (separate)        │  │
-│  └───────────────────────┬───────────────────────────┘  │
+│  │  Node.js API (PM2)   +   BullMQ Worker (PM2)        │  │
+│  └───────────────────────┬────────────────────────────┘  │
 └──────────────────────────┼──────────────────────────────┘
                            │
 ┌──────────────────────────┼──────────────────────────────┐
 │  3. DATA LAYER           │                              │
 │  ┌───────────────┐  ┌────▼──────────┐                   │
-│  │ Redis         │  │ Neon Postgres │                   │
+│  │ Upstash Redis │  │ Neon Postgres │                   │
 │  │ (Cache/Queue) │  │ (via PgBouncer│                   │
 │  └───────────────┘  └───────────────┘                   │
 └─────────────────────────────────────────────────────────┘
@@ -65,7 +56,7 @@
 | **Database** | Neon Serverless PostgreSQL | Relational source of truth |
 | **ORM** | Prisma | Type-safe queries, migrations |
 | **Connection Pooling** | PgBouncer (Neon pooled URL) | Survives horizontal auto-scaling |
-| **Cache / Pub-Sub** | Redis (Upstash or Render Redis) | Session cache, result cache, BullMQ backbone, rate-limit store |
+| **Cache / Pub-Sub** | Upstash Redis | Session cache, result cache, BullMQ backbone, rate-limit store |
 | **Task Queue** | BullMQ | Background jobs (emails, SMS, cron) on separate worker |
 | **File Storage** | Cloudflare R2 | Zero-egress S3-compatible; presigned URL uploads |
 | **Video CDN** | Bunny.net (Bunny Stream) | HLS VOD with IP-bound DRM tokens |
@@ -74,7 +65,7 @@
 | **SMS** | Notify.lk (Lite plan) | Student notifications |
 | **CMS (Marketing)** | Sanity CMS | Public landing page banners and timetables |
 | **Hosting (Frontend)** | Vercel | Edge-optimized Next.js hosting |
-| **Hosting (Backend)** | Render | Auto-scaling Node.js with background workers |
+| **Hosting (Backend)** | AWS EC2 + PM2 | Single-instance Node.js API + worker on a t2.micro |
 | **Observability** | Sentry + Pino | Crash reporting + structured JSON logging |
 | **Security** | Helmet.js + express-rate-limit (Redis-backed) | HTTP hardening + distributed rate limiting |
 | **CI/CD** | GitHub Actions | Staging → Production pipeline with zero-downtime deploys |
@@ -192,11 +183,11 @@ These rules **must never be violated**. Every code review should check against t
 | Domain | Target | Host |
 |--------|--------|------|
 | `academylms.com` / `www.academylms.com` | Next.js frontend | Vercel |
-| `api.academylms.com` | Node.js backend | Render |
+| `api.academylms.com` | Node.js backend | AWS EC2 |
 
 - **DNS Provider**: Cloudflare
 - **Frontend**: `A` / `CNAME` record for `@` → Vercel
-- **Backend**: `CNAME` record for `api` → Render service URL
+- **Backend**: `A` record (or Elastic IP) for `api` → EC2 instance
 
 ---
 
@@ -204,7 +195,7 @@ These rules **must never be violated**. Every code review should check against t
 
 | Layer | Mechanism |
 |-------|-----------|
-| Transport | HTTPS everywhere (Vercel + Render auto-TLS) |
+| Transport | HTTPS everywhere (Vercel + EC2 reverse proxy TLS) |
 | Authentication | JWT access token (15 min) + refresh token (7 days) in HTTP-only cookies |
 | Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`) |
 | Input Validation | Zod schemas in middleware — reject before reaching controller |
