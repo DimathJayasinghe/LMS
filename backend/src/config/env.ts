@@ -48,6 +48,12 @@ const envSchema = z.object({
   // The pull-zone CDN base URL, e.g. https://vz-xxxxxxxx.b-cdn.net
   BUNNY_CDN_HOSTNAME: z.string().default(''),
 
+  // Zoom (Webhooks)
+  ZOOM_WEBHOOK_SECRET: z.string().default(''),
+  ZOOM_ACCOUNT_ID: z.string().default(''),
+  ZOOM_CLIENT_ID: z.string().default(''),
+  ZOOM_CLIENT_SECRET: z.string().default(''),
+
   // PayHere (Payments)
   // Optional at boot — validated at runtime when checkout is requested.
   PAYHERE_MERCHANT_ID: z.string().default(''),
@@ -75,6 +81,9 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().default(''),
   RESEND_FROM_EMAIL: z.string().default(''),
   RESEND_REPLY_TO_EMAIL: z.string().default(''),
+
+  // Sentry
+  SENTRY_DSN: z.string().default(''),
 });
 
 // Fail fast — crash on boot if env is invalid
@@ -86,3 +95,38 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// Enforce full external service configuration in production
+if (env.NODE_ENV === 'production') {
+  const missing: string[] = [];
+
+  const hasR2Endpoint = Boolean(env.R2_ENDPOINT || env.R2_ACCOUNT_ID);
+  if (!env.R2_ACCESS_KEY_ID) missing.push('R2_ACCESS_KEY_ID');
+  if (!env.R2_SECRET_ACCESS_KEY) missing.push('R2_SECRET_ACCESS_KEY');
+  if (!env.R2_BUCKET_NAME) missing.push('R2_BUCKET_NAME');
+  if (!hasR2Endpoint) missing.push('R2_ENDPOINT or R2_ACCOUNT_ID');
+
+  if (!env.BUNNY_API_KEY) missing.push('BUNNY_API_KEY');
+  if (!env.BUNNY_LIBRARY_ID) missing.push('BUNNY_LIBRARY_ID');
+  if (!env.BUNNY_CDN_HOSTNAME) missing.push('BUNNY_CDN_HOSTNAME');
+
+  if (!env.ZOOM_WEBHOOK_SECRET) missing.push('ZOOM_WEBHOOK_SECRET');
+
+  if (!env.PAYHERE_MERCHANT_ID) missing.push('PAYHERE_MERCHANT_ID');
+  if (!env.PAYHERE_MERCHANT_SECRET) missing.push('PAYHERE_MERCHANT_SECRET');
+  if (!env.PAYHERE_RETURN_URL) missing.push('PAYHERE_RETURN_URL');
+  if (!env.PAYHERE_CANCEL_URL) missing.push('PAYHERE_CANCEL_URL');
+  if (!env.PAYHERE_NOTIFY_URL) missing.push('PAYHERE_NOTIFY_URL');
+
+  if (!env.NOTIFY_SEND_URL) missing.push('NOTIFY_SEND_URL');
+  if (!env.NOTIFY_USER_ID) missing.push('NOTIFY_USER_ID');
+  if (!env.NOTIFY_API_KEY) missing.push('NOTIFY_API_KEY');
+  if (!env.NOTIFY_SENDER_ID) missing.push('NOTIFY_SENDER_ID');
+
+  if (!env.SENTRY_DSN) missing.push('SENTRY_DSN');
+
+  if (missing.length > 0) {
+    console.error('❌ Missing required production environment variables:', missing);
+    process.exit(1);
+  }
+}

@@ -23,7 +23,7 @@ Temporary mapping for Step 4:
 
 ## Response Shapes (Current Implementation)
 
-There are two error shapes in use today:
+Current error shapes in use today:
 
 ### Success (controllers)
 
@@ -61,11 +61,9 @@ There are two error shapes in use today:
 
 ```json
 {
-	"success": false,
-	"error": {
-		"code": "USER_NOT_FOUND",
-		"message": "User not found."
-	}
+	"status": "error",
+	"message": "User not found.",
+	"code": "USER_NOT_FOUND"
 }
 ```
 

@@ -21,7 +21,7 @@ Production-grade Learning Management System for a single educational institute (
 | Database | Neon PostgreSQL (PgBouncer pooling) |
 | Cache/Queue | Redis, BullMQ |
 | Storage | Cloudflare R2 (files), Bunny.net (video) |
-| Hosting | Vercel (frontend), Render (backend + workers) |
+| Hosting | Vercel (frontend), AWS EC2 + PM2 (backend + workers) |
 
 ## Project Structure
 
@@ -46,7 +46,7 @@ cd backend && npm install && npx prisma generate && npm run dev
 - **Stateless servers** — zero in-memory state; all shared state in Redis
 - **3-tier separation** — Routes (URLs) → Controllers (req/res) → Services (business logic + DB)
 - **Direct-to-cloud uploads** — presigned URLs; files never touch the API server
-- **Horizontal scaling** — designed for Render auto-scaling from day one
+- **Production-ready** — PM2-managed API + worker on EC2; designed to scale later
 
 ## Environment Variables
 
