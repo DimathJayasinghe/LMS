@@ -29,18 +29,30 @@ If this is a fresh database, run migrations once:
 npx prisma migrate deploy
 ```
 
-## Docker (Neon + Redis)
+## EC2 Deployment (PM2)
 
-The Compose setup uses Neon for `DATABASE_URL` and runs Redis in a container. It reads env values from [backend/.env](backend/.env).
+This project runs on a single EC2 instance with PM2 managing two processes:
 
-From the repo root:
+1. Build the API:
 
 ```bash
-docker compose up --build
+npm install
+npm run build
 ```
 
-If you need to apply migrations to Neon from inside the container:
+2. Start processes with PM2:
 
 ```bash
-docker compose exec backend npx prisma migrate deploy
+pm2 start dist/index.js --name "lms-api"
+pm2 start dist/worker.js --name "lms-worker"
+```
+
+Make sure `REDIS_URL` points to Upstash (`rediss://`) and all production env vars are set.
+
+## Docker (Local Only)
+
+Docker Compose is kept for local development only. It starts the API, worker, and a local Redis.
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
 ```

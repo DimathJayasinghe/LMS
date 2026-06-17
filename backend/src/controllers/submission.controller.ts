@@ -131,7 +131,9 @@ export const publishResults = asyncHandler(
  */
 const sendResultsSms = async (examId: string, examTitle: string): Promise<void> => {
   try {
-    const submissions = await prisma.submission.findMany({
+    type SubmissionRecipient = { user: { id: string; phone: string | null } };
+
+    const submissions: SubmissionRecipient[] = await prisma.submission.findMany({
       where: { examId },
       select: {
         user: { select: { id: true, phone: true } },

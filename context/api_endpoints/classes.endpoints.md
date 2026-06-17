@@ -59,11 +59,9 @@ Temporary mapping for this phase:
 
 ```json
 {
-	"success": false,
-	"error": {
-		"code": "CLASS_NOT_FOUND",
-		"message": "Class not found."
-	}
+	"status": "error",
+	"message": "Class not found.",
+	"code": "CLASS_NOT_FOUND"
 }
 ```
 

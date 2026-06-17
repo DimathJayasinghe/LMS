@@ -14,11 +14,13 @@ import { logger } from './logger';
  * Rate limiting degrades to in-memory when Redis is down.
  */
 const REDIS_RETRY_LOG_INTERVAL = 10; // Only log every Nth reconnect attempt
+const usesTls = env.REDIS_URL.startsWith('rediss://');
 
 export const redis = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null, // Required by BullMQ — retries indefinitely
   enableReadyCheck: true,
   lazyConnect: true,          // Don't connect on import — connect on first command
+  ...(usesTls ? { tls: {} } : {}),
   retryStrategy(times: number): number {
     const delay = Math.min(times * 50, 5000);
 
