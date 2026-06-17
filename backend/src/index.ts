@@ -1,12 +1,15 @@
 import express from 'express';
+import type { Request } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { logger } from './config/logger';
+import { initSentry, captureException } from './config/sentry';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { initStreamService, shutdownStreamService } from './services/stream.service';
 import { createRateLimiters } from './config/rate-limiter';
+import { requestLogger } from './middleware/request-logger.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { createAuthRouter } from './routes/auth.routes';
 import { userRoutes } from './routes/user.routes';
@@ -18,6 +21,8 @@ import { submissionRoutes } from './routes/submission.routes';
 import { paymentRoutes } from './routes/payment.routes';
 import { streamRoutes } from './routes/stream.routes';
 import { auditRoutes } from './routes/audit.routes';
+
+initSentry();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -32,9 +37,15 @@ app.use(
 );
 
 // ─── Body Parsing ────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, _res, buf) => {
+    (req as Request).rawBody = buf.toString('utf8');
+  },
+}));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+app.use(requestLogger);
 
 // ─── Bootstrap ───────────────────────────────────────────────
 const bootstrap = async (): Promise<void> => {
@@ -77,11 +88,11 @@ const bootstrap = async (): Promise<void> => {
   });
 };
 
-const shutdown = async (signal: string): Promise<void> => {
+const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
   await shutdownStreamService();
   await disconnectRedis();
-  process.exit(0);
+  process.exit(exitCode);
 };
 
 process.on('SIGTERM', () => {
@@ -92,8 +103,20 @@ process.on('SIGINT', () => {
   void shutdown('SIGINT');
 });
 
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled promise rejection');
+  captureException(reason, { tags: { origin: 'unhandledRejection' } });
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception');
+  captureException(err, { tags: { origin: 'uncaughtException' } });
+  void shutdown('uncaughtException', 1);
+});
+
 bootstrap().catch((err) => {
   logger.error({ err }, 'Failed to start server');
+  captureException(err, { tags: { origin: 'bootstrap' } });
   process.exit(1);
 });
 

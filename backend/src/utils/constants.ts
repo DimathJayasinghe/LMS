@@ -27,10 +27,15 @@ export const RATE_LIMIT_GLOBAL_MAX = 100;
 export const RATE_LIMIT_GLOBAL_WINDOW_MS = 60 * 1000;
 
 /** Auth endpoints: stricter limit to prevent brute-force */
-export const RATE_LIMIT_AUTH_MAX = 20;
+export const RATE_LIMIT_AUTH_MAX = 10;
 
 /** Auth rate limit window in milliseconds (1 minute) */
 export const RATE_LIMIT_AUTH_WINDOW_MS = 60 * 1000;
+
+// ─── Zoom Webhooks ─────────────────────────────────────────
+
+/** Allowed timestamp skew for Zoom webhook signatures (seconds) */
+export const ZOOM_WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
 
 // ─── Idempotency ────────────────────────────────────────────
 

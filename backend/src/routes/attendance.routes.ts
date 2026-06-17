@@ -4,6 +4,7 @@ import * as AttendanceController from '@/controllers/attendance.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { verifyZoomWebhook } from '@/middleware/zoom-webhook.middleware';
 import {
   scanBarcodeSchema,
   manualAttendanceSchema,
@@ -31,6 +32,7 @@ attendanceRoutes.post(
 // Zoom fires this on participant.joined events
 attendanceRoutes.post(
   '/zoom-webhook',
+  verifyZoomWebhook,
   AttendanceController.handleZoomWebhook,
 );
 

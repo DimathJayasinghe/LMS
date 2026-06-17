@@ -17,7 +17,7 @@
 import 'dotenv/config';
 import { randomUUID } from 'crypto';
 
-const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:80';
+const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:5000';
 const ADMIN_EMAIL = process.env.LMS_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.LMS_ADMIN_PASSWORD;
 const TEST_ID = randomUUID().slice(0, 8);

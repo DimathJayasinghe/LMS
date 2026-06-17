@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
@@ -15,6 +16,7 @@ import {
   attendanceQuerySchema,
 } from '@/schemas/attendance.schema';
 import { logger } from '@/config/logger';
+import { env } from '@/config/env';
 
 // ─── POST /api/attendance/scan ───────────────────────────────
 // Admin scans a student's barcode at the physical entrance
@@ -48,12 +50,23 @@ export const handleZoomWebhook = asyncHandler(
     // Zoom URL validation challenge — respond with the challenge token
     // Zoom sends this during webhook endpoint setup to verify ownership
     if (body.event === 'endpoint.url_validation') {
-      const plainToken = body.payload as Record<string, unknown>;
-      res.status(200).json({
-        plainToken: (plainToken as Record<string, unknown>).plainToken,
-        encryptedToken: (plainToken as Record<string, unknown>).plainToken,
-        message: body,
-      });
+      const payload = body.payload as Record<string, unknown> | undefined;
+      const plainToken = typeof payload?.plainToken === 'string' ? payload.plainToken : '';
+
+      if (!plainToken) {
+        res.status(400).json({
+          status: 'error',
+          message: 'Invalid Zoom validation payload.',
+          code: 'ZOOM_VALIDATION_INVALID',
+        });
+        return;
+      }
+
+      const encryptedToken = createHmac('sha256', env.ZOOM_WEBHOOK_SECRET)
+        .update(plainToken)
+        .digest('hex');
+
+      res.status(200).json({ plainToken, encryptedToken });
       return;
     }
 

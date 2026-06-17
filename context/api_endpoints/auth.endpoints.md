@@ -19,7 +19,7 @@ The auth system uses HTTP-only cookies.
 
 ## Response Shapes (Current Implementation)
 
-There are two error shapes in use today:
+Current error shapes in use today:
 
 ### Success (controllers)
 
@@ -47,11 +47,9 @@ There are two error shapes in use today:
 
 ```json
 {
-	"success": false,
-	"error": {
-		"code": "INVALID_CREDENTIALS",
-		"message": "Invalid email or password."
-	}
+	"status": "error",
+	"message": "Invalid email or password.",
+	"code": "INVALID_CREDENTIALS"
 }
 ```
 

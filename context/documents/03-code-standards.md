@@ -190,7 +190,7 @@ export class AppError extends Error {
 - All known errors throw `AppError` with a code and HTTP status.
 - Global error handler in `index.ts` catches everything and returns uniform JSON:
   ```json
-  { "success": false, "error": { "code": "DUPLICATE_PAYMENT", "message": "..." } }
+  { "status": "error", "message": "...", "code": "DUPLICATE_PAYMENT" }
   ```
 
 ### 5.5 Middleware Ordering

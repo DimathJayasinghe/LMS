@@ -506,14 +506,14 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 - [ ] Validate all env vars for every service (R2, Bunny, Zoom, PayHere, Notify)
 - [ ] Ensure all `onDelete` relations use `Restrict` or soft delete
 - [ ] Add `npm run worker` script to `package.json`
-- [ ] Write Dockerfile for backend + worker (Render deployment)
+- [ ] Document PM2 process setup for API + worker (EC2 deployment)
 - [ ] Smoke test all endpoints end-to-end
 
 ### Acceptance Criteria
 
 - Sentry captures unhandled errors with full stack trace
 - Rate limiter blocks >10 login attempts per minute per IP
-- All endpoints return uniform `{ success, data/error }` JSON shape
+- All endpoints return uniform `{ status, data, message, code }` JSON shape
 
 ---
 
