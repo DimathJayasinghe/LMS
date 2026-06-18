@@ -84,7 +84,11 @@ const bootstrap = async (): Promise<void> => {
 
   // ─── Start Server ────────────────────────────────────────────
   app.listen(env.PORT, () => {
-    logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server is running');
+    logger.info({
+      port: env.PORT,
+      env: env.NODE_ENV,
+      corsOrigin: env.FRONTEND_URL,
+    }, 'Server is running');
   });
 };
 

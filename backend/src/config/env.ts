@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+// More robust dotenv loading - search for .env in the backend root
+// works whether running from src/ (dev) or dist/ (prod)
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const resolvedEnv = {
   ...process.env,
@@ -27,8 +30,14 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
-  // Frontend URL (CORS)
-  FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  // Frontend URL (CORS) - Support comma-separated origins
+  FRONTEND_URL: z
+    .string()
+    .default('http://localhost:3000')
+    .transform((val) => {
+      const origins = val.split(',').map((o) => o.trim().replace(/\/$/, ''));
+      return origins.length === 1 ? origins[0] : origins;
+    }),
 
   // Cloudflare R2 (Exam PDFs)
   // Optional at boot — validated at runtime when presigned URLs are generated.

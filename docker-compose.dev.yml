@@ -49,5 +49,5 @@ services:
       - /app/node_modules
     depends_on:
       - redis
-    command: sh -c "npx prisma generate && npx tsx src/worker.ts"
+    command: npm run dev:worker
     restart: unless-stopped
