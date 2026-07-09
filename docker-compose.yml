@@ -1,14 +1,22 @@
-# Here this exposes 5000 to the host machine
+# Production stack for a SINGLE VPS.
+# nginx (reverse proxy) + backend (API) + worker (BullMQ) + redis.
+# Postgres is NOT here — it is managed by Neon (see backend/.env DATABASE_URL).
+# Deploy:  git pull && docker compose up -d --build
+# See context/documents/09-cost-and-hosting.md for the full runbook.
 
 services:
   nginx:
     image: nginx:alpine
     ports:
       - "80:80"
+      # Enable once TLS certs are mounted (Let's Encrypt / Cloudflare origin cert):
+      # - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - lms
     restart: unless-stopped
@@ -24,11 +32,19 @@ services:
       PORT: "5000"
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
-      FRONTEND_URL: http://localhost
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     expose:
       - "5000"
+    healthcheck:
+      # node:22 has global fetch — avoids needing curl/wget in the slim image.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - lms
     restart: unless-stopped
@@ -45,13 +61,23 @@ services:
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - lms
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    # AOF persistence so the queue + cache survive a restart (see 09 §5).
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - lms
     restart: unless-stopped
@@ -59,3 +85,6 @@ services:
 networks:
   lms:
     driver: bridge
+
+volumes:
+  redis-data:
