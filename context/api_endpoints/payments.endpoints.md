@@ -2,6 +2,10 @@
 
 ## Base URL: `/api/payments`
 
+> **Roles (2026-07-09)**: enum is `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. Below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk). `PATCH /:id/override` is `SUPER_ADMIN` only.
+>
+> **New**: `Payment.method` (`ONLINE` | `ENTRANCE` | `BULK` | `MANUAL`) + `collectedById` (staff who took an `ENTRANCE`/`MANUAL` payment). A dedicated pay-at-entrance endpoint is a follow-up.
+
 ### 1. Initiate Payment (PayHere Checkout)
 Generates the payload required to redirect a student to PayHere checkout.
 
