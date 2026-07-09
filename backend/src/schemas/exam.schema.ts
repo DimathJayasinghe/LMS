@@ -38,6 +38,9 @@ const examBaseSchema = z.object({
 	totalMarks: z.coerce.number().int().positive().optional(),
 	paperPdfUrl: z.string().trim().min(1).nullable().optional(),
 	mcqPayload: mcqPayloadSchema.nullable().optional(),
+	// Answer channels students may use (default true in DB if omitted)
+	allowTypedAnswers: z.boolean().optional(),
+	allowPdfUpload: z.boolean().optional(),
 });
 
 export const createExamSchema = examBaseSchema;

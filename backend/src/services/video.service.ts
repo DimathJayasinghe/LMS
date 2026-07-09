@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { generateBunnyStreamUrl, getBunnyEmbedUrl } from '@/utils/bunny';
+import type { AuthenticatedUser } from '@/types/auth.types';
+import { assertCourseAccess } from '@/services/class.service';
+import { assertStudentContentAccess } from '@/services/access.service';
 import type {
   CreateVideoInput,
   UpdateVideoInput,
@@ -83,8 +86,10 @@ const ensureSessionExists = async (
 
 export const createVideoRecording = async (
   input: CreateVideoInput,
+  actor: AuthenticatedUser,
 ): Promise<VideoRecordWithSession> => {
-  await ensureSessionExists(input.classSessionId);
+  const session = await ensureSessionExists(input.classSessionId);
+  await assertCourseAccess(session.courseId, actor);
 
   return prisma.videoRecording.create({
     data: {
@@ -103,15 +108,18 @@ export const createVideoRecording = async (
 export const updateVideoRecording = async (
   videoId: string,
   input: UpdateVideoInput,
+  actor: AuthenticatedUser,
 ): Promise<VideoRecord> => {
   const video = await prisma.videoRecording.findUnique({
     where: { id: videoId },
-    select: { id: true },
+    select: { id: true, classSession: { select: { courseId: true } } },
   });
 
   if (!video) {
     throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
   }
+
+  await assertCourseAccess(video.classSession.courseId, actor);
 
   return prisma.videoRecording.update({
     where: { id: videoId },
@@ -127,15 +135,20 @@ export const updateVideoRecording = async (
 // Permanently removes the DB record (NOT the Bunny asset).
 // VideoRecording has no child relations so hard delete is safe.
 
-export const deleteVideoRecording = async (videoId: string): Promise<void> => {
+export const deleteVideoRecording = async (
+  videoId: string,
+  actor: AuthenticatedUser,
+): Promise<void> => {
   const video = await prisma.videoRecording.findUnique({
     where: { id: videoId },
-    select: { id: true },
+    select: { id: true, classSession: { select: { courseId: true } } },
   });
 
   if (!video) {
     throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
   }
+
+  await assertCourseAccess(video.classSession.courseId, actor);
 
   await prisma.videoRecording.delete({ where: { id: videoId } });
 };
@@ -147,6 +160,7 @@ export const deleteVideoRecording = async (videoId: string): Promise<void> => {
 export const listVideosByClass = async (
   courseId: string,
   query: VideoListQuery,
+  actor: AuthenticatedUser,
 ): Promise<{ records: VideoRecordWithSession[]; total: number }> => {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
@@ -156,6 +170,9 @@ export const listVideosByClass = async (
   if (!course) {
     throw new AppError('CLASS_NOT_FOUND', 404, 'Class (course) not found.');
   }
+
+  // Students must be enrolled to see a course's video list.
+  await assertStudentContentAccess(actor, courseId, { requirePaid: false });
 
   const where: Prisma.VideoRecordingWhereInput = {
     classSession: {
@@ -206,6 +223,7 @@ export const getVideoById = async (videoId: string): Promise<VideoRecordWithSess
 export const generateStreamUrl = async (
   videoId: string,
   clientIp: string,
+  actor: AuthenticatedUser,
 ): Promise<{
   video: VideoRecordWithSession;
   streamUrl: string;
@@ -213,6 +231,10 @@ export const generateStreamUrl = async (
   expiresAt: number;
 }> => {
   const video = await getVideoById(videoId);
+
+  // Gate: a student must be enrolled AND have paid the current month before we
+  // ever mint an IP-bound Bunny token (architecture §7.1 — content protection).
+  await assertStudentContentAccess(actor, video.classSession.courseId, { requirePaid: true });
 
   const { streamUrl, expiresAt } = generateBunnyStreamUrl(video.bunnyVideoId, clientIp);
   const embedUrl = getBunnyEmbedUrl(video.bunnyVideoId);

@@ -43,7 +43,7 @@ submissionRoutes.patch(
 submissionRoutes.get(
   '/exam/:examId',
   verifyToken,
-  requireRole(Role.ADMIN, Role.MARKER),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.MARKER),
   validateParams(listSubmissionsParamsSchema),
   validateQuery(listSubmissionsQuerySchema),
   SubmissionController.listSubmissions,
@@ -66,7 +66,7 @@ submissionRoutes.patch(
 submissionRoutes.post(
   '/exam/:examId/publish',
   verifyToken,
-  requireRole(Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateParams(publishResultsParamsSchema),
   SubmissionController.publishResults,
 );

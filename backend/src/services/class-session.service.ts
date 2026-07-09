@@ -1,11 +1,14 @@
 import { ClassType, Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import type { AuthenticatedUser } from '@/types/auth.types';
 import type {
   CreateClassSessionInput,
   ListClassSessionsQuery,
   UpdateClassSessionInput,
 } from '@/schemas/class-session.schema';
+import { assertCourseAccess } from '@/services/class.service';
+import { assertStudentContentAccess } from '@/services/access.service';
 import * as StreamService from '@/services/stream.service';
 
 interface ClassSessionSummary {
@@ -48,8 +51,9 @@ const ensureClassExists = async (classId: string): Promise<void> => {
 export const createClassSession = async (
   classId: string,
   input: CreateClassSessionInput,
+  actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary> => {
-  await ensureClassExists(classId);
+  await assertCourseAccess(classId, actor);
 
   const session = await prisma.classSession.create({
     data: {
@@ -77,14 +81,17 @@ export const createClassSession = async (
 export const listClassSessions = async (
   classId: string,
   query: ListClassSessionsQuery,
-  role: Role,
+  actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary[]> => {
+  const role = actor.role;
   await ensureClassExists(classId);
+  // Students may only see the schedule of courses they are enrolled in.
+  await assertStudentContentAccess(actor, classId, { requirePaid: false });
 
   const where: Prisma.ClassSessionWhereInput = {
     courseId: classId,
     ...(query.classType ? { classType: query.classType } : {}),
-    ...(role === Role.ADMIN ? {} : { deletedAt: null }),
+    ...(role === Role.SUPER_ADMIN ? {} : { deletedAt: null }),
   };
 
   return prisma.classSession.findMany({
@@ -97,16 +104,18 @@ export const listClassSessions = async (
 export const getClassSessionById = async (
   classId: string,
   sessionId: string,
-  role: Role,
+  actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary> => {
+  const role = actor.role;
   await ensureClassExists(classId);
+  await assertStudentContentAccess(actor, classId, { requirePaid: false });
 
   const session = await prisma.classSession.findUnique({
     where: { id: sessionId },
     select: classSessionSelect,
   });
 
-  if (!session || session.courseId !== classId || (session.deletedAt && role !== Role.ADMIN)) {
+  if (!session || session.courseId !== classId || (session.deletedAt && role !== Role.SUPER_ADMIN)) {
     throw new AppError('CLASS_SESSION_NOT_FOUND', 404, 'Class session not found.');
   }
 
@@ -117,8 +126,9 @@ export const updateClassSession = async (
   classId: string,
   sessionId: string,
   input: UpdateClassSessionInput,
+  actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary> => {
-  await ensureClassExists(classId);
+  await assertCourseAccess(classId, actor);
 
   const session = await prisma.classSession.findUnique({ where: { id: sessionId } });
 
@@ -152,8 +162,9 @@ export const updateClassSession = async (
 export const deleteClassSession = async (
   classId: string,
   sessionId: string,
+  actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary> => {
-  await ensureClassExists(classId);
+  await assertCourseAccess(classId, actor);
 
   const session = await prisma.classSession.findUnique({ where: { id: sessionId } });
 

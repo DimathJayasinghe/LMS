@@ -1,16 +1,21 @@
-// Prisma schema — generated from context/documents/08-database-design.md
+// Prisma schema — source of truth: context/documents/08-database-design.md
+// Datasource URL is supplied by prisma.config.ts (env DATABASE_URL); the runtime
+// client uses the pg driver adapter (see src/config/database.ts).
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
+// ─────────────────────────────── ENUMS ───────────────────────────────
+
 enum Role {
-  ADMIN
-  STAFF
-  MARKER
+  SUPER_ADMIN // institution owner (exactly one)
+  TEACHER // lecturer (many) — owns their courses
+  ADMIN // front-desk staff (many)
+  MARKER // grades assigned exams
   STUDENT
 }
 
@@ -25,15 +30,23 @@ enum PaymentStatus {
   FAILED
 }
 
+enum PaymentMethod {
+  ONLINE // PayHere
+  ENTRANCE // paid in person at the front desk
+  BULK // Excel import
+  MANUAL // owner/admin adjustment
+}
+
 enum SubmissionStatus {
   UPLOADING
   COMPLETED
 }
 
 enum AttendanceSource {
-  BARCODE
-  ZOOM_WEBHOOK
-  MANUAL
+  QR // student QR scanned at the entrance
+  BARCODE // physical barcode card
+  ZOOM_WEBHOOK // live-streamed class join
+  MANUAL // admin entry
 }
 
 enum SmsStatus {
@@ -49,27 +62,36 @@ enum ExamType {
   INCLASS
 }
 
+// ─────────────────────────────── IDENTITY ───────────────────────────────
+
 model User {
-  id          String   @id @default(uuid())
-  indexNumber Int      @unique @default(autoincrement())
-  email       String   @unique
+  id          String    @id @default(uuid())
+  indexNumber Int       @unique @default(autoincrement())
+  email       String    @unique
   name        String
-  nic         String?  @unique
+  nic         String?   @unique
   phone       String?
   address     String?
   city        String?
   password    String
-  barcode     String?  @unique
-  role        Role     @default(STUDENT)
+  barcode     String?   @unique // LMS-issued QR code (global) — LMS-native entrance
+  role        Role      @default(STUDENT)
   deletedAt   DateTime?
 
+  // Account setup / onboarding
+  setupCompleted Boolean @default(false)
+  nicFrontUrl    String? // R2 key — NIC front photo (private)
+  nicBackUrl     String? // R2 key — NIC back photo (private)
+
+  permission        Permission?        @relation("UserPermission")
   enrollments       Enrollment[]
+  taughtCourses     Course[]           @relation("CourseTeacher") // courses this TEACHER teaches
+  studentBarcodes   StudentBarcode[] // per-institute barcodes
   attendance        Attendance[]
   submissions       Submission[]
-  auditLogs         AuditLog[]         @relation("AuditAdmin")
   actorAuditLogs    AuditLog[]         @relation("AuditActor")
   markerAssignments MarkerAssignment[] @relation("AssignedMarker")
-  permission        Permission?        @relation("UserPermission")
+  collectedPayments Payment[]          @relation("PaymentCollector") // ENTRANCE/MANUAL payments taken
   smsLogs           SmsLog[]
   refreshTokens     RefreshToken[]
 
@@ -82,9 +104,22 @@ model User {
   @@index([role])
 }
 
+model Permission {
+  id          String @id @default(uuid())
+  permissions Json // fine-grained overrides on top of role, e.g. { "createExam": true }
+
+  userId String @unique
+  user   User   @relation("UserPermission", fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model RefreshToken {
   id        String   @id @default(uuid())
-  token     String   @unique
+  token     String   @unique // SHA-256 hash of the refresh token
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expiresAt DateTime
@@ -106,6 +141,22 @@ model IdempotencyRecord {
   @@index([createdAt])
 }
 
+// ─────────────────────────── ACADEMIC HIERARCHY ───────────────────────────
+
+model Subject {
+  id          String  @id @default(uuid())
+  name        String  @unique // Physics, Chemistry, Combined Maths
+  description String?
+  isActive    Boolean @default(true)
+
+  courses Course[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
 model Course {
   id          String   @id @default(uuid())
   name        String
@@ -114,14 +165,27 @@ model Course {
   monthlyFee  Decimal  @db.Decimal(10, 2)
   isActive    Boolean  @default(true)
 
-  enrollments   Enrollment[]
-  classSessions ClassSession[]
-  exams         Exam[]
+  // Display assets shown on the course page / dashboard
+  bannerUrl   String? // wide banner image URL
+  backdropUrl String? // background/backdrop image URL
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  teacherId String
+  teacher   User   @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  enrollments    Enrollment[]
+  classSessions  ClassSession[]
+  exams          Exam[]
+  timetableSlots TimetableSlot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([name, year])
+  @@unique([subjectId, name, year])
+  @@index([subjectId])
+  @@index([teacherId])
   @@index([year])
   @@index([isActive])
 }
@@ -131,8 +195,8 @@ model Enrollment {
   classType ClassType
   isActive  Boolean   @default(true)
 
-  userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   courseId String
   course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
@@ -152,12 +216,16 @@ model Payment {
   id           String        @id @default(uuid())
   amount       Decimal       @db.Decimal(10, 2)
   status       PaymentStatus @default(PENDING)
+  method       PaymentMethod @default(ONLINE)
   payhereId    String?       @unique
   paymentMonth String
   note         String?
 
   enrollmentId String
-  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+
+  collectedById String? // staff who took an ENTRANCE/MANUAL payment
+  collectedBy   User?   @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -165,21 +233,26 @@ model Payment {
   @@unique([enrollmentId, paymentMonth])
   @@index([enrollmentId])
   @@index([status])
+  @@index([method])
   @@index([paymentMonth])
 }
 
 model ClassSession {
-  id              String    @id @default(uuid())
+  id              String     @id @default(uuid())
   title           String
   description     String?
-  classType       ClassType?
+  classType       ClassType? // null = all cohorts (e.g. physical + streamed online)
   date            DateTime
-  durationMinutes Int       @default(60)
-  zoomLink        String?
+  durationMinutes Int        @default(60)
+  zoomLink        String? // present = live-streamed
   zoomMeetingId   String?
 
   courseId String
-  course   Course  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  // Set when this session was generated from a recurring timetable slot.
+  timetableSlotId String?
+  timetableSlot   TimetableSlot? @relation(fields: [timetableSlotId], references: [id], onDelete: SetNull)
 
   deletedAt DateTime?
 
@@ -189,6 +262,7 @@ model ClassSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([timetableSlotId, date]) // idempotent generation: one session per slot per occurrence
   @@index([courseId])
   @@index([courseId, classType])
   @@index([date])
@@ -197,7 +271,7 @@ model ClassSession {
 
 model Attendance {
   id         String           @id @default(uuid())
-  source     AttendanceSource @default(BARCODE)
+  source     AttendanceSource @default(QR)
   scannedAt  DateTime         @default(now())
   lastSeenAt DateTime         @default(now())
 
@@ -216,7 +290,7 @@ model Attendance {
 }
 
 model VideoRecording {
-  id              String @id @default(uuid())
+  id              String  @id @default(uuid())
   title           String
   bunnyVideoId    String
   durationSeconds Int?
@@ -233,16 +307,21 @@ model VideoRecording {
 model Exam {
   id          String   @id @default(uuid())
   title       String
-  type        ExamType @default(WRITTEN)
-  paperPdfUrl String?
-  mcqPayload  Json?
+  type        ExamType @default(HYBRID)
+  paperPdfUrl String? // R2 URL — the written (structured/essay) question paper
+  mcqPayload  Json? // MCQ section (null = no MCQ section)
+
+  // Which answer channels students may use (exam-wide; online + physical alike)
+  allowTypedAnswers Boolean @default(true) // type structured/essay answers online
+  allowPdfUpload    Boolean @default(true) // upload a scanned/written A4 answer PDF
+
   startTime   DateTime
   endTime     DateTime
   totalMarks  Int      @default(100)
   isPublished Boolean  @default(false)
 
   courseId String
-  course   Course  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
 
   deletedAt DateTime?
 
@@ -260,12 +339,13 @@ model Exam {
 }
 
 model Submission {
-  id           String           @id @default(uuid())
-  status       SubmissionStatus @default(UPLOADING)
-  answerPdfUrl String?
-  answers      Json?
-  marks        Int?
-  feedback     String?
+  id             String           @id @default(uuid())
+  status         SubmissionStatus @default(UPLOADING)
+  answerPdfUrl   String? // R2 URL — uploaded PDF answer
+  answers        Json? // MCQ selections — MCQ/HYBRID
+  writtenAnswers Json? // typed essay/structured answers written online
+  marks          Int? // null until graded
+  feedback       String? // marker comments
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -273,9 +353,9 @@ model Submission {
   examId String
   exam   Exam   @relation(fields: [examId], references: [id], onDelete: Restrict)
 
-  submittedAt DateTime @default(now())
+  submittedAt DateTime  @default(now())
   gradedAt    DateTime?
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime  @updatedAt
 
   @@unique([userId, examId])
   @@index([userId])
@@ -284,7 +364,7 @@ model Submission {
 }
 
 model MarkerAssignment {
-  id       String @id @default(uuid())
+  id String @id @default(uuid())
 
   markerId String
   marker   User   @relation("AssignedMarker", fields: [markerId], references: [id], onDelete: Restrict)
@@ -309,25 +389,18 @@ model AuditLog {
   ip          String?
   userAgent   String?
 
-  // Actor — the user who performed the action (any role)
+  // Actor — the user who performed the action (any privileged role)
   actorId   String
   actor     User   @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
-  actorRole String // Denormalized role at the time of action for historical accuracy
-
-  // Legacy admin FK — optional, only set for ADMIN/STAFF actions
-  adminId String?
-  admin   User?  @relation("AuditAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  actorRole String // denormalized role at action time (historical accuracy)
 
   createdAt DateTime @default(now())
 
   @@index([actorId])
-  @@index([adminId])
   @@index([action])
   @@index([targetType, targetId])
   @@index([createdAt])
 }
-
-
 
 model SmsLog {
   id          String    @id @default(uuid())
@@ -338,7 +411,7 @@ model SmsLog {
   errorDetail String?
 
   userId String?
-  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -348,24 +421,70 @@ model SmsLog {
   @@index([createdAt])
 }
 
+// ─────────────────────── PHYSICAL INSTITUTES ───────────────────────
 
-model Permission {
-  id String @id @default(uuid())
+model Institute {
+  id       String  @id @default(uuid())
+  name     String  @unique // "Nugegoda Center"
+  code     String  @unique // short code, e.g. "NUG"
+  city     String?
+  isActive Boolean @default(true)
 
-  permissions Json
-  // Example:
-  // {
-  //   "editStudent": true,
-  //   "markStudent": false
-  // }
-
-  userId String @unique
-  user   User   @relation("UserPermission", fields: [userId], references: [id], onDelete: Restrict)
+  studentBarcodes StudentBarcode[]
+  timetableSlots  TimetableSlot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@index([isActive])
 }
 
+// ─────────────────────────── TIMETABLE ───────────────────────────
+// A recurring weekly slot. A BullMQ job generates dated ClassSessions from
+// active slots; cancellations/one-offs are handled as edits to those sessions.
 
+model TimetableSlot {
+  id              String     @id @default(uuid())
+  title           String? // default title for generated sessions (falls back to course name)
+  dayOfWeek       Int // 0=Sunday .. 6=Saturday (matches JS Date.getUTCDay())
+  startTime       String // "HH:mm" local (Asia/Colombo)
+  durationMinutes Int        @default(60)
+  classType       ClassType? // ONLINE / PHYSICAL; null = all cohorts
+  zoomLink        String? // recurring live link, if online
+  isActive        Boolean    @default(true)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  instituteId String?
+  institute   Institute? @relation(fields: [instituteId], references: [id], onDelete: Restrict)
+
+  generatedSessions ClassSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([instituteId])
+  @@index([dayOfWeek])
+  @@index([isActive])
+}
+
+model StudentBarcode {
+  id      String @id @default(uuid())
+  barcode String // institute-issued scan code (as entered by the student)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  instituteId String
+  institute   Institute @relation(fields: [instituteId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([instituteId, barcode]) // unique WITHIN an institute (not globally)
+  @@unique([userId, instituteId]) // one barcode per student per institute
+  @@index([userId])
+  @@index([instituteId])
+}

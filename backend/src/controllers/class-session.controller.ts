@@ -16,7 +16,7 @@ export const createClassSession = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId } = classIdParamSchema.parse(req.params);
     const input = createClassSessionSchema.parse(req.body);
-    const session = await ClassSessionService.createClassSession(classId, input);
+    const session = await ClassSessionService.createClassSession(classId, input, req.user!);
 
     void AuditService.log({
       action: AUDIT_ACTION.SESSION_CREATED,
@@ -38,7 +38,7 @@ export const listClassSessions = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId } = classIdParamSchema.parse(req.params);
     const query = listClassSessionsQuerySchema.parse(req.query);
-    const sessions = await ClassSessionService.listClassSessions(classId, query, req.user!.role);
+    const sessions = await ClassSessionService.listClassSessions(classId, query, req.user!);
 
     res.status(200).json({
       status: 'success',
@@ -54,7 +54,7 @@ export const getClassSessionById = asyncHandler(
     const session = await ClassSessionService.getClassSessionById(
       classId,
       sessionId,
-      req.user!.role,
+      req.user!,
     );
 
     res.status(200).json({
@@ -68,7 +68,7 @@ export const updateClassSession = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId, sessionId } = classSessionParamsSchema.parse(req.params);
     const input = updateClassSessionSchema.parse(req.body);
-    const session = await ClassSessionService.updateClassSession(classId, sessionId, input);
+    const session = await ClassSessionService.updateClassSession(classId, sessionId, input, req.user!);
 
     void AuditService.log({
       action: AUDIT_ACTION.SESSION_UPDATED,
@@ -88,7 +88,7 @@ export const updateClassSession = asyncHandler(
 export const deleteClassSession = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId, sessionId } = classSessionParamsSchema.parse(req.params);
-    const session = await ClassSessionService.deleteClassSession(classId, sessionId);
+    const session = await ClassSessionService.deleteClassSession(classId, sessionId, req.user!);
 
     void AuditService.log({
       action: AUDIT_ACTION.SESSION_DELETED,

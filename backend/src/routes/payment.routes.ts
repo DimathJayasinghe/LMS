@@ -48,7 +48,7 @@ paymentRoutes.post('/payhere/notify', PaymentController.handlePayhereNotify);
 paymentRoutes.get(
 	'/payhere/status/:id',
 	verifyToken,
-	requireRole(Role.STUDENT, Role.ADMIN, Role.STAFF),
+	requireRole(Role.STUDENT, Role.SUPER_ADMIN, Role.ADMIN),
 	validateParams(paymentIdParamSchema),
 	PaymentController.getPayhereStatus,
 );
@@ -57,7 +57,7 @@ paymentRoutes.get(
 paymentRoutes.get(
 	'/',
 	verifyToken,
-	requireRole(Role.ADMIN, Role.STAFF),
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
 	validateQuery(listPaymentsQuerySchema),
 	PaymentController.listPayments,
 );
@@ -75,7 +75,7 @@ paymentRoutes.get(
 paymentRoutes.get(
 	'/:id',
 	verifyToken,
-	requireRole(Role.STUDENT, Role.ADMIN, Role.STAFF),
+	requireRole(Role.STUDENT, Role.SUPER_ADMIN, Role.ADMIN),
 	validateParams(paymentIdParamSchema),
 	PaymentController.getPaymentById,
 );
@@ -84,7 +84,7 @@ paymentRoutes.get(
 paymentRoutes.patch(
 	'/:id/override',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN),
 	validateParams(paymentIdParamSchema),
 	validateBody(overridePaymentSchema),
 	PaymentController.overridePayment,
@@ -94,7 +94,7 @@ paymentRoutes.patch(
 paymentRoutes.post(
 	'/bulk-upload',
 	verifyToken,
-	requireRole(Role.ADMIN, Role.STAFF),
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
 	upload.single('file'),
 	PaymentController.bulkUploadPayments,
 );

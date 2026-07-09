@@ -19,7 +19,7 @@ export const examRoutes = Router();
 examRoutes.post(
 	'/',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateBody(createExamSchema),
 	ExamController.createExam,
 );
@@ -36,7 +36,7 @@ examRoutes.get(
 examRoutes.post(
 	'/:id/upload-url',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(examIdParamSchema),
 	validateBody(examUploadUrlSchema),
 	ExamController.getPaperUploadUrl,
@@ -46,7 +46,7 @@ examRoutes.post(
 examRoutes.post(
 	'/:id/assign-markers',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(examIdParamSchema),
 	validateBody(assignMarkersSchema),
 	ExamController.assignMarkers,
@@ -64,7 +64,7 @@ examRoutes.get(
 examRoutes.patch(
 	'/:id',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(examIdParamSchema),
 	validateBody(updateExamSchema),
 	ExamController.updateExam,
@@ -74,7 +74,7 @@ examRoutes.patch(
 examRoutes.delete(
 	'/:id',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(examIdParamSchema),
 	ExamController.deleteExam,
 );

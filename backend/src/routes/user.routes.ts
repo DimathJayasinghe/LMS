@@ -18,7 +18,7 @@ export const userRoutes = Router();
 userRoutes.get(
     '/',
     verifyToken,
-    requireRole(Role.ADMIN, Role.STAFF),
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateQuery(listUsersQuerySchema),
     UserController.listUsers,
 );
@@ -30,7 +30,7 @@ userRoutes.get('/me', verifyToken, UserController.getMe);
 userRoutes.get(
     '/:id',
     verifyToken,
-    requireRole(Role.ADMIN, Role.STAFF),
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     UserController.getUserById,
 );
@@ -39,7 +39,7 @@ userRoutes.get(
 userRoutes.patch(
     '/:id/role',
     verifyToken,
-    requireRole(Role.ADMIN),
+    requireRole(Role.SUPER_ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateRoleSchema),
     UserController.updateRole,
@@ -49,7 +49,7 @@ userRoutes.patch(
 userRoutes.patch(
     '/:id/status',
     verifyToken,
-    requireRole(Role.ADMIN, Role.STAFF),
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateStatusSchema),
     UserController.updateStatus,
@@ -59,7 +59,7 @@ userRoutes.patch(
 userRoutes.patch(
     '/:id/barcode',
     verifyToken,
-    requireRole(Role.ADMIN, Role.STAFF),
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(assignBarcodeSchema),
     UserController.assignBarcode,

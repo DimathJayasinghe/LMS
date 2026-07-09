@@ -1,3 +1,12 @@
+> ⚠️ **HISTORICAL BRAINSTORM — NOT THE SOURCE OF TRUTH.**
+> This is the original whiteboard. It assumes **Render auto-scaling**, a **multi-instance** deployment, and an **older schema** (`Float` money, `isActive`, `PRESENT/ABSENT`, no Subject/Teacher). Those decisions were **superseded** on 2026-07-09.
+>
+> The system now targets **one small VPS + Docker Compose** (no Kubernetes, no auto-scaling), Neon Postgres + self-hosted Redis, a single Next.js frontend, roles `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`, and a `Subject → Course → …` hierarchy.
+>
+> **Read [`../documents/`](../documents/) for the current design** (start with `01-project-overview.md`). Keep this file only for the *reasoning* behind edge-case mitigations (thundering herd, idempotency, DRM, webhook storms, etc.), which remain valid.
+
+---
+
 # Whiteboard
 
 [Summery](https://www.notion.so/Summery-35685bd4e92d80be9b8ef948d294dcfe?pvs=21)

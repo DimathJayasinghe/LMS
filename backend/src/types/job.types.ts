@@ -5,12 +5,3 @@ export interface SmsJobData {
 	isUnicode?: boolean;
 	smsLogId?: string;
 }
-
-export interface EmailJobData {
-	to: string | string[];
-	subject: string;
-	html?: string;
-	text?: string;
-	from?: string;
-	replyTo?: string;
-}

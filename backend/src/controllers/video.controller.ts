@@ -14,7 +14,7 @@ import {
 export const createVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = createVideoSchema.parse(req.body);
-    const video = await VideoService.createVideoRecording(input);
+    const video = await VideoService.createVideoRecording(input, req.user!);
 
     res.status(201).json({
       status: 'success',
@@ -30,7 +30,7 @@ export const updateVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
     const input = updateVideoSchema.parse(req.body);
-    const video = await VideoService.updateVideoRecording(id, input);
+    const video = await VideoService.updateVideoRecording(id, input, req.user!);
 
     res.status(200).json({
       status: 'success',
@@ -45,7 +45,7 @@ export const updateVideo = asyncHandler(
 export const deleteVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
-    await VideoService.deleteVideoRecording(id);
+    await VideoService.deleteVideoRecording(id, req.user!);
 
     res.status(200).json({
       status: 'success',
@@ -61,7 +61,7 @@ export const listVideosForClass = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId } = classIdParamSchema.parse(req.params);
     const query = videoListQuerySchema.parse(req.query);
-    const { records, total } = await VideoService.listVideosByClass(classId, query);
+    const { records, total } = await VideoService.listVideosByClass(classId, query, req.user!);
 
     res.status(200).json({
       status: 'success',
@@ -102,6 +102,7 @@ export const getStreamUrl = asyncHandler(
     const { video, streamUrl, embedUrl, expiresAt } = await VideoService.generateStreamUrl(
       id,
       clientIp,
+      req.user!,
     );
 
     res.status(200).json({

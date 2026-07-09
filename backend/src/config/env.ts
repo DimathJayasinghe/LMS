@@ -76,12 +76,6 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
 
-  // Resend (Email)
-  // Optional at boot — validated when jobs are enqueued or processed.
-  RESEND_API_KEY: z.string().default(''),
-  RESEND_FROM_EMAIL: z.string().default(''),
-  RESEND_REPLY_TO_EMAIL: z.string().default(''),
-
   // Sentry
   SENTRY_DSN: z.string().default(''),
 });
@@ -123,10 +117,13 @@ if (env.NODE_ENV === 'production') {
   if (!env.NOTIFY_API_KEY) missing.push('NOTIFY_API_KEY');
   if (!env.NOTIFY_SENDER_ID) missing.push('NOTIFY_SENDER_ID');
 
-  if (!env.SENTRY_DSN) missing.push('SENTRY_DSN');
-
   if (missing.length > 0) {
     console.error('❌ Missing required production environment variables:', missing);
     process.exit(1);
+  }
+
+  // Sentry is optional observability — warn, but never block boot on it.
+  if (!env.SENTRY_DSN) {
+    console.warn('⚠️  SENTRY_DSN not set — crash reporting is disabled.');
   }
 }

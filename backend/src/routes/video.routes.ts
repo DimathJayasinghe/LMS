@@ -19,7 +19,7 @@ export const videoRoutes = Router();
 videoRoutes.post(
   '/',
   verifyToken,
-  requireRole(Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateBody(createVideoSchema),
   VideoController.createVideo,
 );
@@ -29,7 +29,7 @@ videoRoutes.post(
 videoRoutes.patch(
   '/:id',
   verifyToken,
-  requireRole(Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateParams(videoIdParamSchema),
   validateBody(updateVideoSchema),
   VideoController.updateVideo,
@@ -40,7 +40,7 @@ videoRoutes.patch(
 videoRoutes.delete(
   '/:id',
   verifyToken,
-  requireRole(Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateParams(videoIdParamSchema),
   VideoController.deleteVideo,
 );
@@ -62,7 +62,7 @@ videoRoutes.get(
 videoRoutes.get(
   '/:id/stream',
   verifyToken,
-  requireRole(Role.STUDENT, Role.ADMIN, Role.STAFF, Role.MARKER),
+  requireRole(Role.STUDENT, Role.SUPER_ADMIN, Role.ADMIN, Role.MARKER, Role.TEACHER),
   validateParams(videoIdParamSchema),
   VideoController.getStreamUrl,
 );
