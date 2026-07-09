@@ -1,60 +1,71 @@
 # Academic LMS
 
-Production-grade Learning Management System for a single educational institute (~1,200 students).
+Learning Management System for a **single tuition institution** (~1,200 students) with several teachers across multiple subjects. Built to run **cheaply on one small VPS** — no Kubernetes, no auto-scaling.
 
 ## Features
 
-- **Auth & Roles** — JWT sessions with Super Admin, Admin, Marker, and Student roles
-- **Class Management** — Schedule sessions, Zoom live classes, barcode attendance scanning
-- **Video Streaming** — DRM-protected VOD via Bunny.net with IP-bound tokens
-- **Exam Engine** — Timed MCQ/essay exams, R2 PDF uploads, server-authoritative timers
-- **Marking & Results** — Marker assignment, grading, batch result publishing via SSE
-- **Payments** — PayHere gateway with idempotency keys, bulk Excel import
+- **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — with optional per-user permission overrides
+- **Academic model** — Subject → Course (one teacher) → Class Sessions & Exams; students enrol + pay per course
+- **Classes** — delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes
+- **Content protection** — enrolled + paid gating, IP-bound video tokens, per-student watermark, server-signed live join
+- **Exams** — one mixed paper (MCQ + structured + essay) for both online and physical students; submit via MCQ, typed answers, or scanned PDF upload; server-authoritative timers
+- **Marking & Results** — marker assignment, grading, batch result publishing via SSE
+- **Payments** — PayHere online, pay-at-entrance (front-desk), and bulk Excel import; idempotency keys
 - **Notifications** — SMS (Notify.lk), real-time SSE push, BullMQ background jobs
 
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind, Zustand, React Query |
+| Frontend | Next.js (App Router), TypeScript, Tailwind, Zustand, React Query — hosted on Vercel (free) |
 | Backend | Node.js, Express, TypeScript, Prisma ORM |
-| Database | Neon PostgreSQL (PgBouncer pooling) |
-| Cache/Queue | Redis, BullMQ |
-| Storage | Cloudflare R2 (files), Bunny.net (video) |
-| Hosting | Vercel (frontend), AWS EC2 + PM2 (backend + workers) |
+| Database | Neon PostgreSQL (managed, pooled connection, automated backups) |
+| Cache/Queue | Redis (self-hosted in Compose), BullMQ |
+| Storage / Video | Cloudflare R2 (files), Bunny.net (video) |
+| Hosting | **One VPS** running nginx + API + worker + Redis via Docker Compose |
+| Observability | Sentry + Pino |
 
 ## Project Structure
 
 ```
-├── frontend/          # Next.js App Router
-├── backend/           # Express API (Controller → Service → Route)
+├── frontend/          # Next.js App Router — all roles via route groups
+├── backend/           # Express API (Route → Controller → Service) + BullMQ worker
+├── nginx/             # Reverse proxy + TLS config
+├── docker-compose.yml # nginx + backend + worker + redis (one box)
 └── context/           # Architecture docs, plan, design specs
 ```
 
-## Getting Started
+## Getting Started (local dev)
 
 ```bash
-# Frontend
-cd frontend && npm install && npm run dev
-
 # Backend
 cd backend && npm install && npx prisma generate && npm run dev
+
+# Frontend
+cd frontend && npm install && npm run dev
 ```
+
+## Deploy (production)
+
+One small VPS + Docker Compose:
+
+```bash
+git pull && docker compose up -d --build
+```
+
+Full runbook and monthly cost breakdown: [`context/documents/09-cost-and-hosting.md`](./context/documents/09-cost-and-hosting.md).
 
 ## Architecture Highlights
 
-- **Stateless servers** — zero in-memory state; all shared state in Redis
+- **One VPS, no cluster** — Redis caching absorbs the result-release spike; scale up (bigger box) before scaling out
+- **Stateless API** — no in-memory shared state; keeps the worker/API split clean and a future second instance a config change
 - **3-tier separation** — Routes (URLs) → Controllers (req/res) → Services (business logic + DB)
 - **Direct-to-cloud uploads** — presigned URLs; files never touch the API server
-- **Production-ready** — PM2-managed API + worker on EC2; designed to scale later
-
-## Environment Variables
-
-Copy `.env.example` in both `frontend/` and `backend/` and fill in your credentials.
+- **Content gated per enrollment + paid month** — IP-bound video tokens, watermark, server-signed live join
 
 ## Docs
 
-Full system design and conventions live in [`context/documents/`](./context/documents/).
+Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`.
 
 ## License
 

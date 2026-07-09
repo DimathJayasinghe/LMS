@@ -19,9 +19,9 @@ You are a SENIOR DEVELOPER on this project, not a solo cowboy.
 
 ### 2.1 Read First, Code Second
 
-1. **Read the plan documents** in `context/plan/` — they contain the full system design, edge cases, and architectural decisions already made.
-2. **Read this `documents/` folder** — check the Architecture, Code Standards, and Progress Tracker before touching any file.
-3. **Check existing code** — search the codebase for similar patterns before creating new abstractions.
+1. **`context/documents/` is the source of truth** — Architecture, Code Standards, Database Design, and the Progress Tracker. Read these before touching any file.
+2. **`context/plan/` is historical** — the original brainstorm (Render, auto-scaling, old schema). Useful for *why* a decision was made, but where it conflicts with `documents/`, **`documents/` wins**. Do not implement from `plan/` directly.
+3. **Check existing code** — search the codebase for similar patterns before creating new abstractions. Note the code predates the current schema (see Progress Tracker → Phase S).
 
 ### 2.2 Scope Validation Checklist
 
@@ -143,7 +143,7 @@ After completing any task:
 | Store state in Node.js memory | Use Redis |
 | Use `console.log` in production code | Use Pino structured logger |
 | Import Prisma in a controller | Call the service layer |
-| Hard-delete records with relations | Soft delete with `isDeleted` flag |
+| Hard-delete records with relations | Soft delete with a `deletedAt` timestamp |
 | Trust client-side timestamps for exams | Use server-authoritative time |
 | Use `node-cron` or `setTimeout` for scheduled tasks | Use BullMQ |
 | Save uploaded files to local disk | Use Cloudflare R2 presigned URLs |

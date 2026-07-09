@@ -3,6 +3,8 @@
 > Step-by-step build order, dependency graph, and objectives for the backend.
 > Each step produces a **testable, working increment** — nothing is left half-built.
 
+> **⚠️ 2026-07-09 — Schema realignment lands first.** The revised institution model (see [08-database-design.md §12](./08-database-design.md#12-code-drift--required-migrations) and the Progress Tracker's *Phase S*) adds: the `TEACHER` role (`Role` becomes `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`), a top-level **`Subject`** model, **`Course.teacherId`** ownership, **`QR`** attendance, a **`PaymentMethod`** enum + pay-at-entrance, **`Submission.writtenAnswers`**, and exam **channel flags**. Do Phase S before resuming feature work, and thread teacher-ownership scoping (`course.teacherId === user.id`) into the Class/Exam services. New endpoints needed: `Subject` CRUD (Super Admin) and Teacher-scoped Course management.
+
 ---
 
 ## API Response Format Documentation
@@ -437,7 +439,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 - [x] Create `src/routes/stream.routes.ts` — SSE connection endpoint
 - [x] Create `src/services/stream.service.ts` — manage connections, broadcast via Redis Pub/Sub
-- [x] Wire Redis Pub/Sub so broadcasts work across auto-scaled instances
+- [x] Wire Redis Pub/Sub for SSE fan-out (single instance today; keeps a future second instance a no-op)
 
 ### Endpoints
 
@@ -448,7 +450,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 ### Acceptance Criteria
 
 - Client receives `data:` events when results are published or timetable changes
-- Works across multiple Node instances via Redis Pub/Sub
+- Broadcasts via Redis Pub/Sub (works for one instance now, and any future instance transparently)
 
 ---
 
@@ -468,7 +470,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 ### Acceptance Criteria
 
 - Worker runs as a separate process (`npm run worker`)
-- Jobs are distributed-safe (exactly-once across auto-scaled instances)
+- Jobs run exactly-once and survive restarts (durable in Redis; safe even if a second worker is ever added)
 - Failed jobs retry with backoff
 
 ---
@@ -501,19 +503,22 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 ### Tasks
 
 - [ ] Add Sentry error tracking (install `@sentry/node`)
-- [ ] Implement distributed rate limiting on auth routes (Redis-backed)
+- [ ] Redis-backed rate limiting on auth routes (10/min/IP) + on stream-token endpoints
 - [ ] Add request logging middleware (Pino HTTP)
 - [ ] Validate all env vars for every service (R2, Bunny, Zoom, PayHere, Notify)
-- [ ] Ensure all `onDelete` relations use `Restrict` or soft delete
+- [ ] Ensure all `onDelete` relations use `Restrict` or `SetNull` (never `Cascade`)
+- [ ] Enforce content gate (active enrollment + current month paid) before issuing Bunny tokens / Zoom join signatures; add per-student watermark
 - [ ] Add `npm run worker` script to `package.json`
-- [ ] Document PM2 process setup for API + worker (EC2 deployment)
+- [ ] Finalize `docker-compose.yml` (nginx + backend + worker + redis) + nginx TLS; document the one-command deploy (see 09-cost-and-hosting.md)
 - [ ] Smoke test all endpoints end-to-end
 
 ### Acceptance Criteria
 
 - Sentry captures unhandled errors with full stack trace
 - Rate limiter blocks >10 login attempts per minute per IP
+- Stream tokens/join signatures are refused for non-enrolled or unpaid students
 - All endpoints return uniform `{ status, data, message, code }` JSON shape
+- `docker compose up -d --build` brings up the full backend on one VPS
 
 ---
 
