@@ -12,14 +12,20 @@ http://localhost:5000/api/exams
 
 All exam endpoints require the `access_token` cookie.
 
-## Roles (Current Implementation)
+## Roles
 
-The Prisma enum currently uses `ADMIN`, `STAFF`, `MARKER`, and `STUDENT`.
+Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
-Temporary mapping for this phase:
+- **Manage exams** (create/update/delete/upload-url/assign-markers) — `SUPER_ADMIN` or the course's `TEACHER` (own courses only).
+- **Read** — students see exams for **enrolled** courses only; the paper/MCQ is returned only within the exam window.
 
-- `ADMIN` = Super Admin (full access)
-- `STAFF` = Admin (daily ops)
+> **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**; course-content routes now also allow the owning **`TEACHER`**.
+
+## What changed (2026-07-09)
+
+- One exam serves both online + physical cohorts. New flags: **`allowTypedAnswers`**, **`allowPdfUpload`** (default `true`) control the submission channels.
+- `type`: `MCQ` | `WRITTEN` | `HYBRID` | `INCLASS`; `HYBRID` = mixed paper (MCQ + structured/essay).
+- Student exam reads are gated to enrolled courses (`403 NOT_ENROLLED`).
 
 ## Response Shapes (Current Implementation)
 

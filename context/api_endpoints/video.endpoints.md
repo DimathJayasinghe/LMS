@@ -12,6 +12,12 @@ http://localhost:5000/api/videos
 
 All endpoints require the standard `access_token` HTTP-only cookie (except where noted as public — there are none; all video routes require authentication).
 
+## Content gate (2026-07-09)
+
+- **`GET /:id/stream`** — a student must be **enrolled AND have paid the current month** before an IP-bound Bunny token is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Privileged roles bypass. Additionally rate-limited (30/min/IP).
+- **`GET /class/:classId`** (list) — requires an **active enrollment** for students.
+- **Manage videos** (create/update/delete) — `SUPER_ADMIN` or the course's **`TEACHER`** (older tables say `ADMIN`).
+
 ## Video Record Shape
 
 Returned by most endpoints:
