@@ -1,3 +1,4 @@
+
 # Classes + Class Sessions API Endpoints
 
 This document describes class (course) and class session endpoints in the backend.
@@ -12,14 +13,24 @@ http://localhost:5000/api/classes
 
 All classes endpoints require the `access_token` cookie.
 
-## Roles (Current Implementation)
+## Roles
 
-The Prisma enum currently uses `ADMIN`, `STAFF`, `MARKER`, and `STUDENT`.
+Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
-Temporary mapping for this phase:
+- `SUPER_ADMIN` — institution owner; full access.
+- `TEACHER` — manages **their own** courses' sessions/exams/videos/timetable.
+- `ADMIN` — front-desk staff (attendance, payments, timetable edits, account verification).
+- `MARKER` — grades assigned exams.
+- `STUDENT` — enrolled learner; content gated on active enrollment (+ paid month for video).
 
-- `ADMIN` = Super Admin (full access)
-- `STAFF` = Admin (daily ops)
+> **Reading older tables below**: where a row says `ADMIN` it now means **`SUPER_ADMIN`**, and `STAFF` now means **`ADMIN`**. Course-content routes (courses, sessions, exams, videos) now also allow the owning **`TEACHER`**; front-desk `ADMIN` may also edit sessions (timetable).
+
+## What changed (2026-07-09)
+
+- **Course create/update** now requires `subjectId` and (for SUPER_ADMIN) `teacherId`; a TEACHER creating a course owns it automatically.
+- Course gained `bannerUrl` / `backdropUrl` (image URLs).
+- **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise).
+- Sessions may be **generated from the timetable** (see `timetable.endpoints.md`); `timetableSlotId` links them.
 
 ## Response Shapes (Current Implementation)
 
@@ -77,6 +88,10 @@ Temporary mapping for this phase:
 	"description": "...",
 	"monthlyFee": "2500.00",
 	"isActive": true,
+	"subjectId": "uuid",
+	"teacherId": "uuid",
+	"bannerUrl": "https://.../banner.png",
+	"backdropUrl": "https://.../backdrop.png",
 	"createdAt": "2026-05-13T06:00:00.000Z",
 	"updatedAt": "2026-05-13T06:00:00.000Z"
 }
@@ -129,9 +144,15 @@ Creates a class (course).
 	"year": 2025,
 	"description": "...",
 	"monthlyFee": 2500,
-	"isActive": true
+	"isActive": true,
+	"subjectId": "uuid",
+	"teacherId": "uuid",
+	"bannerUrl": "https://.../banner.png",
+	"backdropUrl": "https://.../backdrop.png"
 }
 ```
+
+- `subjectId` — **required**. `teacherId` — required when the caller is `SUPER_ADMIN`; omitted by a `TEACHER` (they own it). `bannerUrl`/`backdropUrl` — optional image URLs.
 
 **Success (201)**
 

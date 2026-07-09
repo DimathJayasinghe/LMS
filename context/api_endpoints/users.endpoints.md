@@ -12,14 +12,16 @@ http://localhost:5000/api/users
 
 All users endpoints require the `access_token` cookie.
 
-## Roles (Current Implementation)
+## Roles
 
-The Prisma enum currently uses `ADMIN`, `STAFF`, `MARKER`, and `STUDENT`.
+Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
-Temporary mapping for Step 4:
+- Only `SUPER_ADMIN` changes roles (`PATCH /:id/role`).
+- `SUPER_ADMIN` + `ADMIN` (front-desk) may list users and set status/barcode.
 
-- `ADMIN` = Super Admin (full access, role changes)
-- `STAFF` = Admin (daily ops, no role changes)
+> **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**, `STAFF` now means **`ADMIN`**.
+
+> **New user fields** (account setup): `setupCompleted` (bool), `nicFrontUrl`, `nicBackUrl` (R2 keys). The student setup flow (NIC upload + per-institute barcodes) is not yet exposed — see Progress Tracker.
 
 ## Response Shapes (Current Implementation)
 

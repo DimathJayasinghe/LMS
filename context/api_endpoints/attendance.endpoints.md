@@ -12,6 +12,13 @@ http://localhost:5000/api/attendance
 
 The attendance endpoints require authentication (except for the Zoom webhook). They use the standard `access_token` HTTP-only cookie.
 
+## Roles & recent changes (2026-07-09)
+
+Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk scans at the entrance).
+
+- `AttendanceSource` now includes **`QR`** (default) alongside `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`.
+- Institute-scoped scanning (`(instituteId, barcode) → student`, per-institute barcodes) is a follow-up.
+
 ## Attendance Record Shape
 
 Returned in most endpoints:

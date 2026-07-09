@@ -14,6 +14,10 @@
 | PATCH | `/api/submissions/:id/marks` | MARKER (assigned) | Submit marks (idempotent) |
 | POST | `/api/submissions/exam/:examId/publish` | ADMIN | Publish results for an exam |
 
+> **Roles updated (2026-07-09)**: `ADMIN` → **`SUPER_ADMIN`**; list + publish now also allow the exam's **`TEACHER`**; grading stays **`MARKER`** (assigned).
+>
+> **New**: alongside `answers` (MCQ) and `answerPdfUrl` (scanned upload), students may submit typed essay/structured answers via **`writtenAnswers`** (JSON, keyed by question/part). The exam's `allowTypedAnswers` / `allowPdfUpload` flags decide which channels are accepted.
+
 ---
 
 ## POST `/api/submissions`
