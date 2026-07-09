@@ -17,7 +17,7 @@ export const classSessionRoutes = Router({ mergeParams: true });
 classSessionRoutes.post(
   '/',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(classIdParamSchema),
   validateBody(createClassSessionSchema),
   ClassSessionController.createClassSession,
@@ -41,7 +41,7 @@ classSessionRoutes.get(
 classSessionRoutes.patch(
   '/:sessionId',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(classSessionParamsSchema),
   validateBody(updateClassSessionSchema),
   ClassSessionController.updateClassSession,
@@ -50,7 +50,7 @@ classSessionRoutes.patch(
 classSessionRoutes.delete(
   '/:sessionId',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(classSessionParamsSchema),
   ClassSessionController.deleteClassSession,
 );

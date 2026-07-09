@@ -7,14 +7,18 @@ import {
   RATE_LIMIT_GLOBAL_WINDOW_MS,
   RATE_LIMIT_AUTH_MAX,
   RATE_LIMIT_AUTH_WINDOW_MS,
+  RATE_LIMIT_STREAM_MAX,
+  RATE_LIMIT_STREAM_WINDOW_MS,
 } from '../utils/constants';
 
 /**
  * Creates an express-rate-limit instance.
  *
  * Store selection:
- *  - Redis is available → uses RedisStore (distributed across all Render instances)
- *  - Redis is down      → falls back to in-memory store (per-instance only)
+ *  - Redis is available → uses RedisStore (survives restarts; shared if a second
+ *    instance is ever added behind nginx)
+ *  - Redis is down      → falls back to in-memory store (still fine on the single
+ *    VPS this runs on today)
  *
  * In production, Redis should always be available. In local dev, it's okay to
  * run without it — the in-memory fallback still provides rate limiting.
@@ -65,6 +69,7 @@ const createLimiter = (
 export const createRateLimiters = (): {
   globalLimiter: ReturnType<typeof rateLimit>;
   authLimiter: ReturnType<typeof rateLimit>;
+  streamLimiter: ReturnType<typeof rateLimit>;
 } => ({
   /**
    * Global limiter: applied to all `/api/*` routes.
@@ -85,5 +90,16 @@ export const createRateLimiters = (): {
     RATE_LIMIT_AUTH_WINDOW_MS,
     RATE_LIMIT_AUTH_MAX,
     'rl:auth:',
+  ),
+
+  /**
+   * Stream limiter: applied to the IP-bound video token endpoint.
+   * 30 requests per minute per IP — a legit student watches a handful of
+   * videos; this blocks scripted harvesting of stream tokens (§7.1).
+   */
+  streamLimiter: createLimiter(
+    RATE_LIMIT_STREAM_WINDOW_MS,
+    RATE_LIMIT_STREAM_MAX,
+    'rl:stream:',
   ),
 });

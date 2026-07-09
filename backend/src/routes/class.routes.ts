@@ -21,7 +21,7 @@ classRoutes.use('/:classId/sessions', classSessionRoutes);
 classRoutes.post(
 	'/',
 	verifyToken,
-	requireRole(Role.ADMIN, Role.STAFF),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateBody(createClassSchema),
 	ClassController.createClass,
 );
@@ -43,7 +43,7 @@ classRoutes.get(
 classRoutes.patch(
 	'/:classId',
 	verifyToken,
-	requireRole(Role.ADMIN, Role.STAFF),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(classIdParamSchema),
 	validateBody(updateClassSchema),
 	ClassController.updateClass,

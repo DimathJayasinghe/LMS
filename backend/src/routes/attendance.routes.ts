@@ -22,7 +22,7 @@ export const attendanceRoutes = Router();
 attendanceRoutes.post(
   '/scan',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(scanBarcodeSchema),
   AttendanceController.scanBarcode,
 );
@@ -41,7 +41,7 @@ attendanceRoutes.post(
 attendanceRoutes.post(
   '/manual',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(manualAttendanceSchema),
   AttendanceController.markManualAttendance,
 );
@@ -61,7 +61,7 @@ attendanceRoutes.post(
 attendanceRoutes.get(
   '/session/:sessionId',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
   validateParams(attendanceSessionParamsSchema),
   AttendanceController.getAttendanceBySession,
 );
@@ -71,7 +71,7 @@ attendanceRoutes.get(
 attendanceRoutes.get(
   '/class/:classId',
   verifyToken,
-  requireRole(Role.ADMIN, Role.STAFF),
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
   validateParams(attendanceClassParamsSchema),
   validateQuery(attendanceQuerySchema),
   AttendanceController.getAttendanceByCourse,

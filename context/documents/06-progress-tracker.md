@@ -8,11 +8,46 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening |
-| **Last Updated** | 2026-05-29 |
-| **Last Completed Task** | Step 13 — Audit Logs + SMS |
-| **Next Task** | Step 14 — Hardening (Sentry, logging, env validation, smoke tests) |
-| **Blockers** | None |
+| **Current Phase** | Phase 9 — Polish & Hardening (paused for schema realignment) |
+| **Last Updated** | 2026-07-09 |
+| **Last Completed Task** | Docs revision — cost/complexity refactor + institution model (subjects, teachers) |
+| **Next Task** | **Phase S — Schema Realignment** (see below) before resuming frontend/hardening |
+| **Blockers** | Schema in code predates the revised design (roles, Subject, teacher ownership) |
+
+> **2026-07-09 docs revision.** All `documents/` were revised for **lowest cost / lowest complexity**: backend runs on **one VPS via Docker Compose** (nginx + API + worker + Redis), Postgres on **Neon free tier**, frontend on **Vercel free tier**. Kubernetes (`k8s/`), Sanity CMS, Upstash, and the abandoned `admin_frontend/` + `admin_panel/` folders were **removed**. The institution model was expanded: **multiple teachers** (new `TEACHER` role), **subjects** (new top-level `Subject`), **QR attendance**, **pay-at-entrance**, and **typed online answers**. See the Decisions Log and [09-cost-and-hosting.md](./09-cost-and-hosting.md).
+
+---
+
+## Phase S — Schema Realignment (2026-07-09)
+
+The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md §12](./08-database-design.md#12-code-drift--required-migrations). No production data exists, so this was safe pre-launch. **Backend `tsc` build is green.**
+
+**Done in code:**
+- [x] `Role` → `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`; every `requireRole(...)` guard remapped (owner→`SUPER_ADMIN`, front-desk→`ADMIN`, `TEACHER` added to course-content routes)
+- [x] `Subject` model + full CRUD module (`schema/service/controller/route`, mounted at `/api/subjects`)
+- [x] `Course.subjectId` + `Course.teacherId`; `@@unique([subjectId,name,year])`
+- [x] **Teacher-ownership** enforced via `assertCourseAccess()` (in `class.service`), wired through course/session/exam/video create+update+delete
+- [x] `AttendanceSource.QR`, `PaymentMethod` enum + `Payment.method`/`collectedById`, `Submission.writtenAnswers`, `Exam.allowTypedAnswers`/`allowPdfUpload` added to schema
+- [x] `AuditLog` collapsed to `actorId` + `actorRole` (legacy `adminId` dropped)
+- [x] Owner-visibility checks (soft-deleted/inactive) fixed to `SUPER_ADMIN` across class/session/exam services
+- [x] Exam channel flags exposed via the exam create/update API
+
+**Architecture re-alignment pass (2026-07-09, later):**
+- [x] **Content-access gate** — new `access.service.ts` (`assertStudentContentAccess`): students must hold an active enrollment to list videos / read a course's sessions & exams, and must **also have paid the current month** before a Bunny stream token is minted (architecture §7.1). Wired into video (stream=paid, list=enrolled), exam (`listExams` scoped to enrolled + `getExamById` gated), and class-session list/get. Privileged roles bypass.
+- [x] **Stream-token rate limit** — `streamLimiter` (30/min/IP) on `/api/videos/:id/stream`.
+- [x] **Email removed** — deleted `email.job.ts`, email queue/worker, `EmailJobData`, `RESEND_*` env, email JOB constants, and uninstalled the `resend` dependency.
+- [x] Stale "Render/instances" comment in `rate-limiter.ts` updated to single-VPS wording.
+
+**Remaining follow-ups (columns/enums exist; endpoints not yet wired):**
+- [ ] Apply the schema to Neon: `npx prisma migrate dev --name align_to_design_doc` (needs DB access) — entrypoint currently uses `prisma db push`
+- [ ] Submission flow: accept & store `writtenAnswers` (typed essay/structured answers) + autosave contract
+- [ ] Payment flow: pay-at-entrance endpoint setting `method=ENTRANCE` + `collectedById`
+- [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint
+- [ ] Live classes: server-signed Zoom SDK join endpoint (same content gate) + per-student video **watermark** overlay (frontend)
+- [ ] Enrollment CRUD endpoints (the `Enrollment` model has no API yet — needed for the gate to have data)
+- [ ] Teacher-scoped **reads** for attendance (currently `SUPER_ADMIN`+`ADMIN`)
+- [ ] **Student account-setup flow**: NIC front/back R2 upload endpoints, register/list/delete `StudentBarcode` per institute, flip `setupCompleted`; block content until setup done + account active
+- [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`)
 
 ---
 
@@ -232,19 +267,20 @@
 
 ---
 
-## Phase 10 — Deployment
+## Phase 10 — Deployment (single VPS + Docker Compose)
 
 ### Tasks
 
-- [ ] Configure Vercel project + custom domain
-- [ ] Provision EC2 instance + PM2 (API + worker)
-- [ ] Set up Cloudflare DNS records
-- [ ] Configure Neon PostgreSQL + PgBouncer pooled URL
-- [ ] Set up Redis instance (Upstash)
-- [ ] Set up Sentry projects (frontend + backend)
-- [ ] Create GitHub Actions CI/CD pipeline (staging → production)
-- [ ] Smoke test full system on staging
-- [ ] Production deploy + monitoring
+- [ ] Configure Vercel project + custom domain (frontend, free tier)
+- [ ] Provision one VPS (Hetzner/DigitalOcean, ~$5–12/mo); install Docker + Compose
+- [ ] Point `api.` DNS (Cloudflare) at the VPS; nginx TLS via Let's Encrypt
+- [ ] Configure Neon PostgreSQL (pooled connection URL) + confirm automated backups
+- [ ] Run `docker compose up -d --build` (nginx + API + worker + self-hosted Redis)
+- [ ] Set up Sentry projects (frontend + backend, free tier)
+- [ ] GitHub Actions: build/test on PR; on merge to `main`, SSH deploy (`git pull && docker compose up -d --build`)
+- [ ] Smoke test full system
+- [ ] Production cutover + monitoring
+- [ ] See [09-cost-and-hosting.md](./09-cost-and-hosting.md) for the full runbook + cost table
 
 ---
 
@@ -268,6 +304,18 @@
 | 2026-05-13 | Treat "classes" as courses; sessions are nested resources | Classes map to Course model; sessions live under `/api/classes/:classId/sessions` |
 | 2026-05-20 | Accept R2 endpoint + legacy env keys | Align local env vars with R2 client configuration without renaming existing secrets |
 | 2026-05-29 | Move backend hosting to EC2 + PM2 | Single-instance deploy with Upstash Redis; frontend stays on Vercel |
+| 2026-07-09 | **Single VPS + Docker Compose** (supersedes EC2+PM2) | Lowest cost/complexity: nginx + API + worker + Redis in one Compose file on a ~$5–12/mo VPS. `git pull && docker compose up -d --build` is the whole deploy. |
+| 2026-07-09 | **Delete Kubernetes** (`k8s/` + HPA) | Auto-scaling is unjustified at ~1,200 users; Redis caching absorbs the result-release spike on one box. Removed the biggest cost/complexity sink. |
+| 2026-07-09 | **Postgres = Neon (managed), Redis = self-hosted** | Neon free tier gives automated backups + PITR (the one thing you can't lose); Redis in Compose is free and has no cross-instance state to sync on a single instance. Dropped Upstash. |
+| 2026-07-09 | **Drop Sanity CMS** | Marketing pages are static in Next.js. Removes a paid dependency *and* the on-demand-revalidation complexity. |
+| 2026-07-09 | **Email out of scope for v1** | SMS via Notify.lk is the notification channel; `resend` dependency to be removed. Email can return later as a BullMQ job. |
+| 2026-07-09 | **One Next.js frontend** | Deleted abandoned `admin_frontend/` + `admin_panel/`; all roles served from `frontend/` via App Router route groups. |
+| 2026-07-09 | **Add `TEACHER` role; owner is the single `SUPER_ADMIN`** | Institution has several teachers; each manages only their own courses' sessions/exams. Fine-grained exceptions via `Permission`. Replaces the legacy `ADMIN/STAFF` enum mapping. |
+| 2026-07-09 | **Add `Subject` as academic top level** | Subject → Course → sessions/exams/enrollment. Each Course belongs to one Subject and one Teacher. |
+| 2026-07-09 | **QR attendance + pay-at-entrance** | `AttendanceSource.QR`; `PaymentMethod` enum (`ONLINE/ENTRANCE/BULK/MANUAL`) + `Payment.collectedById`. |
+| 2026-07-09 | **One mixed paper, multi-channel answers** | Exam is course-wide (both cohorts). `Submission.writtenAnswers` (typed) + `answerPdfUrl` (scanned) + `answers` (MCQ); exam-level `allowTypedAnswers`/`allowPdfUpload` flags. |
+| 2026-07-09 | **Physical institutes + per-institute barcodes + NIC onboarding** | New `Institute` allowlist (Super-Admin, pre-configured centers) and `StudentBarcode` (`@@unique([instituteId,barcode])` — per-institute, one per student per institute). `User.barcode` kept as the global LMS QR. `User.setupCompleted`/`nicFrontUrl`/`nicBackUrl` for mandatory onboarding. Institute CRUD module added at `/api/institutes`. |
+| 2026-07-09 | **Recurring timetable (template + generated sessions) + course banners** | New `TimetableSlot` weekly template + `ClassSession.timetableSlotId` (`@@unique([timetableSlotId,date])` for idempotent generation). Timetable CRUD + manual `POST /api/timetable/generate` + **weekly BullMQ job** (Sun 20:00 UTC, 14-day window). Front-desk `ADMIN` added to session/timetable editing. `Course.bannerUrl`/`backdropUrl` display assets. |
 
 ---
 
@@ -279,7 +327,10 @@
 | Zoom webhook missed during server restart | Retry config + Admin "Sync" button | ⬜ To implement |
 | JWT expiry during long exam | Silent refresh token rotation | ⬜ To implement |
 | R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement |
+| Video piracy (leaked stream link) | IP-bound Bunny tokens + enrolled/paid gating + student watermark overlay | ⬜ To implement |
+| Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ⬜ To implement |
 | DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ To implement |
+| Single VPS is a single point of failure | Neon managed backups (PITR) + nightly Redis snapshot; documented rebuild runbook | ⬜ To implement |
 | Webhook spam from flaky student connections | Upsert-based webhook handlers | ✅ Done |
 | Database cascade delete | Soft deletes + `onDelete: Restrict` | ✅ Done |
-| Multi-server cron job collision | BullMQ distributed queue | ✅ Done |
+| Multi-worker cron job collision | BullMQ distributed queue | ✅ Done |

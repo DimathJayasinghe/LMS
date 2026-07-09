@@ -7,6 +7,13 @@ export const createClassSchema = z.object({
   description: z.string().max(500).trim().optional(),
   monthlyFee: z.coerce.number().positive(),
   isActive: z.boolean().optional(),
+  // Academic hierarchy — a course belongs to one subject and one teacher.
+  subjectId: z.string().uuid(),
+  // Optional: a TEACHER omits this (they own the course); a SUPER_ADMIN sets it.
+  teacherId: z.string().uuid().optional(),
+  // Display assets (image URLs)
+  bannerUrl: z.string().url().max(1000).optional(),
+  backdropUrl: z.string().url().max(1000).optional(),
 });
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;
