@@ -13,6 +13,9 @@ import { requestLogger } from './middleware/request-logger.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { createAuthRouter } from './routes/auth.routes';
 import { userRoutes } from './routes/user.routes';
+import { subjectRoutes } from './routes/subject.routes';
+import { instituteRoutes } from './routes/institute.routes';
+import { timetableRoutes } from './routes/timetable.routes';
 import { classRoutes } from './routes/class.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
@@ -55,7 +58,7 @@ const bootstrap = async (): Promise<void> => {
 
   // Create rate limiters AFTER Redis connection attempt
   // so they can detect Redis status and choose the right store
-  const { globalLimiter, authLimiter } = createRateLimiters();
+  const { globalLimiter, authLimiter, streamLimiter } = createRateLimiters();
 
   // ─── Rate Limiting (global) ─────────────────────────────────
   app.use('/api', globalLimiter);
@@ -70,8 +73,13 @@ const bootstrap = async (): Promise<void> => {
 
   // ─── User Management ─────────────────────────────────────────
   app.use('/api/users', userRoutes);
+  app.use('/api/subjects', subjectRoutes);
+  app.use('/api/institutes', instituteRoutes);
+  app.use('/api/timetable', timetableRoutes);
   app.use('/api/classes', classRoutes);
   app.use('/api/attendance', attendanceRoutes);
+  // Extra throttle on the stream-token endpoint (on top of the global limiter).
+  app.use('/api/videos/:id/stream', streamLimiter);
   app.use('/api/videos', videoRoutes);
   app.use('/api/exams', examRoutes);
   app.use('/api/submissions', submissionRoutes);

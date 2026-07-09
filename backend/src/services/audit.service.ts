@@ -3,7 +3,7 @@
 // Audit writes NEVER block the HTTP response cycle.
 // Also handles read queries for the audit log listing endpoint.
 
-import { Prisma, Role } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { logger } from '@/config/logger';
 import type { AuditLogInput } from '@/types/audit.types';
@@ -79,10 +79,6 @@ export const listAuditLogs = async (query: ListAuditLogsQuery): Promise<Paginate
 export const log = (input: AuditLogInput): void => {
 	const { context, action, description, targetType, targetId, metadata } = input;
 
-	// Determine if the actor is an admin/staff role for the legacy adminId field
-	const isAdminRole =
-		context.actorRole === Role.ADMIN || context.actorRole === Role.STAFF;
-
 	prisma.auditLog
 		.create({
 			data: {
@@ -95,7 +91,6 @@ export const log = (input: AuditLogInput): void => {
 				userAgent: context.userAgent ?? null,
 				actorId: context.actorId,
 				actorRole: context.actorRole,
-				adminId: isAdminRole ? context.actorId : null,
 			},
 		})
 		.then(() => {

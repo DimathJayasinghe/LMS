@@ -1,6 +1,9 @@
 import { ExamType, Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import type { AuthenticatedUser } from '@/types/auth.types';
+import { assertCourseAccess } from '@/services/class.service';
+import { assertStudentContentAccess } from '@/services/access.service';
 import { EXAM_PDF_KEY_PREFIX, EXAM_PDF_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedGetUrl, createR2PresignedPutUrl } from '@/utils/r2';
 import {
@@ -189,8 +192,12 @@ const stripMcqAnswers = (payload: McqPayload): StudentMcqPayload => ({
 
 // ─── CRUD ──────────────────────────────────────────────────
 
-export const createExam = async (input: CreateExamInput): Promise<ExamDetail> => {
-	await ensureCourseExists(input.courseId);
+export const createExam = async (
+	input: CreateExamInput,
+	actor: AuthenticatedUser,
+): Promise<ExamDetail> => {
+	// Enforces course existence AND teacher ownership in one gate.
+	await assertCourseAccess(input.courseId, actor);
 
 	validateExamWindow(input.startTime, input.endTime);
 
@@ -207,6 +214,8 @@ export const createExam = async (input: CreateExamInput): Promise<ExamDetail> =>
 			totalMarks: input.totalMarks,
 			paperPdfUrl,
 			mcqPayload: mcqPayload ?? Prisma.JsonNull,
+			allowTypedAnswers: input.allowTypedAnswers,
+			allowPdfUpload: input.allowPdfUpload,
 		},
 		select: examDetailSelect,
 	});
@@ -214,7 +223,11 @@ export const createExam = async (input: CreateExamInput): Promise<ExamDetail> =>
 	return normalizeExamDetail(created);
 };
 
-export const listExams = async (query: ListExamsQuery, role: Role): Promise<ExamListItem[]> => {
+export const listExams = async (
+	query: ListExamsQuery,
+	actor: AuthenticatedUser,
+): Promise<ExamListItem[]> => {
+	const role = actor.role;
 	const now = new Date();
 
 	const timeFilter: Prisma.ExamWhereInput =
@@ -229,7 +242,11 @@ export const listExams = async (query: ListExamsQuery, role: Role): Promise<Exam
 	const where: Prisma.ExamWhereInput = {
 		...(query.courseId ? { courseId: query.courseId } : {}),
 		...(query.type ? { type: query.type } : {}),
-		...(role === Role.ADMIN ? {} : { deletedAt: null }),
+		...(role === Role.SUPER_ADMIN ? {} : { deletedAt: null }),
+		// Students only see exams for courses they are actively enrolled in.
+		...(role === Role.STUDENT
+			? { course: { enrollments: { some: { userId: actor.userId, isActive: true } } } }
+			: {}),
 		...timeFilter,
 	};
 
@@ -240,12 +257,19 @@ export const listExams = async (query: ListExamsQuery, role: Role): Promise<Exam
 	});
 };
 
-export const getExamById = async (examId: string, role: Role): Promise<ExamDetail> => {
+export const getExamById = async (
+	examId: string,
+	actor: AuthenticatedUser,
+): Promise<ExamDetail> => {
+	const role = actor.role;
 	const exam = await ensureExamExists(examId);
 
-	if (exam.deletedAt && role !== Role.ADMIN) {
+	if (exam.deletedAt && role !== Role.SUPER_ADMIN) {
 		throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
 	}
+
+	// Students may only read exams for courses they are enrolled in.
+	await assertStudentContentAccess(actor, exam.courseId, { requirePaid: false });
 
 	const now = new Date();
 	const isWithinWindow = now >= exam.startTime && now <= exam.endTime;
@@ -273,8 +297,16 @@ export const getExamById = async (examId: string, role: Role): Promise<ExamDetai
 	};
 };
 
-export const updateExam = async (examId: string, input: UpdateExamInput): Promise<ExamDetail> => {
+export const updateExam = async (
+	examId: string,
+	input: UpdateExamInput,
+	actor: AuthenticatedUser,
+): Promise<ExamDetail> => {
 	const existing = await ensureExamExists(examId);
+	await assertCourseAccess(existing.courseId, actor);
+	if (input.courseId && input.courseId !== existing.courseId) {
+		await assertCourseAccess(input.courseId, actor);
+	}
 
 	if (existing.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot be updated.');
@@ -303,6 +335,8 @@ export const updateExam = async (examId: string, input: UpdateExamInput): Promis
 			totalMarks: input.totalMarks,
 			paperPdfUrl,
 			mcqPayload: mcqPayload ?? Prisma.JsonNull,
+			allowTypedAnswers: input.allowTypedAnswers,
+			allowPdfUpload: input.allowPdfUpload,
 		},
 		select: examDetailSelect,
 	});
@@ -324,8 +358,12 @@ export const updateExam = async (examId: string, input: UpdateExamInput): Promis
 	return normalized;
 };
 
-export const deleteExam = async (examId: string): Promise<ExamDetail> => {
+export const deleteExam = async (
+	examId: string,
+	actor: AuthenticatedUser,
+): Promise<ExamDetail> => {
 	const existing = await ensureExamExists(examId);
+	await assertCourseAccess(existing.courseId, actor);
 
 	if (existing.deletedAt) {
 		return normalizeExamDetail(existing);
@@ -353,8 +391,10 @@ export const deleteExam = async (examId: string): Promise<ExamDetail> => {
 export const generateExamPaperUploadUrl = async (
 	examId: string,
 	input: ExamUploadUrlInput,
+	actor: AuthenticatedUser,
 ): Promise<UploadUrlResult> => {
 	const exam = await ensureExamExists(examId);
+	await assertCourseAccess(exam.courseId, actor);
 
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot accept uploads.');
@@ -389,8 +429,10 @@ export const generateExamPaperUploadUrl = async (
 export const assignMarkersToExam = async (
 	examId: string,
 	input: AssignMarkersInput,
+	actor: AuthenticatedUser,
 ): Promise<MarkerAssignmentResult> => {
 	const exam = await ensureExamExists(examId);
+	await assertCourseAccess(exam.courseId, actor);
 
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');

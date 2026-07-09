@@ -2,14 +2,15 @@ import { Worker } from 'bullmq';
 import { redis } from '@/config/redis';
 import { logger } from '@/config/logger';
 import { initSentry, captureException } from '@/config/sentry';
-import { processEmailJob } from '@/jobs/email.job';
 import { processSmsJob } from '@/jobs/sms.job';
-import type { EmailJobData, SmsJobData } from '@/types/job.types';
+import { scheduleWeeklyTimetableGeneration } from '@/jobs/notification.queue';
+import { generateSessions } from '@/services/timetable.service';
+import type { SmsJobData } from '@/types/job.types';
 import {
-	JOB_EMAIL_CONCURRENCY,
-	JOB_QUEUE_EMAIL,
 	JOB_QUEUE_SMS,
+	JOB_QUEUE_TIMETABLE,
 	JOB_SMS_CONCURRENCY,
+	TIMETABLE_GENERATE_AHEAD_DAYS,
 } from '@/utils/constants';
 
 const smsWorker = new Worker<SmsJobData>(
@@ -23,14 +24,18 @@ const smsWorker = new Worker<SmsJobData>(
 	},
 );
 
-const emailWorker = new Worker<EmailJobData>(
-	JOB_QUEUE_EMAIL,
-	async (job) => {
-		await processEmailJob(job.data);
+// Weekly timetable → dated sessions. Generates the next window every run.
+const timetableWorker = new Worker(
+	JOB_QUEUE_TIMETABLE,
+	async () => {
+		const from = new Date();
+		const to = new Date(Date.now() + TIMETABLE_GENERATE_AHEAD_DAYS * 24 * 60 * 60 * 1000);
+		const result = await generateSessions(from, to);
+		logger.info(result, 'Timetable sessions generated');
 	},
 	{
 		connection: redis.duplicate(),
-		concurrency: JOB_EMAIL_CONCURRENCY,
+		concurrency: 1,
 	},
 );
 
@@ -48,35 +53,23 @@ smsWorker.on('failed', (job, err) => {
 	});
 });
 
-emailWorker.on('completed', (job) => {
-	logger.info({ jobId: job.id, queue: JOB_QUEUE_EMAIL }, 'Email job completed');
-});
-
-emailWorker.on('failed', (job, err) => {
-	logger.error({ jobId: job?.id, queue: JOB_QUEUE_EMAIL, err: err.message }, 'Email job failed');
+timetableWorker.on('failed', (job, err) => {
+	logger.error({ jobId: job?.id, queue: JOB_QUEUE_TIMETABLE, err: err.message }, 'Timetable job failed');
 	captureException(err, {
-		tags: { queue: JOB_QUEUE_EMAIL },
+		tags: { queue: JOB_QUEUE_TIMETABLE },
 		extras: { jobId: job?.id },
 	});
 });
 
 const bootstrap = async (): Promise<void> => {
-	await Promise.all([
-		smsWorker.waitUntilReady(),
-		emailWorker.waitUntilReady(),
-	]);
-
+	await Promise.all([smsWorker.waitUntilReady(), timetableWorker.waitUntilReady()]);
+	await scheduleWeeklyTimetableGeneration();
 	logger.info('BullMQ workers ready');
 };
 
 const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
 	logger.info({ signal }, 'Shutting down worker');
-
-	await Promise.all([
-		smsWorker.close(),
-		emailWorker.close(),
-	]);
-
+	await Promise.all([smsWorker.close(), timetableWorker.close()]);
 	process.exit(exitCode);
 };
 

@@ -13,7 +13,7 @@ import {
 
 export const createClass = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const input = createClassSchema.parse(req.body);
-	const classData = await ClassService.createClass(input);
+	const classData = await ClassService.createClass(input, req.user!);
 
 	void AuditService.log({
 		action: AUDIT_ACTION.CLASS_CREATED,
@@ -32,7 +32,7 @@ export const createClass = asyncHandler(async (req: Request, res: Response): Pro
 
 export const listClasses = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const query = listClassesQuerySchema.parse(req.query);
-	const classes = await ClassService.listClasses(query, req.user!.role);
+	const classes = await ClassService.listClasses(query, req.user!);
 
 	res.status(200).json({
 		status: 'success',
@@ -43,7 +43,7 @@ export const listClasses = asyncHandler(async (req: Request, res: Response): Pro
 
 export const getClassById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { classId } = classIdParamSchema.parse(req.params);
-	const classData = await ClassService.getClassById(classId, req.user!.role);
+	const classData = await ClassService.getClassById(classId, req.user!);
 
 	res.status(200).json({
 		status: 'success',
@@ -54,7 +54,7 @@ export const getClassById = asyncHandler(async (req: Request, res: Response): Pr
 export const updateClass = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { classId } = classIdParamSchema.parse(req.params);
 	const input = updateClassSchema.parse(req.body);
-	const classData = await ClassService.updateClass(classId, input);
+	const classData = await ClassService.updateClass(classId, input, req.user!);
 
 	void AuditService.log({
 		action: AUDIT_ACTION.CLASS_UPDATED,

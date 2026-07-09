@@ -32,6 +32,12 @@ export const RATE_LIMIT_AUTH_MAX = 10;
 /** Auth rate limit window in milliseconds (1 minute) */
 export const RATE_LIMIT_AUTH_WINDOW_MS = 60 * 1000;
 
+/** Stream-token endpoint: cap per IP to stop scripted harvesting of Bunny tokens (architecture §7.1) */
+export const RATE_LIMIT_STREAM_MAX = 30;
+
+/** Stream rate limit window in milliseconds (1 minute) */
+export const RATE_LIMIT_STREAM_WINDOW_MS = 60 * 1000;
+
 // ─── Zoom Webhooks ─────────────────────────────────────────
 
 /** Allowed timestamp skew for Zoom webhook signatures (seconds) */
@@ -117,11 +123,20 @@ export const SSE_HEARTBEAT_MS = 30 * 1000;
 
 /** Queue names for background jobs */
 export const JOB_QUEUE_SMS = 'lms_sms';
-export const JOB_QUEUE_EMAIL = 'lms_email';
+export const JOB_QUEUE_TIMETABLE = 'lms_timetable';
 
 /** Job names per queue */
 export const JOB_NAME_SEND_SMS = 'send_sms';
-export const JOB_NAME_SEND_EMAIL = 'send_email';
+export const JOB_NAME_GENERATE_SESSIONS = 'generate_sessions';
+
+/** Repeatable-job cron: generate next week's sessions every Sunday 20:00 UTC */
+export const JOB_CRON_WEEKLY_TIMETABLE = '0 20 * * 0';
+
+/** How many days ahead the weekly generator materializes sessions */
+export const TIMETABLE_GENERATE_AHEAD_DAYS = 14;
+
+/** Asia/Colombo is UTC+5:30 — offset in minutes for timetable time math */
+export const COLOMBO_UTC_OFFSET_MIN = 330;
 
 /** Default retry attempts for background jobs */
 export const JOB_DEFAULT_ATTEMPTS = 3;
@@ -131,7 +146,6 @@ export const JOB_DEFAULT_BACKOFF_MS = 5000;
 
 /** Worker concurrency per queue */
 export const JOB_SMS_CONCURRENCY = 5;
-export const JOB_EMAIL_CONCURRENCY = 5;
 
 /** Cleanup behavior for completed/failed jobs */
 export const JOB_REMOVE_ON_COMPLETE = true;
@@ -146,6 +160,20 @@ export const AUDIT_ACTION = {
 	USER_ACTIVATED: 'USER_ACTIVATED',
 	USER_DEACTIVATED: 'USER_DEACTIVATED',
 	BARCODE_ASSIGNED: 'BARCODE_ASSIGNED',
+
+	// Subjects
+	SUBJECT_CREATED: 'SUBJECT_CREATED',
+	SUBJECT_UPDATED: 'SUBJECT_UPDATED',
+
+	// Institutes
+	INSTITUTE_CREATED: 'INSTITUTE_CREATED',
+	INSTITUTE_UPDATED: 'INSTITUTE_UPDATED',
+
+	// Timetable
+	TIMETABLE_SLOT_CREATED: 'TIMETABLE_SLOT_CREATED',
+	TIMETABLE_SLOT_UPDATED: 'TIMETABLE_SLOT_UPDATED',
+	TIMETABLE_SLOT_DELETED: 'TIMETABLE_SLOT_DELETED',
+	TIMETABLE_GENERATED: 'TIMETABLE_GENERATED',
 
 	// Classes (courses)
 	CLASS_CREATED: 'CLASS_CREATED',
