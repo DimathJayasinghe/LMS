@@ -60,7 +60,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response): Prom
 export const updateStatus = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = userIdParamSchema.parse(req.params);
 	const input = req.body as UpdateStatusInput;
-	const user = await UserService.updateStatus(id, input);
+	const user = await UserService.updateStatus(id, input, req.user!.role);
 
 	void AuditService.log({
 		action: input.isActive ? AUDIT_ACTION.USER_ACTIVATED : AUDIT_ACTION.USER_DEACTIVATED,
@@ -82,7 +82,7 @@ export const assignBarcode = asyncHandler(async (req: Request, res: Response): P
 	const input = req.body as AssignBarcodeInput;
 
 	const before = await UserService.getUserById(id);
-	const user = await UserService.assignBarcode(id, input);
+	const user = await UserService.assignBarcode(id, input, req.user!.role);
 
 	void AuditService.log({
 		action: AUDIT_ACTION.BARCODE_ASSIGNED,

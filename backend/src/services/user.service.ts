@@ -100,6 +100,20 @@ export const getUserById = async (id: string): Promise<SafeUser> => {
 	return user;
 };
 
+// Front-desk (ADMIN) manages day-to-day accounts but must never be able to touch a
+// privileged peer/superior account (ADMIN or SUPER_ADMIN) — only SUPER_ADMIN can.
+const assertCanManagePrivilegedTarget = (actorRole: Role, targetRole: Role): void => {
+	const targetIsPrivileged = targetRole === Role.SUPER_ADMIN || targetRole === Role.ADMIN;
+
+	if (targetIsPrivileged && actorRole !== Role.SUPER_ADMIN) {
+		throw new AppError(
+			'FORBIDDEN',
+			403,
+			'Only a super admin can modify an admin or super admin account.',
+		);
+	}
+};
+
 export const updateRole = async (id: string, input: UpdateRoleInput): Promise<SafeUser> => {
 	const user = await prisma.user.findUnique({ where: { id } });
 
@@ -117,12 +131,15 @@ export const updateRole = async (id: string, input: UpdateRoleInput): Promise<Sa
 export const updateStatus = async (
 	id: string,
 	input: UpdateStatusInput,
+	actorRole: Role,
 ): Promise<SafeUser> => {
 	const user = await prisma.user.findUnique({ where: { id } });
 
 	if (!user) {
 		throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
 	}
+
+	assertCanManagePrivilegedTarget(actorRole, user.role);
 
 	const deletedAt = input.isActive ? null : new Date();
 
@@ -136,12 +153,15 @@ export const updateStatus = async (
 export const assignBarcode = async (
 	id: string,
 	input: AssignBarcodeInput,
+	actorRole: Role,
 ): Promise<SafeUser> => {
 	const user = await prisma.user.findUnique({ where: { id } });
 
 	if (!user) {
 		throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
 	}
+
+	assertCanManagePrivilegedTarget(actorRole, user.role);
 
 	const existing = await prisma.user.findUnique({ where: { barcode: input.barcode } });
 

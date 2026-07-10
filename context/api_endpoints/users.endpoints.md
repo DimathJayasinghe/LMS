@@ -210,6 +210,13 @@ Updates the user's role. ADMIN only.
 
 Activates or deactivates a user.
 
+> **Privileged-target guard (fixed 2026-07-10):** an `ADMIN` (front-desk) actor can no longer
+> change the status of an `ADMIN` or `SUPER_ADMIN` target — only `SUPER_ADMIN` can. Previously
+> the route was gated only by `requireRole(SUPER_ADMIN, ADMIN)` with no check on the *target's*
+> role, so front-desk could deactivate a super-admin account (this happened for real — see
+> `AuditLog`). The check lives in `UserService.updateStatus` via `assertCanManagePrivilegedTarget`,
+> shared with `PATCH /:id/barcode` below (same actor/target pattern, same fix).
+
 **Request body**
 
 ```json
@@ -233,6 +240,7 @@ Activates or deactivates a user.
 - 400 validation error
 - 401 auth middleware error
 - 403 forbidden (role guard)
+- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`
 - 404 `USER_NOT_FOUND` (service error shape)
 
 ### PATCH `/:id/barcode`
@@ -262,5 +270,6 @@ Assigns a barcode to a user.
 - 400 validation error
 - 401 auth middleware error
 - 403 forbidden (role guard)
+- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN` (same guard as `/:id/status`)
 - 404 `USER_NOT_FOUND` (service error shape)
 - 409 `BARCODE_IN_USE` (service error shape)

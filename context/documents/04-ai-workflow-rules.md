@@ -57,6 +57,27 @@ Before implementing, answer these questions:
 - Run existing tests before and after changes (when tests exist).
 - If changing a shared utility, check all call sites first.
 
+### 3.4 Edge Cases + Unit Tests (required, added 2026-07-10)
+
+Triggered by a real incident: a missing actor-vs-target-role check let a front-desk `ADMIN`
+deactivate a `SUPER_ADMIN` account (see `AuditLog`, fixed in `user.service.ts`'s
+`assertCanManagePrivilegedTarget`). Going forward, for **every implementation** (new endpoint,
+service function, or bugfix with behavioral change):
+
+1. **Brainstorm edge cases before/while coding** — not just the happy path. For anything with an
+   actor + target (role checks, ownership checks, resource state), explicitly enumerate the
+   actor×target matrix, not just the one case that was reported. Think about: who's the actor,
+   what can they target, what happens on "not found," what happens when two checks could both
+   fire (which one should win?), self-referential cases (can a user target themselves?).
+2. **Write unit tests for the new/changed logic** — backend uses **Vitest**
+   (`backend/vitest.config.ts`, `npm run test` / `npm run test:watch`). Mock `@/config/database`'s
+   `prisma` export rather than hitting a real DB for pure service-logic tests. Colocate as
+   `<file>.test.ts` next to the source file. See `backend/src/services/user.service.test.ts` for
+   the reference pattern (mocked prisma, actor×target matrix, ordering-of-checks cases).
+3. This is in addition to, not instead of, the session's standing practice of testing against the
+   live Docker Compose stack for end-to-end verification — unit tests cover the logic branches
+   fast and in CI; the live-stack pass confirms wiring end-to-end.
+
 ---
 
 ## 4. Decision-Making Framework
