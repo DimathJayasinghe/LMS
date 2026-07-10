@@ -1,11 +1,139 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { Video } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { ComingSoon } from "@/components/custom/ComingSoon";
+import { Badge } from "@/components/ui/badge";
+import { api } from "@/lib/api";
+import type { ApiList, Course, TimetableSlot } from "@/lib/types";
 
-export default function TimetablePage() {
+// Render Monday-first; API dayOfWeek is 0=Sun … 6=Sat.
+const WEEK: { day: number; label: string }[] = [
+  { day: 1, label: "Monday" },
+  { day: 2, label: "Tuesday" },
+  { day: 3, label: "Wednesday" },
+  { day: 4, label: "Thursday" },
+  { day: 5, label: "Friday" },
+  { day: 6, label: "Saturday" },
+  { day: 0, label: "Sunday" },
+];
+
+/** "16:00" → "4:00 PM". */
+function formatTime(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m.toString().padStart(2, "0")} ${period}`;
+}
+
+/** Start "16:00" + 120 min → "4:00 PM – 6:00 PM". */
+function timeRange(start: string, durationMinutes: number): string {
+  const [h, m] = start.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return formatTime(start);
+  const end = (h * 60 + m + durationMinutes) % (24 * 60);
+  const endHHmm = `${Math.floor(end / 60)
+    .toString()
+    .padStart(2, "0")}:${(end % 60).toString().padStart(2, "0")}`;
+  return `${formatTime(start)} – ${formatTime(endHHmm)}`;
+}
+
+export default async function TimetablePage() {
+  const cookie = (await cookies()).toString();
+
+  let slots: TimetableSlot[];
+  let courses: Course[];
+  try {
+    const [slotList, classList] = await Promise.all([
+      api.get<ApiList<TimetableSlot>>("/timetable/slots", { cookie }),
+      api.get<ApiList<Course>>("/classes", { cookie }),
+    ]);
+    slots = slotList.data;
+    courses = classList.data;
+  } catch {
+    redirect("/auth/login");
+  }
+
+  const courseName = new Map(courses.map((c) => [c.id, c.name]));
+
+  // Group slots by day, sorted by start time within each day.
+  const byDay = new Map<number, TimetableSlot[]>();
+  for (const slot of slots) {
+    const list = byDay.get(slot.dayOfWeek) ?? [];
+    list.push(slot);
+    byDay.set(slot.dayOfWeek, list);
+  }
+  for (const list of byDay.values()) {
+    list.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }
+
   return (
-    <div className="mx-auto max-w-5xl">
-      <PageHeader title="Timetable" description="Your weekly schedule." />
-      <ComingSoon />
+    <div className="mx-auto max-w-4xl">
+      <PageHeader title="Timetable" description="Your weekly class schedule." />
+
+      {slots.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-10 text-center text-sm text-muted-foreground">
+          No timetable slots have been scheduled yet.
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-border">
+          {WEEK.map(({ day, label }, i) => {
+            const daySlots = byDay.get(day) ?? [];
+            return (
+              <div
+                key={day}
+                className={`flex flex-col gap-3 p-4 sm:flex-row ${
+                  i > 0 ? "border-t border-border" : ""
+                }`}
+              >
+                <div className="w-28 shrink-0 pt-1 text-sm font-medium text-foreground">
+                  {label}
+                </div>
+                <div className="flex-1">
+                  {daySlots.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No classes</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {daySlots.map((slot) => (
+                        <li
+                          key={slot.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {slot.title ?? courseName.get(slot.courseId) ?? "Class"}
+                            </p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {timeRange(slot.startTime, slot.durationMinutes)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {slot.classType && (
+                              <Badge variant="outline">
+                                {slot.classType === "ONLINE" ? "Online" : "Physical"}
+                              </Badge>
+                            )}
+                            {slot.zoomLink && (
+                              <a
+                                href={slot.zoomLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                              >
+                                <Video className="size-4" aria-hidden />
+                                Join
+                              </a>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

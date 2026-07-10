@@ -19,7 +19,11 @@ _Last updated: 2026-07-10._
 | API client / auth context | ✅ Done | `lib/env.ts`, `lib/types.ts`, `lib/api.ts` (401→refresh→retry), `lib/hooks/useAuth.tsx` (`AuthProvider`/`useAuth`) mounted in root layout. |
 | Authenticated `(app)` shell | ✅ Done | `app/(app)/layout.tsx` server auth-guard (`/auth/me`, forwarded cookies → redirect to login); `AppShell` (fixed sidebar + mobile drawer + sticky TopBar); role-based `Sidebar` (`lib/nav.ts`), `TopBar` user menu + logout. |
 | Role-aware `/dashboard` | ✅ Done | Moved into `(app)`; greets user + renders role-filtered quick-link cards. |
-| `(app)` route stubs | 🟡 Placeholder | `classes`, `timetable`, `exams`, `submissions`, `attendance`, `payments`, `admin/{users,subjects,institutes}` render `PageHeader` + `ComingSoon` — nav resolves; screens are Phase 3+. |
+| Classes: browse + detail | ✅ Wired | `/classes` server-fetches `GET /classes` (search box → `?search`), subject names from `GET /subjects`, "Enrolled" badges from `GET /enrollments/my`. `/classes/[classId]` shows detail + sessions (gracefully gated on `403 NOT_ENROLLED`) + `EnrollPanel`. |
+| Enroll → pay | ✅ Wired | `EnrollPanel` (client): self-enroll (`POST /enrollments`, ONLINE/PHYSICAL), drop (`DELETE /enrollments/:id`), and **pay** (`POST /payments/initiate` → auto-POST form to PayHere checkout). Needs backend PayHere merchant config to complete a live charge. |
+| Timetable | ✅ Wired | `/timetable` server-fetches `GET /timetable/slots` + `GET /classes`, renders a Monday-first weekly view (time range, course/title, mode badge, Zoom join). |
+| Enrollment API (backend) | ✅ Added | `POST/GET/DELETE /api/enrollments` (+ `/my`) — the `Enrollment` model previously had no API; this unblocks the paid flow (see `context/api_endpoints/enrollments.endpoints.md`). |
+| `(app)` route stubs | 🟡 Placeholder | `exams`, `submissions`, `attendance`, `payments`, `admin/{users,subjects,institutes}` render `PageHeader` + `ComingSoon` — nav resolves; screens are Phase 3/4. |
 | Student account-setup (NIC + barcode) | ❌ Blocked | **Backend upload endpoints not yet exposed** (see backend progress tracker). |
 | Student account-setup (NIC + barcode) | ❌ Missing | UI not built; **backend upload endpoints not yet exposed** (see backend progress tracker). |
 
@@ -66,12 +70,13 @@ _Still open:_
 - `(app)/layout.tsx`: auth guard (server `/auth/me`), Sidebar + TopBar (role-based nav), mobile drawer.
 - Role-aware `/dashboard` landing.
 
-**Phase 3 — Student core:**
-- Browse subjects/courses → course detail → **enroll** → **pay** (online + status).
-- Timetable view (weekly). Class sessions list; recorded **video player** (stream token, enrolled+paid gate);
-  live class join.
-- Exams: list → sit (MCQ inline + timer) → upload/typed answers → results when published.
-- QR attendance (student QR display; scan flow is staff-side).
+**Phase 3 — Student core:** 🟡 **In progress (2026-07-10)**
+- ✅ Browse subjects/courses → course detail → **enroll** → **pay** — `/classes`, `/classes/[classId]`,
+  `EnrollPanel` (self-enroll + PayHere initiate). Added the backend enrollment endpoints to unblock it.
+- ✅ Timetable view (weekly) — `/timetable`. Class sessions list on the detail page (enrolled-gated).
+- ⬜ Recorded **video player** (stream token, enrolled+paid gate); live class join.
+- ⬜ Exams: list → sit (MCQ inline + timer) → upload/typed answers → results when published.
+- ⬜ QR attendance (student QR display; scan flow is staff-side).
 
 **Phase 4 — Staff / teacher / marker / admin:**
 - TEACHER: manage own courses, sessions, timetable slots, videos, exams.
@@ -118,3 +123,8 @@ _(Move completed items here with date + PR.)_
 - 2026-07-10 — Phase 2 authenticated `(app)` shell: server auth-guard layout, `AppShell` (fixed sidebar + mobile
   drawer + sticky TopBar), role-based `Sidebar`/`lib/nav.ts`, `TopBar` user menu + logout, role-aware `/dashboard`,
   `PageHeader`/`ComingSoon` + route stubs. Guard + role filtering smoke-tested (SUPER_ADMIN vs STUDENT).
+- 2026-07-10 — Phase 3 (part 1): `/classes` browse (search, subject names, enrolled badges), `/classes/[classId]`
+  detail (sessions gated on `NOT_ENROLLED`) + `EnrollPanel` (self-enroll / drop / PayHere pay), `/timetable` weekly
+  view. Extended `Course` type (`monthlyFee`/`description`/`isActive`), added `ClassSession`/`Enrollment` types +
+  `formatCurrency`. **Backend**: new enrollment resource (`POST/GET/DELETE /api/enrollments` + `/my`) with docs —
+  the `Enrollment` model had no API, which had blocked enroll→pay. `tsc` + `lint` + `next build` green (17 routes).

@@ -69,6 +69,10 @@ export interface Course {
   id: string;
   name: string;
   year?: number | null;
+  description?: string | null;
+  /** Monthly fee — a decimal serialized as a string, e.g. "2500.00". */
+  monthlyFee: string;
+  isActive: boolean;
   subjectId: string;
   teacherId: string;
   bannerUrl?: string | null;
@@ -78,6 +82,49 @@ export interface Course {
 }
 
 export type ClassType = "ONLINE" | "PHYSICAL" | null;
+
+/** Enrollment / timetable mode. Unlike a session's `classType`, never null. */
+export type EnrollmentMode = "ONLINE" | "PHYSICAL";
+
+/** A dated occurrence of a course (see classes.endpoints.md). */
+export interface ClassSession {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  classType: ClassType;
+  date: string;
+  durationMinutes: number;
+  zoomLink?: string | null;
+  zoomMeetingId?: string | null;
+  courseId: string;
+  deletedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Course summary embedded in an Enrollment (see enrollments.endpoints.md). */
+export interface EnrollmentCourse {
+  id: string;
+  name: string;
+  year?: number | null;
+  monthlyFee: string;
+  bannerUrl?: string | null;
+  isActive: boolean;
+  subjectId: string;
+  teacherId: string;
+}
+
+/** A student's link to a course in a given mode; gates content + payments. */
+export interface Enrollment {
+  id: string;
+  classType: EnrollmentMode;
+  isActive: boolean;
+  userId: string;
+  courseId: string;
+  createdAt: string;
+  updatedAt: string;
+  course: EnrollmentCourse;
+}
 
 export interface TimetableSlot {
   id: string;
