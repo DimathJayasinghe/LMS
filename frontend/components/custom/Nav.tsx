@@ -1,63 +1,43 @@
-import styled from "styled-components"
+import Link from "next/link";
 
-const NavContainer = styled.nav`
-    display: inline-block;
-    position: relative;
-    display: flex;
-    justify-content: space-between;
-    margin: 1rem;
-    border: 1px solid #000;
-    border-radius: 3rem;
-    max-width: 50rem;
-    min-width: fit-content;
-    width: 100%;
-    margin: 2rem auto;
-    background-color: #fff;
-`
+const LINKS = [
+  { href: "/home", label: "Home" },
+  { href: "/about", label: "About us" },
+  { href: "/courses", label: "Courses" },
+  { href: "/teachers", label: "Teachers" },
+  { href: "/contact", label: "Contact us" },
+];
 
+export default function Nav() {
+  return (
+    <nav className="relative z-50 mx-auto my-8 flex w-full min-w-fit max-w-[50rem] items-center justify-between rounded-full border border-foreground bg-background p-1.5">
+      <Link
+        href="/home"
+        aria-label="Home"
+        className="flex size-12 items-center justify-center rounded-full bg-foreground text-lg font-bold text-background"
+      >
+        L
+      </Link>
 
+      <ul className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
+        {LINKS.map((link) => (
+          <li key={link.href}>
+            <Link
+              href={link.href}
+              className="transition-colors hover:text-foreground"
+            >
+              {link.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
 
-export default function Nav(){
-    return <NavContainer>
-        <div>
-            <a 
-            className="
-                flex
-                items-center
-                justify-center
-                bg-black
-                text-white
-                aspect-square
-                w-15
-                rounded-full
-                align-center
-            " 
-            href="/home">L</a>
-        </div>
-
-
-        <ul className="flex space-x-6 text-sm  text-gray-700 items-center">
-            <li><a href="/home">Home</a></li>
-            <li><a href="/about">About us</a></li>
-            <li><a href="/courses">Courses</a></li>
-            <li><a href="/teachers">Teachers</a></li>
-            <li><a href="/contact">Contact us</a></li>
-        </ul>
-
-        <a 
-        className="
-            bg-black
-            text-white
-            cursor-pointer
-            pl-10
-            pr-10
-            flex
-            justify-center
-            items-center
-            rounded-full
-            "
-        href="/auth/login">
-            login
-        </a>
-    </NavContainer> 
+      <Link
+        href="/auth/login"
+        className="flex items-center self-stretch rounded-full bg-foreground px-8 text-sm text-background transition hover:opacity-90"
+      >
+        Login
+      </Link>
+    </nav>
+  );
 }

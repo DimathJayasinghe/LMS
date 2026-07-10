@@ -1,78 +1,57 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import Nav from "@/components/custom/Nav";
-import Grid from "./_components/Grid";
-import StudentReviews from "./_components/StudentRevies";
-import Header from "./_components/Header";
-import CourseCard from "./_components/CourseCard";
 import Footer from "@/components/custom/Footer";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowAltCircleRight, faArrowRight, faStar } from "@fortawesome/free-solid-svg-icons";
-import styled from "styled-components";
+import Grid from "./_components/Grid";
+import StudentReviews from "./_components/StudentReviews";
+import Header from "./_components/Header";
+import CourseCard, { type CourseCardData } from "./_components/CourseCard";
 
-type BoxProps = {
-    top: number;
-    left: number;
-};
+// Sample tiles for the marketing grid. Real courses are fetched on /courses.
+const SAMPLE_COURSES: CourseCardData[] = Array.from({ length: 9 }, (_, i) => ({
+  title: `Advanced Level Physics ${2026 + (i % 3)}`,
+  year: `${2026 + (i % 3)} A/L`,
+  schedule: "Monday · 3.00PM – 5.00PM",
+  image: "/Courses/1.png",
+  href: "/courses",
+}));
 
-const Box = styled.div<BoxProps>`
-    width: 3rem;
-    height : 3rem;
-    position: absolute;
-    animation : pop 1s ease infinite;
-    top : ${props=>props.top}px;
-    left : ${props=>props.left}px;
+export default function Home() {
+  return (
+    <>
+      <main>
+        <Grid />
+        <Nav />
+        <StudentReviews />
+        <Header />
+      </main>
 
-    @keyframes pop{
-        0%{
-            opacity : 0;
-        }
+      <section className="z-40 mt-60 min-h-[400px] border-t border-border bg-muted/40 p-10 pt-40">
+        <h2 className="text-center text-5xl font-medium text-foreground">
+          Discover Classes
+        </h2>
+        <p className="m-auto mt-4 max-w-[50rem] text-center italic leading-7 text-muted-foreground">
+          Find the best classes you want to join based on your interests, career
+          goals, and skills you want to improve. Choose classes that are useful,
+          engaging, and helpful for your future development.
+        </p>
 
-        50%{
-            opacity : 1;
-        }
+        <div className="m-auto mt-10 flex w-full max-w-[75rem] flex-wrap justify-center gap-10">
+          {SAMPLE_COURSES.map((course, i) => (
+            <CourseCard key={i} course={course} />
+          ))}
+        </div>
 
-        100%{
-            opacity : 0;
-        }
-    }
-`
+        <Link
+          href="/courses"
+          className="relative m-auto mb-10 mt-10 flex w-fit items-center gap-3 rounded-full bg-primary px-10 py-5 text-lg text-primary-foreground transition duration-300 hover:scale-110 motion-reduce:hover:scale-100"
+        >
+          All classes
+          <ArrowRight className="size-5" aria-hidden />
+        </Link>
+      </section>
 
-
-
-export default function home() {
-    return <>
-        <main>
-            <Grid />
-            <Nav />
-            <StudentReviews />
-            <Header />
-        </main>
-
-        <section className="bg-gray-50 border-t border-gray-50 mt-60 min-h-400 z-40 p-10 pt-40">
-            <h1 className="text-gray-700 text-center text-5xl font-medium">Discover Classes</h1>
-            <p className="text-center max-w-200 leading-7 m-auto mt-4 italic">Find the best classes you want to join based on your interests, career goals, and skills you want to improve. Choose classes that are useful, engaging, and helpful for your future development.</p>
-
-            <div
-                data-name="cards-container"
-                className=" w-full flex flex-wrap gap-10 justify-center max-w-300 m-auto mt-10 "
-            >
-                
-                {Array.from(new Array(9)).map((_ ,i)=><CourseCard key={i} />)}
-
-            </div>
-
-            <a
-                href="#"
-                data-name="button-discover-more-classes"
-                className="bg-black flex m-auto mt-10 mb-10 text-white items-center gap-3 p-5 pl-10 pr-10 rounded-full w-fit text-lg relative hover:scale-110 ease-initial duration-300"
-            >
-                All classes
-                <FontAwesomeIcon icon={faArrowRight} className="text-white w-5" />
-            </a>
-
-
-        </section>
-
-        <Footer />
-
+      <Footer />
     </>
+  );
 }

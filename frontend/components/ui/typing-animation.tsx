@@ -106,6 +106,9 @@ export function TypingAnimation({
   )
 
   useEffect(() => {
+    // Vendored Magic UI component: reset the typing animation whenever the
+    // source text changes. Intentional synchronous reset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDisplayedText("")
     setCurrentWordIndex(0)
     setCurrentCharIndex(0)
