@@ -32,11 +32,11 @@
                        │           │  (TCP, pooled)
                        ▼           ▼
 ┌─────────────────────────────────────────────────────────┐
-│  3. MANAGED DATA LAYER                                   │
+│  3. DATA LAYER (self-hosted in Compose, private network) │
 │  ┌───────────────────────────────────────────────────┐  │
-│  │ Neon Serverless PostgreSQL (free tier)            │  │
-│  │  — automated backups + point-in-time restore      │  │
-│  │  — pooled connection string (PgBouncer built-in)  │  │
+│  │ PostgreSQL 16 — `postgres` service, `pgdata` vol  │  │
+│  │  — not exposed to host/internet                   │  │
+│  │  — `backup` sidecar: verified+encrypted+off-site  │  │
 │  └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 
@@ -55,7 +55,7 @@
 
 **Why this shape:**
 - **One VPS runs everything** for the backend: nginx (TLS termination + reverse proxy), the API, the BullMQ worker, and Redis — all as containers in one `docker-compose.yml`. Deploy is `git pull && docker compose up -d --build`.
-- **Postgres is the only managed piece of the data layer** (Neon free tier) because a database is the one thing you must never lose, and Neon gives automated backups + point-in-time restore for $0 at this scale.
+- **Postgres is self-hosted** in the same Compose stack on a persistent `pgdata` volume, reachable only over the private Docker network. Durability is our own **`backup` service** — scheduled, verified, encrypted, off-site dumps with monthly restore drills. This removes the managed-DB bill and the free-tier cold-start problem; see [12-data-backup-and-recovery.md](./12-data-backup-and-recovery.md).
 - **Redis is self-hosted** in the same Compose file. On a single instance there is no cross-instance state to synchronise, so a managed Redis buys nothing — self-hosting is free and one less external dependency.
 - **The frontend is on Vercel's free tier** (edge-hosted Next.js). It could also be containerised on the same VPS; Vercel is chosen only because it is free and zero-effort. See [09-cost-and-hosting.md](./09-cost-and-hosting.md).
 
@@ -72,9 +72,9 @@
 | **Backend API** | Node.js + Express.js + TypeScript | Stateless REST API (Route → Controller → Service) |
 | **Real-Time** | Server-Sent Events (SSE) | One-way push to clients (results, timers, attendance) |
 | **Auth** | JWT (access + refresh tokens in HTTP-only cookies) | Stateless session management |
-| **Database** | Neon Serverless PostgreSQL | Relational source of truth |
+| **Database** | PostgreSQL 16 (self-hosted in Compose, `pgdata` volume) | Relational source of truth |
 | **ORM** | Prisma | Type-safe queries, migrations |
-| **Connection Pooling** | Neon pooled connection string (PgBouncer, built-in) | Keeps Postgres connection count safe |
+| **Connection Pooling** | Prisma client pool (add pgbouncer only if `max_connections` is ever exceeded) | Keeps Postgres connection count safe |
 | **Cache / Pub-Sub / Queue** | Redis (self-hosted in Compose) | Result cache, rate-limit store, BullMQ backbone, SSE fan-out |
 | **Task Queue** | BullMQ | Background jobs (SMS, cleanup, cron) on a separate worker process |
 | **File Storage** | Cloudflare R2 | Zero-egress S3-compatible; presigned URL uploads |
@@ -146,10 +146,10 @@ backend/
 |------|----------|-------------|
 | Browser → nginx → Backend | REST over HTTPS | All CRUD operations via JSON |
 | Backend → Browser | SSE (HTTP stream) | Real-time push (results, timer sync, timetable updates) |
-| Backend → PostgreSQL | TCP via Neon pooled URL | Prisma ORM queries through the connection pooler |
+| Backend → PostgreSQL | TCP on private Docker network (`postgres:5432`) | Prisma ORM queries |
 | Backend ↔ Redis | RESP protocol | Cache reads/writes, BullMQ enqueue, SSE Pub/Sub |
 | Worker ↔ Redis | RESP protocol | BullMQ job dequeue and processing |
-| Worker → PostgreSQL | TCP via Neon pooled URL | Background job database writes |
+| Worker → PostgreSQL | TCP on private Docker network (`postgres:5432`) | Background job database writes |
 | Browser → Cloudflare R2 | HTTPS (presigned URL) | Direct file upload — backend never touches the file |
 | Browser → Bunny.net | HLS over HTTPS | Token-protected video streaming |
 | Browser → Zoom | Zoom Web SDK (WebRTC) | Live class; Zoom fires webhook back to backend |

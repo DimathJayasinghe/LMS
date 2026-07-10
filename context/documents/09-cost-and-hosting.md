@@ -8,16 +8,20 @@
 ## 1. Hosting Model at a Glance
 
 ```
-Vercel (free)                    ONE VPS  (~$5–12/mo)                 Neon (free)
-┌──────────────┐   HTTPS   ┌───────────────────────────────┐   TCP   ┌──────────────┐
-│ Next.js app  │ ────────► │ nginx (TLS) → API → worker    │ ──────► │ PostgreSQL   │
-│ (all roles)  │           │                    └ Redis     │         │ + backups/PITR│
-└──────────────┘           └───────────────────────────────┘         └──────────────┘
+Vercel (free)                    ONE VPS  (~$5–12/mo)
+┌──────────────┐   HTTPS   ┌──────────────────────────────────────────────┐
+│ Next.js app  │ ────────► │ nginx (TLS) → API → worker → Redis           │
+│ (all roles)  │           │                       │                      │
+└──────────────┘           │        PostgreSQL (pgdata vol) ◄─ backup ────┼──► off-site bucket
+                           └──────────────────────────────────────────────┘    (rclone, encrypted)
                                     │ pay-per-use / free tiers
                     ┌───────────────┼───────────────┬───────────────┐
                  Cloudflare R2   Bunny.net       Notify.lk        Zoom / PayHere
                  (files)         (video)         (SMS)            (live / payments)
 ```
+
+- **PostgreSQL is self-hosted** inside the Compose stack on a persistent volume (no more Neon). The `backup`
+  service takes scheduled, verified, encrypted, off-site dumps — see [12-data-backup-and-recovery.md](./12-data-backup-and-recovery.md).
 
 - **No Kubernetes, no load balancer, no auto-scaling.** At ~1,200 students the result-release spike is read-heavy and absorbed by Redis caching on one box.
 - **Deploy is one command:** `git pull && docker compose up -d --build`.
@@ -30,7 +34,8 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)                 Neon (fr
 |------|----------|------|--------------|
 | Backend host (nginx + API + worker + Redis) | Hetzner / DigitalOcean VPS | 2 vCPU / 4 GB | **$5–12** |
 | Frontend | Vercel | Hobby (free) | **$0** |
-| PostgreSQL (+ backups, PITR) | Neon | Free tier | **$0** (until data/compute grows) |
+| PostgreSQL (self-hosted in Compose) | on the VPS | — | **$0** (runs on the box you already pay for) |
+| Off-site DB backups | Backblaze B2 / S3 | pay-per-GB | **~$0–1** (dumps are small + compressed) |
 | Redis | self-hosted in Compose | — | **$0** |
 | DNS + CDN + DDoS shield | Cloudflare | Free | **$0** |
 | Error tracking | Sentry | Free (5k events/mo) | **$0** |
@@ -46,7 +51,9 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)                 Neon (fr
 - Bunny **IP-bound tokens** + enrolled/paid gating stop the "leaked link → 5,000 viewers → surprise bandwidth bill" scenario.
 - Cloudflare R2 has **zero egress fees** — downloads don't rack up transfer costs.
 - SMS is a **BullMQ job**, so a result release sends in the background and can be batched/capped.
-- Redis caching keeps Neon compute usage (and thus its bill as you scale) low.
+- Redis caching keeps DB load low so the single box comfortably absorbs read-heavy spikes (result releases).
+- Self-hosting Postgres removes the managed-DB bill and the free-tier cold-start problem entirely — the only
+  DB cost is a few cents of off-site backup storage.
 
 ---
 
@@ -69,9 +76,12 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)                 Neon (fr
 1. Create a VPS (Ubuntu LTS). Add a non-root sudo user; enable UFW (allow 22, 80, 443).
 2. Install Docker + Docker Compose plugin.
 3. Point Cloudflare DNS `api.academylms.com` → VPS IP (proxied, orange cloud).
-4. Clone the repo; create `backend/.env` from `.env.example` (never commit it).
+4. Clone the repo; create `backend/.env` (never commit it) — set a **strong `POSTGRES_PASSWORD`**, a
+   `BACKUP_ENCRYPTION_PASSPHRASE`, and (recommended) `BACKUP_RCLONE_REMOTE` for off-site backups.
 5. Issue a Let's Encrypt cert for nginx (certbot or an nginx-companion container); enable auto-renew.
-6. `docker compose up -d --build`.
+6. `docker compose up -d --build` — this also brings up Postgres (fresh `pgdata` volume) and the backup service.
+7. Apply the schema: `docker compose exec backend npx prisma migrate deploy` (first boot only / after schema changes).
+8. Configure off-site + run one restore drill (see [12 §5, §8](./12-data-backup-and-recovery.md)).
 
 **Each deploy:**
 ```bash
@@ -80,7 +90,7 @@ cd /srv/lms && git pull && docker compose up -d --build && docker compose ps
 
 **GitHub Actions (recommended):** on merge to `main`, run build + tests, then SSH to the VPS and run the deploy line above. Zero secrets in the repo — use Actions secrets for the SSH key.
 
-**Services in `docker-compose.yml`:** `nginx` (TLS + reverse proxy → API), `backend` (Express API), `worker` (BullMQ), `redis`. Postgres is **not** in Compose — it's managed by Neon.
+**Services in `docker-compose.yml`:** `postgres` (self-hosted DB on the `pgdata` volume, not exposed to the host), `nginx` (TLS + reverse proxy → API), `backend` (Express API), `worker` (BullMQ), `redis`, and `backup` (scheduled encrypted dumps → `./backups` + off-site). Migrations run **in-container** (`docker compose exec backend npx prisma migrate deploy`) since the DB has no host port.
 
 ---
 
@@ -90,14 +100,14 @@ A single VPS is a single point of failure. Mitigations that keep it cheap:
 
 | Concern | Mitigation |
 |---------|-----------|
-| Data loss | **Postgres is on Neon** — automated backups + point-in-time restore. The one thing you can't lose is not on the box. |
+| Data loss | Postgres runs on a persistent `pgdata` volume, backed by the **`backup` service**: scheduled `pg_dump`, verified, AES-256 encrypted, rotated (daily/weekly/monthly), and copied **off-site**. Monthly restore drills. Full runbook: [12](./12-data-backup-and-recovery.md). |
 | Redis loss | Redis holds cache + queue, not source-of-truth data. Enable **AOF/RDB snapshot** to a mounted volume; a restart replays it. Jobs are re-enqueuable. |
-| Box dies | Rebuild is scripted: new VPS → clone → `.env` → `docker compose up -d`. Neon holds the data. Document this as a runbook and test it once. |
+| Box dies | Rebuild is scripted: new VPS → clone → `.env` → pull off-site backups → `docker compose up -d postgres` → `restore --latest` → `up -d`. The off-site copy is what makes total-loss recovery possible ([12 §7c](./12-data-backup-and-recovery.md)). |
 | Process crash | `restart: unless-stopped` on every container; Sentry alerts on unhandled errors. |
 | Traffic spike | Redis caches hot reads (results); rate limiting protects auth + token endpoints. |
 | TLS expiry | Let's Encrypt auto-renew (cron/container). |
 
-**When to scale up (not out):** if Neon compute or VPS CPU is consistently hot, first **resize the VPS** (bigger box) — it's one click and no code change. Only consider a second API instance behind nginx if a single large box is genuinely saturated; the stateless design (invariant §5.1) makes that a config change, not a rewrite.
+**When to scale up (not out):** if VPS CPU/RAM (or disk I/O for Postgres) is consistently hot, first **resize the VPS** (bigger box) — it's one click and no code change. Only consider a second API instance behind nginx if a single large box is genuinely saturated; the stateless design (invariant §5.1) makes that a config change, not a rewrite. Keep the DB on fast SSD storage and size RAM so the working set stays cached.
 
 ---
 
