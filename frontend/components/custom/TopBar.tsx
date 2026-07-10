@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Menu } from "lucide-react";
+import { ChevronDown, IdCard, LogOut, Menu } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/hooks/useAuth";
 import type { User } from "@/lib/types";
@@ -101,6 +102,17 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
                 {user.email}
               </p>
             </div>
+            {user.role === "STUDENT" && (
+              <Link
+                href="/auth/account-setup"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted"
+              >
+                <IdCard className="size-4" aria-hidden />
+                Account setup
+              </Link>
+            )}
             <button
               type="button"
               role="menuitem"

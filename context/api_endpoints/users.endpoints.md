@@ -21,7 +21,16 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 > **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**, `STAFF` now means **`ADMIN`**.
 
-> **New user fields** (account setup): `setupCompleted` (bool), `nicFrontUrl`, `nicBackUrl` (R2 keys). The student setup flow (NIC upload + per-institute barcodes) is not yet exposed — see Progress Tracker.
+> **Account setup** (implemented 2026-07-10): `setupCompleted` (bool) is exposed on `/auth/me`
+> along with `nicFrontUploaded`/`nicBackUploaded` (presence-only booleans — `/auth/me` never
+> returns the raw R2 key or a signed URL, to keep every SSR page's auth check cheap). The
+> NIC-upload and institute-barcode endpoints themselves live under `/api/users/me/...` — see
+> the dedicated `account-setup.endpoints.md` rather than duplicating them here.
+>
+> **`User.barcode` (the LMS QR) is now auto-generated at registration** (`LMS-<indexNumber
+> padded to 6 digits>`), not left null until an admin assigns one. `PATCH /:id/barcode` below
+> still exists for admin override/reassignment (e.g. a lost card) — it just no longer has to be
+> the *first* time a student gets a value.
 
 ## Response Shapes (Current Implementation)
 

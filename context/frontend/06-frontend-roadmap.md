@@ -33,8 +33,7 @@ _Last updated: 2026-07-10._
 | Teacher: exam authoring | ✅ Wired | `/exams/new` (TEACHER/SUPER_ADMIN; others redirect): create an exam — title, course, type, window (datetime-local → ISO), total marks, written channels (typed/PDF), a **question-paper PDF upload** (direct-to-R2, server never touches the file — same presigned-PUT pattern as the student answer-PDF channel; retry-safe if only the upload leg fails, never duplicates the exam), and an **MCQ builder** (add questions/options, mark correct). Builds the `mcqPayload` (generated ids) and `POST /exams`. Staff get a **New exam** CTA on `/exams`. Marker assignment deferred (needs user-list access, which TEACHER lacks). Frontend-only (`POST /exams/:id/upload-url` already existed server-side, unwired until now). |
 | Admin: user management | ✅ Wired | `/admin/users` (SUPER_ADMIN/ADMIN; others redirect): searchable/filterable (role, status) paginated user table with inline actions — change role (SUPER_ADMIN only), activate/deactivate, assign/edit entrance **barcode**. All via `PATCH /users/:id/{role,status,barcode}`; self-row protected. Frontend-only (endpoints existed). |
 | `(app)` route stubs | 🟡 Placeholder | `payments`, `admin/{subjects,institutes}` render `PageHeader` + `ComingSoon` — nav resolves; screens are Phase 4. |
-| Student account-setup (NIC + barcode) | ❌ Blocked | **Backend upload endpoints not yet exposed** (see backend progress tracker). |
-| Student account-setup (NIC + barcode) | ❌ Missing | UI not built; **backend upload endpoints not yet exposed** (see backend progress tracker). |
+| Student account-setup (NIC + barcode) | ✅ Wired | `/auth/account-setup` (STUDENT-only, `auth` route group — not `(app)`): two NIC photo pickers (front/back, direct-to-R2 presigned PUT, same server-never-touches-the-file pattern as exam PDFs) and an optional institute-barcode section (picker from `GET /institutes` + text input for the code the institute already gave the student, add/remove). `(app)/layout.tsx` now redirects an incomplete `STUDENT` here before any other screen renders; a completed student can revisit anytime via the TopBar user menu ("Account setup") to manage institute barcodes. **Backend** (new): `POST /users/me/nic/upload-url`, `GET/POST /users/me/institute-barcodes`, `DELETE .../:barcodeId` — all STUDENT-gated; `setupCompleted` auto-flips server-side once both NIC sides are on file, no admin-approval step (decision 2026-07-10, see `account-setup.endpoints.md`). Also: `User.barcode` (LMS QR) is now **auto-generated at registration** (`LMS-<indexNumber>`), not left null until an admin assigns one. Verified on the running production stack: **26/26** — auto-gen QR, presigned-URL round trip with a **real PUT to R2** (R2 creds are live, unlike Bunny/Zoom's placeholders), `setupCompleted` flip timing, STUDENT-only role gate, per-institute-not-global barcode uniqueness (same value accepted at institute B after being taken at institute A), ownership-scoped delete (404 not 403, cross-student), and the full SSR gate (incomplete→redirected, non-student bounced away, complete→through). `lint` + `tsc` + `next build` green. |
 
 ---
 
@@ -80,8 +79,8 @@ _Still open:_
 - Wire `/auth/login` (email+password → `POST /auth/login`) and `/auth/signup` (→ `POST /auth/register`) with
   error mapping.
 - Post-login redirect to a role-aware `/dashboard`.
-- Student **account setup** (NIC front/back upload, per-institute barcode) — gate on `setupCompleted`
-  (backend flow pending; see backend progress tracker).
+- ✅ Student **account setup** (NIC front/back upload, per-institute barcode) — gate on `setupCompleted`.
+  See §1's table row and the Done log for the 2026-07-10 implementation.
 
 **Phase 2 — Authenticated shell:** ✅ **Done (2026-07-10)**
 - `(app)/layout.tsx`: auth guard (server `/auth/me`), Sidebar + TopBar (role-based nav), mobile drawer.
@@ -140,6 +139,24 @@ _Still open:_
 
 _(Move completed items here with date + PR.)_
 
+- 2026-07-10 — Phase 1: **Student account setup** (NIC upload + institute barcodes). `/auth/account-setup`
+  (STUDENT-only): two NIC photo pickers (front/back), direct-to-R2 presigned PUT — same pattern as exam
+  PDFs, server never touches the file. Optional institute-barcode section (plain text — the student types
+  in a code their physical institute already issued, not a scan). `(app)/layout.tsx` gates the whole
+  authenticated area on `setupCompleted` for STUDENT. **Backend** (new): `POST /users/me/nic/upload-url`
+  (eager DB write at URL-generation time, `setupCompleted` auto-flips once both sides are on file — no
+  admin-approval step exists, a deliberate scope decision, see `account-setup.endpoints.md`),
+  `GET/POST /users/me/institute-barcodes`, `DELETE .../:barcodeId` (ownership-scoped). Also:
+  `User.barcode` (the LMS QR) is now **auto-generated at registration** (`LMS-<indexNumber>`) instead of
+  staying null until an admin manually assigns one. Verified on the running production stack: **26/26** —
+  including a **real PUT to R2** (unlike Bunny/Zoom, R2 creds are live and this proved it end-to-end),
+  per-institute (not global) barcode uniqueness confirmed both ways (same value rejected at the same
+  institute, accepted at a different one), ownership-scoped delete, STUDENT-only role gate, and the full
+  SSR flow (incomplete-setup redirect, non-student bounce, complete-setup pass-through). While
+  investigating this, found and documented (not fixed) two related gaps: `POST /attendance/scan` never
+  uses `StudentBarcode`/institute context (only the LMS QR), and `POST /attendance/video` exists
+  server-side but nothing on the frontend calls it — see `attendance.endpoints.md`. `lint` + `tsc` +
+  `next build` green (24 routes) on both frontend and backend.
 - 2026-07-10 — Phase 4 (part 5): **Direct-to-Bunny video upload**. Teachers now upload the recording file
   itself through the site: `POST /videos/uploads` (new; TEACHER/SUPER_ADMIN) creates the Bunny video +
   a `VideoRecording` row (`status: UPLOADING`, new `VideoStatus` enum) and returns a signed **TUS**

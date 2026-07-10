@@ -122,6 +122,20 @@ export const ANSWER_PDF_URL_TTL_SECONDS = 15 * 60;
 /** R2 object key prefix for student answer PDFs */
 export const ANSWER_PDF_KEY_PREFIX = 'answers';
 
+// ─── Student Account Setup (NIC photos, R2) ────────────────
+
+/** Allowed MIME types for NIC front/back photo uploads */
+export const NIC_IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png'] as const;
+
+/** Max upload size per NIC photo (10 MB) */
+export const NIC_IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+
+/** Presigned URL lifetime for NIC photo uploads (15 minutes) */
+export const NIC_IMAGE_URL_TTL_SECONDS = 15 * 60;
+
+/** R2 object key prefix for NIC photos */
+export const NIC_IMAGE_KEY_PREFIX = 'nic';
+
 // ─── Payments + PayHere ───────────────────────────────────
 
 /** PayHere checkout path appended to PAYHERE_BASE_URL */
@@ -195,6 +209,11 @@ export const AUDIT_ACTION = {
 	USER_ACTIVATED: 'USER_ACTIVATED',
 	USER_DEACTIVATED: 'USER_DEACTIVATED',
 	BARCODE_ASSIGNED: 'BARCODE_ASSIGNED',
+
+	// Account setup (NIC photos + institute barcodes)
+	NIC_UPLOAD_URL: 'NIC_UPLOAD_URL',
+	STUDENT_BARCODE_ASSIGNED: 'STUDENT_BARCODE_ASSIGNED',
+	STUDENT_BARCODE_REMOVED: 'STUDENT_BARCODE_REMOVED',
 
 	// Subjects
 	SUBJECT_CREATED: 'SUBJECT_CREATED',

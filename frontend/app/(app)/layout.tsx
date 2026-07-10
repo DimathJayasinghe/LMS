@@ -30,5 +30,11 @@ export default async function AppLayout({
     redirect("/auth/login");
   }
 
+  // Mandatory one-time onboarding (NIC photos) before any other screen —
+  // see context/api_endpoints/account-setup.endpoints.md.
+  if (user.role === "STUDENT" && !user.setupCompleted) {
+    redirect("/auth/account-setup");
+  }
+
   return <AppShell user={user}>{children}</AppShell>;
 }

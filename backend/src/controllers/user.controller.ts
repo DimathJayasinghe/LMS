@@ -7,6 +7,9 @@ import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	listUsersQuerySchema,
 	userIdParamSchema,
+	nicUploadUrlSchema,
+	createStudentBarcodeSchema,
+	studentBarcodeIdParamSchema,
 	type AssignBarcodeInput,
 	type UpdateRoleInput,
 	type UpdateStatusInput,
@@ -106,6 +109,73 @@ export const getMe = asyncHandler(async (req: Request, res: Response): Promise<v
 	res.status(200).json({
 		status: 'success',
 		data: user,
+	});
+});
+
+// ─── Account Setup (NIC upload + institute barcodes) ─────────
+
+export const getNicUploadUrl = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const input = nicUploadUrlSchema.parse(req.body);
+	const upload = await UserService.generateNicUploadUrl(req.user!.userId, input);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.NIC_UPLOAD_URL,
+		description: `NIC ${input.side.toLowerCase()} photo upload URL issued`,
+		targetType: 'User',
+		targetId: req.user!.userId,
+		context: extractAuditContext(req),
+	});
+
+	res.status(200).json({
+		status: 'success',
+		data: upload,
+	});
+});
+
+export const listMyInstituteBarcodes = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const barcodes = await UserService.listMyInstituteBarcodes(req.user!.userId);
+
+	res.status(200).json({
+		status: 'success',
+		data: barcodes,
+		count: barcodes.length,
+	});
+});
+
+export const createMyInstituteBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const input = createStudentBarcodeSchema.parse(req.body);
+	const barcode = await UserService.createMyInstituteBarcode(req.user!.userId, input);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.STUDENT_BARCODE_ASSIGNED,
+		description: `Institute barcode registered for institute ${input.instituteId}`,
+		targetType: 'User',
+		targetId: req.user!.userId,
+		context: extractAuditContext(req),
+	});
+
+	res.status(201).json({
+		status: 'success',
+		data: barcode,
+		message: 'Institute barcode registered.',
+	});
+});
+
+export const deleteMyInstituteBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { barcodeId } = studentBarcodeIdParamSchema.parse(req.params);
+	await UserService.deleteMyInstituteBarcode(req.user!.userId, barcodeId);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.STUDENT_BARCODE_REMOVED,
+		targetType: 'User',
+		targetId: req.user!.userId,
+		context: extractAuditContext(req),
+	});
+
+	res.status(200).json({
+		status: 'success',
+		data: null,
+		message: 'Institute barcode removed.',
 	});
 });
 

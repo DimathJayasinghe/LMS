@@ -19,6 +19,30 @@ Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` =
 - `AttendanceSource` now includes **`QR`** (default) alongside `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`.
 - Institute-scoped scanning (`(instituteId, barcode) → student`, per-institute barcodes) is a follow-up.
 
+## Attendance channels — current state vs. intent (clarified 2026-07-10)
+
+There are three intended ways attendance gets marked; here's exactly what's real today for each,
+since the schema anticipates more than the code currently does:
+
+1. **Entrance scan (`POST /scan`).** Today this is the **only** scan path, and it resolves purely
+   via `User.barcode` (the LMS QR — see `account-setup.endpoints.md`). It always writes
+   `source: BARCODE` regardless of whether the front-desk device read a QR code or a plain
+   barcode — **`AttendanceSource.QR` is defined in the schema but no code path currently produces
+   it.** It does **not** use `StudentBarcode`/`instituteId` at all — an institute's own barcode
+   reader scanning a student's institute-issued card has no way to resolve through our system
+   yet. Wiring `/scan` (or a new institute-scoped variant) to also check `(instituteId, barcode) →
+   student` via `StudentBarcode` is the real follow-up here, not just a docs note.
+2. **Live Zoom join (`POST /zoom-webhook`).** Fully automatic — Zoom's `meeting.participant_joined`
+   webhook fires on join, matched by `classSession.zoomMeetingId`. This is real and working
+   (subject to real Zoom credentials being configured — see `live-class.endpoints.md`).
+3. **Recorded video watch (`POST /video`).** The **backend** endpoint is real (`STUDENT`-only,
+   upserts attendance immediately on call, tagged `source: ZOOM_WEBHOOK` "same as online" per the
+   service comment) — but **nothing on the frontend calls it**. `VideoPlayer.tsx` doesn't invoke
+   `POST /attendance/video` anywhere, so watching a recording currently marks no attendance at
+   all in practice. There's also no watch-duration/completion gating server-side (it fires
+   immediately on the first call) — if this gets wired up, decide then whether "started playing"
+   is enough or a minimum watched-duration should gate it.
+
 ## Attendance Record Shape
 
 Returned in most endpoints:

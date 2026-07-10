@@ -47,12 +47,32 @@ export interface User {
   phone?: string | null;
   nic?: string | null;
   barcode?: string | null;
-  /** Account-setup gate: NIC upload + barcode completed. */
+  /** Account-setup gate: both NIC photos uploaded (see account-setup.endpoints.md). */
   setupCompleted?: boolean;
-  nicFrontUrl?: string | null;
-  nicBackUrl?: string | null;
+  /** Presence-only flags — never a raw R2 key or signed URL. */
+  nicFrontUploaded?: boolean;
+  nicBackUploaded?: boolean;
   deletedAt?: string | null;
   createdAt: string;
+}
+
+/** A student's own per-institute barcode (see account-setup.endpoints.md). */
+export interface StudentBarcode {
+  id: string;
+  barcode: string;
+  instituteId: string;
+  institute: { id: string; name: string; code: string; city?: string | null };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Signed direct-to-R2 NIC photo upload (POST /users/me/nic/upload-url). */
+export interface NicUploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
+  /** Reflects the account *after* this write — true once both sides are on file. */
+  setupCompleted: boolean;
 }
 
 // ── Academic hierarchy ───────────────────────────────────────────────────────
@@ -144,6 +164,8 @@ export interface TimetableSlot {
 export interface Institute {
   id: string;
   name: string;
+  code: string;
+  city?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
