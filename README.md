@@ -19,10 +19,10 @@ Learning Management System for a **single tuition institution** (~1,200 students
 |-------|------|
 | Frontend | Next.js (App Router), TypeScript, Tailwind, Zustand, React Query — hosted on Vercel (free) |
 | Backend | Node.js, Express, TypeScript, Prisma ORM |
-| Database | Neon PostgreSQL (managed, pooled connection, automated backups) |
+| Database | PostgreSQL 16 (self-hosted in Compose, persistent volume) + `backup` service (encrypted, off-site dumps) |
 | Cache/Queue | Redis (self-hosted in Compose), BullMQ |
 | Storage / Video | Cloudflare R2 (files), Bunny.net (video) |
-| Hosting | **One VPS** running nginx + API + worker + Redis via Docker Compose |
+| Hosting | **One VPS** running postgres + nginx + API + worker + Redis + backup via Docker Compose |
 | Observability | Sentry + Pino |
 
 ## Project Structure

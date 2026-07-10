@@ -901,8 +901,8 @@ model TimetableSlot {
 ## 9. Migration Strategy
 
 - Initial: `prisma migrate dev --name init`. No production data yet.
-- Post-launch: additive-first (nullable columns, backfill, then constrain); never rename/drop in one step; test against a Neon branch of production. Full runbook in `Guides_And_Summeries/database_migration_guide.md`.
-- **Backups**: Neon provides automated backups + point-in-time restore on the free tier — this is the primary recovery path.
+- Post-launch: additive-first (nullable columns, backfill, then constrain); never rename/drop in one step; test against a **scratch DB restored from a backup** (`restore --dbname lms_staging --create`) before applying to prod. Full runbook in `Guides_And_Summeries/database_migration_guide.md`.
+- **Backups**: Postgres is self-hosted; durability is the **`backup` service** — scheduled, verified, AES-256 encrypted, rotated (daily/weekly/monthly), off-site dumps, with monthly restore drills. Full runbook: [12-data-backup-and-recovery.md](./12-data-backup-and-recovery.md).
 
 ---
 

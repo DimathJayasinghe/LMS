@@ -39,7 +39,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Stale "Render/instances" comment in `rate-limiter.ts` updated to single-VPS wording.
 
 **Remaining follow-ups (columns/enums exist; endpoints not yet wired):**
-- [ ] Apply the schema to Neon: `npx prisma migrate dev --name align_to_design_doc` (needs DB access) — entrypoint currently uses `prisma db push`
+- [ ] Apply the schema to the self-hosted Postgres in-container: `docker compose exec backend npx prisma migrate deploy` (dev DB is on `localhost:5433` for host tooling) — entrypoint currently uses `prisma db push`
 - [ ] Submission flow: accept & store `writtenAnswers` (typed essay/structured answers) + autosave contract
 - [ ] Payment flow: pay-at-entrance endpoint setting `method=ENTRANCE` + `collectedById`
 - [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint
@@ -274,8 +274,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Configure Vercel project + custom domain (frontend, free tier)
 - [ ] Provision one VPS (Hetzner/DigitalOcean, ~$5–12/mo); install Docker + Compose
 - [ ] Point `api.` DNS (Cloudflare) at the VPS; nginx TLS via Let's Encrypt
-- [ ] Configure Neon PostgreSQL (pooled connection URL) + confirm automated backups
-- [ ] Run `docker compose up -d --build` (nginx + API + worker + self-hosted Redis)
+- [ ] Set a strong `POSTGRES_PASSWORD` + `BACKUP_ENCRYPTION_PASSPHRASE` in `backend/.env`; configure `BACKUP_RCLONE_REMOTE` (off-site) + `BACKUP_HEALTHCHECK_URL`
+- [ ] Run `docker compose up -d --build` (postgres + nginx + API + worker + Redis + backup); then `prisma migrate deploy` in-container
+- [ ] Run one restore drill ([12 §8](./12-data-backup-and-recovery.md)) before cutover
 - [ ] Set up Sentry projects (frontend + backend, free tier)
 - [ ] GitHub Actions: build/test on PR; on merge to `main`, SSH deploy (`git pull && docker compose up -d --build`)
 - [ ] Smoke test full system
@@ -306,7 +307,8 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2026-05-29 | Move backend hosting to EC2 + PM2 | Single-instance deploy with Upstash Redis; frontend stays on Vercel |
 | 2026-07-09 | **Single VPS + Docker Compose** (supersedes EC2+PM2) | Lowest cost/complexity: nginx + API + worker + Redis in one Compose file on a ~$5–12/mo VPS. `git pull && docker compose up -d --build` is the whole deploy. |
 | 2026-07-09 | **Delete Kubernetes** (`k8s/` + HPA) | Auto-scaling is unjustified at ~1,200 users; Redis caching absorbs the result-release spike on one box. Removed the biggest cost/complexity sink. |
-| 2026-07-09 | **Postgres = Neon (managed), Redis = self-hosted** | Neon free tier gives automated backups + PITR (the one thing you can't lose); Redis in Compose is free and has no cross-instance state to sync on a single instance. Dropped Upstash. |
+| 2026-07-09 | ~~Postgres = Neon (managed)~~ **superseded → self-hosted Postgres** | Redis in Compose is free and has no cross-instance state to sync on a single instance. Dropped Upstash. (Neon choice reversed below.) |
+| 2026-07-09 | **Postgres = self-hosted in Compose** (supersedes Neon) | Neon free-tier compute auto-suspends → first-query `ETIMEDOUT` broke auth. Self-hosting on a `pgdata` volume is always warm, zero DB bill, full control. We now own durability via the **`backup` service**: scheduled `pg_dump`, verified, AES-256 encrypted, GFS-rotated, off-site (rclone), monthly restore drills. Runbook: [12-data-backup-and-recovery.md](./12-data-backup-and-recovery.md). |
 | 2026-07-09 | **Drop Sanity CMS** | Marketing pages are static in Next.js. Removes a paid dependency *and* the on-demand-revalidation complexity. |
 | 2026-07-09 | **Email out of scope for v1** | SMS via Notify.lk is the notification channel; `resend` dependency to be removed. Email can return later as a BullMQ job. |
 | 2026-07-09 | **One Next.js frontend** | Deleted abandoned `admin_frontend/` + `admin_panel/`; all roles served from `frontend/` via App Router route groups. |
@@ -330,7 +332,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Video piracy (leaked stream link) | IP-bound Bunny tokens + enrolled/paid gating + student watermark overlay | ⬜ To implement |
 | Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ⬜ To implement |
 | DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ To implement |
-| Single VPS is a single point of failure | Neon managed backups (PITR) + nightly Redis snapshot; documented rebuild runbook | ⬜ To implement |
+| Single VPS is a single point of failure | Self-hosted Postgres on a persistent volume + the `backup` service (verified, encrypted, **off-site** dumps) + nightly Redis snapshot; scripted rebuild + restore runbook ([12](./12-data-backup-and-recovery.md)) | 🟡 Backup engine built & validated; configure off-site + drill before cutover |
 | Webhook spam from flaky student connections | Upsert-based webhook handlers | ✅ Done |
 | Database cascade delete | Soft deletes + `onDelete: Restrict` | ✅ Done |
 | Multi-worker cron job collision | BullMQ distributed queue | ✅ Done |
