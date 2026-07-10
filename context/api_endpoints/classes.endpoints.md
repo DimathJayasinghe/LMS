@@ -29,7 +29,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 - **Course create/update** now requires `subjectId` and (for SUPER_ADMIN) `teacherId`; a TEACHER creating a course owns it automatically.
 - Course gained `bannerUrl` / `backdropUrl` (image URLs).
-- **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise).
+- **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise). Enrollments are created/listed via `enrollments.endpoints.md`.
 - Sessions may be **generated from the timetable** (see `timetable.endpoints.md`); `timetableSlotId` links them.
 
 ## Response Shapes (Current Implementation)
