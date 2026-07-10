@@ -17,6 +17,7 @@ import { subjectRoutes } from './routes/subject.routes';
 import { instituteRoutes } from './routes/institute.routes';
 import { timetableRoutes } from './routes/timetable.routes';
 import { classRoutes } from './routes/class.routes';
+import { enrollmentRoutes } from './routes/enrollment.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
@@ -77,6 +78,7 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/institutes', instituteRoutes);
   app.use('/api/timetable', timetableRoutes);
   app.use('/api/classes', classRoutes);
+  app.use('/api/enrollments', enrollmentRoutes);
   app.use('/api/attendance', attendanceRoutes);
   // Extra throttle on the stream-token endpoint (on top of the global limiter).
   app.use('/api/videos/:id/stream', streamLimiter);

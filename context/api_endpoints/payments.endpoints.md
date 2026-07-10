@@ -19,6 +19,8 @@ Generates the payload required to redirect a student to PayHere checkout.
     "paymentMonth": "YYYY-MM"
   }
   ```
+  > `enrollmentId` comes from the student's **active** enrollments — see
+  > `enrollments.endpoints.md` (`GET /api/enrollments/my`).
 - **Success Response (200 OK):**
   ```json
   {

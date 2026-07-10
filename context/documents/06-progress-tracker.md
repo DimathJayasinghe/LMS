@@ -44,7 +44,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Payment flow: pay-at-entrance endpoint setting `method=ENTRANCE` + `collectedById`
 - [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint
 - [ ] Live classes: server-signed Zoom SDK join endpoint (same content gate) + per-student video **watermark** overlay (frontend)
-- [ ] Enrollment CRUD endpoints (the `Enrollment` model has no API yet — needed for the gate to have data)
+- [x] **Enrollment endpoints** (2026-07-10) — `POST /api/enrollments` (STUDENT self-enroll; ADMIN/SUPER_ADMIN enroll a `userId`; re-enroll reactivates a cancelled row), `GET /my`, `GET /` (admin, paginated), `GET /:id`, `DELETE /:id` (soft-cancel). Feeds the content-access gate and unblocks `POST /payments/initiate`. Files: `schemas/enrollment.schema.ts`, `services/enrollment.service.ts`, `controllers/enrollment.controller.ts`, `routes/enrollment.routes.ts`; `AUDIT_ACTION.ENROLLMENT_{CREATED,CANCELLED}`; `context/api_endpoints/enrollments.endpoints.md`. No migration (existing `Enrollment` table).
 - [ ] Teacher-scoped **reads** for attendance (currently `SUPER_ADMIN`+`ADMIN`)
 - [ ] **Student account-setup flow**: NIC front/back R2 upload endpoints, register/list/delete `StudentBarcode` per institute, flip `setupCompleted`; block content until setup done + account active
 - [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`)
