@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { logger } from '@/config/logger';
+import { env } from '@/config/env';
 import * as VideoService from '@/services/video.service';
 import {
   createVideoSchema,
@@ -7,7 +9,51 @@ import {
   videoIdParamSchema,
   classIdParamSchema,
   videoListQuerySchema,
+  initiateVideoUploadSchema,
+  bunnyWebhookSchema,
 } from '@/schemas/video.schema';
+
+// ─── POST /api/videos/uploads ─────────────────────────────────
+// Teacher/Super Admin starts a direct-to-Bunny upload. Returns a signed TUS
+// target the browser uploads the file into — the file never touches this server.
+export const initiateUpload = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const input = initiateVideoUploadSchema.parse(req.body);
+    const { video, upload } = await VideoService.initiateVideoUpload(input, req.user!);
+
+    res.status(201).json({
+      status: 'success',
+      data: { video, upload },
+      message: 'Upload authorized. Upload the file directly to Bunny.',
+    });
+  },
+);
+
+// ─── POST /api/videos/bunny-webhook ────────────────────────────
+// Bunny calls this when a video finishes processing (or fails) — the source
+// of truth for "upload complete", independent of the teacher's connection.
+// No user session: verified by a shared secret query param instead (Bunny's
+// library webhook has no per-request signature to check).
+export const bunnyWebhook = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    if (!env.BUNNY_WEBHOOK_SECRET || req.query.secret !== env.BUNNY_WEBHOOK_SECRET) {
+      res.status(401).json({ status: 'error', message: 'Invalid webhook secret.' });
+      return;
+    }
+
+    const parsed = bunnyWebhookSchema.safeParse(req.body);
+    if (!parsed.success) {
+      // Don't 400 — an unrecognized payload shouldn't make Bunny retry forever.
+      logger.warn({ errors: parsed.error.issues }, 'Invalid Bunny webhook payload — ignoring.');
+      res.status(200).json({ status: 'success', message: 'Payload ignored.' });
+      return;
+    }
+
+    await VideoService.handleBunnyWebhook(parsed.data);
+
+    res.status(200).json({ status: 'success', message: 'Webhook processed.' });
+  },
+);
 
 // ─── POST /api/videos ─────────────────────────────────────────
 // Super Admin attaches a Bunny Stream video to a class session

@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, CalendarDays, Clock, Lock, Video } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, Lock, PlayCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
+import { LiveClassAction } from "./_components/LiveClassAction";
 import { api, ApiError } from "@/lib/api";
+import { formatDuration } from "@/lib/video";
 import type {
   ApiList,
   ApiSuccess,
@@ -13,6 +16,7 @@ import type {
   Enrollment,
   Subject,
   User,
+  VideoRecording,
 } from "@/lib/types";
 
 /** Format a session instant in Asia/Colombo, e.g. "Wed, 13 May · 4:00 PM". */
@@ -56,7 +60,7 @@ export default async function ClassDetailPage({
     throw e;
   }
 
-  const [subjectName, sessionsResult, active] = await Promise.all([
+  const [subjectName, sessionsResult, videosResult, active] = await Promise.all([
     // Subject name (payload carries only subjectId).
     (async () => {
       try {
@@ -81,6 +85,20 @@ export default async function ClassDetailPage({
         return { sessions: [], gated };
       }
     })(),
+    // Recordings — students without an active enrollment get 403.
+    (async (): Promise<{ videos: VideoRecording[]; gated: boolean }> => {
+      try {
+        const res = await api.get<ApiList<VideoRecording>>(
+          `/videos/class/${classId}?limit=50`,
+          { cookie },
+        );
+        return { videos: res.data, gated: false };
+      } catch (e) {
+        const gated =
+          e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403);
+        return { videos: [], gated };
+      }
+    })(),
     // The viewer's active enrollment for this course (students only).
     (async (): Promise<{ id: string; classType: "ONLINE" | "PHYSICAL" } | null> => {
       if (user.role !== "STUDENT") return null;
@@ -99,7 +117,9 @@ export default async function ClassDetailPage({
   ]);
 
   const { sessions, gated } = sessionsResult;
+  const { videos, gated: videosGated } = videosResult;
   const banner = course.backdropUrl ?? course.bannerUrl;
+  const isStaff = user.role === "TEACHER" || user.role === "SUPER_ADMIN";
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -152,10 +172,20 @@ export default async function ClassDetailPage({
           )}
 
           <section>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-              <CalendarDays className="size-4" aria-hidden />
-              Sessions
-            </h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                <CalendarDays className="size-4" aria-hidden />
+                Sessions
+              </h2>
+              {isStaff && (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/classes/${classId}/sessions/new`}>
+                    <Plus aria-hidden />
+                    New session
+                  </Link>
+                </Button>
+              )}
+            </div>
 
             {gated ? (
               <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -188,16 +218,13 @@ export default async function ClassDetailPage({
                           {session.classType === "ONLINE" ? "Online" : "Physical"}
                         </Badge>
                       )}
-                      {session.zoomLink && (
-                        <a
-                          href={session.zoomLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                        >
-                          <Video className="size-4" aria-hidden />
-                          Join
-                        </a>
+                      {session.classType === "ONLINE" && (
+                        <LiveClassAction
+                          classId={classId}
+                          sessionId={session.id}
+                          scheduled={Boolean(session.zoomMeetingId)}
+                          isStaff={isStaff}
+                        />
                       )}
                     </div>
                   </li>
@@ -205,6 +232,81 @@ export default async function ClassDetailPage({
               </ul>
             )}
           </section>
+
+          {!videosGated && (
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                  <PlayCircle className="size-4" aria-hidden />
+                  Recordings
+                </h2>
+                {isStaff && sessions.length > 0 && (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/classes/${classId}/videos/new`}>
+                      <Plus aria-hidden />
+                      Upload recording
+                    </Link>
+                  </Button>
+                )}
+              </div>
+
+              {videos.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
+                  No recordings have been published yet.
+                </div>
+              ) : (
+                <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
+                  {videos.map((video) => {
+                    const duration = formatDuration(video.durationSeconds);
+                    const ready = video.status === "READY";
+                    const rowContent = (
+                      <>
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <PlayCircle className="size-5" aria-hidden />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {video.title}
+                          </span>
+                          {(video.classSession?.title || duration) && (
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                              {video.classSession?.title}
+                              {video.classSession?.title && duration ? " · " : ""}
+                              {duration}
+                            </span>
+                          )}
+                        </span>
+                        {video.status === "UPLOADING" && (
+                          <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
+                            Processing
+                          </Badge>
+                        )}
+                        {video.status === "FAILED" && (
+                          <Badge variant="outline" className="border-destructive/40 text-destructive">
+                            Failed
+                          </Badge>
+                        )}
+                      </>
+                    );
+                    return (
+                      <li key={video.id} className="bg-card">
+                        {ready ? (
+                          <Link
+                            href={`/classes/${classId}/videos/${video.id}`}
+                            className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/50"
+                          >
+                            {rowContent}
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-3 p-4">{rowContent}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-20 lg:self-start">

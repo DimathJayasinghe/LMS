@@ -42,6 +42,14 @@ enum SubmissionStatus {
   COMPLETED
 }
 
+// Lifecycle of a direct-to-Bunny video upload. UPLOADING → READY is driven by
+// Bunny's webhook (Status 4 "Finished"), never by the client — see bunny.ts.
+enum VideoStatus {
+  UPLOADING
+  READY
+  FAILED
+}
+
 enum AttendanceSource {
   QR // student QR scanned at the entrance
   BARCODE // physical barcode card
@@ -244,8 +252,9 @@ model ClassSession {
   classType       ClassType? // null = all cohorts (e.g. physical + streamed online)
   date            DateTime
   durationMinutes Int        @default(60)
-  zoomLink        String? // present = live-streamed
+  zoomLink        String? // present = live-streamed; the Zoom join_url once scheduled through the site
   zoomMeetingId   String?
+  zoomPassword    String? // set when WE create the meeting (self-service scheduling) — needed by every joiner
 
   courseId String
   course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
@@ -290,10 +299,14 @@ model Attendance {
 }
 
 model VideoRecording {
-  id              String  @id @default(uuid())
+  id              String      @id @default(uuid())
   title           String
   bunnyVideoId    String
   durationSeconds Int?
+  // UPLOADING until Bunny's webhook confirms processing finished — see
+  // VideoStatus below. Videos attached via the legacy manual (already-on-Bunny)
+  // flow are created straight into READY.
+  status          VideoStatus @default(UPLOADING)
 
   classSessionId String
   classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
@@ -302,6 +315,7 @@ model VideoRecording {
   updatedAt DateTime @updatedAt
 
   @@index([classSessionId])
+  @@index([bunnyVideoId])
 }
 
 model Exam {

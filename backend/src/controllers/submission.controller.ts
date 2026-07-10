@@ -12,6 +12,7 @@ import {
   completeSubmissionSchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
+  listMySubmissionsQuerySchema,
   submissionIdParamSchema,
   submitMarksSchema,
   publishResultsParamsSchema,
@@ -43,6 +44,21 @@ export const completeSubmission = asyncHandler(
       status: 'success',
       data: submission,
       message: 'Submission marked as complete.',
+    });
+  },
+);
+
+// ─── List My Submissions (Student) ────────────────────────
+
+export const listMySubmissions = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { examId } = listMySubmissionsQuerySchema.parse(req.query);
+    const submissions = await SubmissionService.listMySubmissions(req.user!.userId, examId);
+
+    res.status(200).json({
+      status: 'success',
+      data: submissions,
+      count: submissions.length,
     });
   },
 );

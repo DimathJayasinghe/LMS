@@ -153,20 +153,233 @@ export interface Institute {
 export type ExamType = "MCQ" | "WRITTEN" | "HYBRID" | "INCLASS";
 export type SubmissionStatus = "UPLOADING" | "COMPLETED";
 
+/** An MCQ option. `isCorrect` is present only for privileged roles — stripped for students. */
+export interface McqOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+export interface McqQuestion {
+  id: string;
+  text: string;
+  order: number;
+  marks: number;
+  options: McqOption[];
+}
+
+export interface McqPayload {
+  questions: McqQuestion[];
+}
+
+/** Exam list item (see exams.endpoints.md). Times are ISO UTC strings. */
 export interface Exam {
   id: string;
   title: string;
   type: ExamType;
+  startTime: string;
+  endTime: string;
   totalMarks: number;
+  isPublished: boolean;
   allowTypedAnswers: boolean;
   allowPdfUpload: boolean;
   courseId: string;
-  startsAt?: string | null;
-  endsAt?: string | null;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Exam detail read. Adds the paper URL + MCQ payload. For a STUDENT the payload
+ * is answer-stripped and only present inside the server-time exam window
+ * (`null` otherwise); privileged roles always get the full payload.
+ */
+export interface ExamDetail extends Exam {
+  paperPdfUrl: string | null;
+  mcqPayload: McqPayload | null;
+}
+
+/** Map of question ID → selected option IDs (MCQ). */
+export type McqAnswers = Record<string, string[]>;
+/** Map of question/part ID → typed answer text (written). */
+export type WrittenAnswers = Record<string, string>;
+
+/** A student's own submission (GET /submissions/mine). Marks are null until published. */
+export interface MySubmission {
+  id: string;
+  status: SubmissionStatus;
+  answers: McqAnswers | null;
+  writtenAnswers: WrittenAnswers | null;
+  answerPdfUrl: string | null;
+  marks: number | null;
+  feedback: string | null;
+  published: boolean;
+  examId: string;
+  exam: {
+    id: string;
+    title: string;
+    type: ExamType;
+    totalMarks: number;
+    isPublished: boolean;
+  };
+  submittedAt: string;
+  gradedAt: string | null;
+}
+
+/** Response of POST /submissions. `uploadUrl` is present only for the PDF channel. */
+export interface StartSubmissionResult {
+  submission: {
+    id: string;
+    status: SubmissionStatus;
+    answerPdfUrl: string | null;
+    answers: McqAnswers | null;
+    writtenAnswers: WrittenAnswers | null;
+    marks: number | null;
+    feedback: string | null;
+    examId: string;
+    userId: string;
+    submittedAt: string;
+    gradedAt: string | null;
+    updatedAt: string;
+  };
+  uploadUrl?: string;
+  uploadKey?: string;
+  uploadExpiresAt?: string;
+}
+
+/** Response of POST /exams/:id/upload-url — a presigned R2 PUT for the exam's paper PDF. */
+export interface ExamPaperUploadResult {
+  uploadUrl: string;
+  paperKey: string;
+  expiresAt: string;
+}
+
+/** A submission as seen by a marker/teacher (GET /submissions/exam/:examId). */
+export interface ExamSubmission {
+  id: string;
+  status: SubmissionStatus;
+  answerPdfUrl: string | null;
+  answers: McqAnswers | null;
+  writtenAnswers: WrittenAnswers | null;
+  marks: number | null;
+  feedback: string | null;
+  submittedAt: string;
+  gradedAt: string | null;
+  user: { id: string; name: string; email: string; indexNumber: number };
+}
+
+/** Result of POST /submissions/exam/:examId/publish. */
+export interface PublishResult {
+  examId: string;
+  examTitle: string;
+  publishedAt: string;
+  totalSubmissions: number;
+  gradedSubmissions: number;
+}
+
+// ── Video recordings ─────────────────────────────────────────────────────────
+/** The session a recording belongs to (embedded on video reads). */
+export interface VideoSession {
+  id: string;
+  title?: string | null;
+  date: string;
+  courseId: string;
+}
+
+/** UPLOADING until Bunny's webhook confirms processing finished (never set by the client). */
+export type VideoStatus = "UPLOADING" | "READY" | "FAILED";
+
+/** A recorded lecture attached to a class session (see video.endpoints.md). */
+export interface VideoRecording {
+  id: string;
+  title: string;
+  bunnyVideoId: string;
+  durationSeconds?: number | null;
+  status: VideoStatus;
+  classSessionId: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Included on create + list responses; omitted on metadata-only updates. */
+  classSession?: VideoSession;
+}
+
+/**
+ * Signed stream payload (GET /videos/:id/stream). `streamUrl` is IP-bound to
+ * the requesting client, so this MUST be fetched from the browser — never from
+ * a Server Component (the token would bind to the Next server's IP).
+ */
+export interface StreamData {
+  videoId: string;
+  title: string;
+  durationSeconds?: number | null;
+  /** HLS M3U8 playlist — feed to hls.js (or native `<video>` on Safari). */
+  streamUrl: string;
+  /** Bunny-hosted iframe player (not IP-bound); fallback only. */
+  embedUrl: string;
+  /** Unix seconds when the token expires (4h default). */
+  expiresAt: number;
+}
+
+/**
+ * Signed TUS (resumable upload) authorization (POST /videos/uploads).
+ * Feed straight into tus-js-client, pointed at Bunny — the browser uploads
+ * the file directly to Bunny, never through our server.
+ */
+export interface BunnyTusUpload {
+  endpoint: string;
+  libraryId: string;
+  videoId: string;
+  signature: string;
+  expire: number;
+}
+
+export interface InitiateUploadResult {
+  video: VideoRecording;
+  upload: BunnyTusUpload;
+}
+
+// ── Live classes (Zoom Meeting SDK) ──────────────────────────────────────────
+export interface ScheduleLiveClassResult {
+  sessionId: string;
+  zoomMeetingId: string;
+  joinUrl: string;
+}
+
+/**
+ * Signed Meeting SDK join payload (POST .../live/token). Freshly minted per
+ * join attempt — never cache or reuse across page loads. `userName` is
+ * server-derived (DB, never client input) for watermark traceability. `zak`
+ * is present only when `role === 1` (host).
+ */
+export interface LiveClassToken {
+  signature: string;
+  sdkKey: string;
+  meetingNumber: string;
+  password?: string;
+  role: 0 | 1;
+  userName: string;
+  zak?: string;
+  expiresAt: number;
 }
 
 // ── Payments & attendance ────────────────────────────────────────────────────
 export type PaymentMethod = "ONLINE" | "ENTRANCE" | "BULK" | "MANUAL";
 export type AttendanceSource = "QR" | "BARCODE" | "ZOOM_WEBHOOK" | "MANUAL";
+
+/** An attendance record (see attendance.endpoints.md). Relations included on query reads. */
+export interface AttendanceRecord {
+  id: string;
+  source: AttendanceSource;
+  scannedAt: string;
+  lastSeenAt: string;
+  userId: string;
+  classSessionId: string;
+  createdAt: string;
+  updatedAt: string;
+  classSession?: {
+    id: string;
+    title?: string | null;
+    date: string;
+    courseId: string;
+  };
+}

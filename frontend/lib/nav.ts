@@ -56,7 +56,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Attendance",
         href: "/attendance",
         icon: ScanLine,
-        roles: ["ADMIN", "TEACHER", "SUPER_ADMIN"],
+        roles: ["STUDENT", "ADMIN", "TEACHER", "SUPER_ADMIN"],
       },
       {
         label: "Payments",

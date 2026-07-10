@@ -29,6 +29,9 @@ interface SafeUser {
   address: string | null;
   city: string | null;
   createdAt: Date;
+  /** Present on `/auth/me` — the caller's own account fields. */
+  barcode?: string | null;
+  setupCompleted?: boolean;
 }
 
 // ─── Token Helpers (private) ─────────────────────────────────
@@ -289,6 +292,8 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
       address: true,
       city: true,
       createdAt: true,
+      barcode: true,
+      setupCompleted: true,
     },
   });
 
@@ -296,7 +301,13 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
     throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
   }
 
-  return toSafeUser(user);
+  // `/auth/me` returns the caller their own barcode (entrance QR) + setup gate,
+  // which the shared `toSafeUser` shape omits.
+  return {
+    ...toSafeUser(user),
+    barcode: user.barcode,
+    setupCompleted: user.setupCompleted,
+  };
 };
 
 // ─── Private Helpers ─────────────────────────────────────────

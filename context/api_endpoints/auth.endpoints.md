@@ -80,6 +80,9 @@ Returned in `register`, `login`, `refresh`, and `me`:
 }
 ```
 
+> **`GET /me` additionally returns** the caller's own `barcode` (the global LMS entrance QR value, may be
+> `null`) and `setupCompleted` (boolean). These are `me`-only — `register`/`login`/`refresh` omit them.
+
 ## Endpoints Summary
 
 | Method | Path | Auth | Description |

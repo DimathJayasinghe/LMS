@@ -1,7 +1,12 @@
-import { createHmac } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 import { env } from '@/config/env';
 import { AppError } from '@/utils/app-error';
-import { BUNNY_TOKEN_TTL_SECONDS } from '@/utils/constants';
+import {
+  BUNNY_MANAGEMENT_BASE_URL,
+  BUNNY_TOKEN_TTL_SECONDS,
+  BUNNY_TUS_UPLOAD_ENDPOINT,
+  BUNNY_UPLOAD_AUTH_TTL_SECONDS,
+} from '@/utils/constants';
 
 /**
  * Generates an IP-bound Bunny.net authentication token for a video stream.
@@ -28,19 +33,22 @@ export interface BunnyStreamUrl {
   expiresAt: number;
 }
 
-export const generateBunnyStreamUrl = (
-  bunnyVideoId: string,
-  clientIp: string,
-): BunnyStreamUrl => {
-  // Guard: fail with a clear error if Bunny is not configured yet.
-  // The server boots without these vars; they are only required at stream-time.
+/** Fails fast with a clear error if Bunny is not configured. Server boots without these vars — they are only required when a video is actually created/streamed. */
+const assertBunnyConfigured = (): void => {
   if (!env.BUNNY_API_KEY || !env.BUNNY_LIBRARY_ID || !env.BUNNY_CDN_HOSTNAME) {
     throw new AppError(
       'BUNNY_NOT_CONFIGURED',
       503,
-      'Video streaming is not configured. Please set BUNNY_API_KEY, BUNNY_LIBRARY_ID, and BUNNY_CDN_HOSTNAME in the server environment.',
+      'Video is not configured. Please set BUNNY_API_KEY, BUNNY_LIBRARY_ID, and BUNNY_CDN_HOSTNAME in the server environment.',
     );
   }
+};
+
+export const generateBunnyStreamUrl = (
+  bunnyVideoId: string,
+  clientIp: string,
+): BunnyStreamUrl => {
+  assertBunnyConfigured();
 
   const expires = String(Math.floor(Date.now() / 1000) + BUNNY_TOKEN_TTL_SECONDS);
 
@@ -85,4 +93,93 @@ export const generateBunnyStreamUrl = (
  */
 export const getBunnyEmbedUrl = (bunnyVideoId: string): string => {
   return `https://iframe.mediadelivery.net/embed/${env.BUNNY_LIBRARY_ID}/${bunnyVideoId}`;
+};
+
+/**
+ * Creates an empty video entry in the Bunny Stream library (management API,
+ * server-side only — this call carries the account's `AccessKey` and must
+ * never run in the browser). Returns the Bunny-assigned video GUID, which the
+ * browser then uploads the actual file bytes into via TUS (see
+ * `generateBunnyTusUpload`). The file itself never touches our server.
+ */
+export const createBunnyVideo = async (title: string): Promise<{ bunnyVideoId: string }> => {
+  assertBunnyConfigured();
+
+  const res = await fetch(`${BUNNY_MANAGEMENT_BASE_URL}/${env.BUNNY_LIBRARY_ID}/videos`, {
+    method: 'POST',
+    headers: {
+      AccessKey: env.BUNNY_API_KEY,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!res.ok) {
+    throw new AppError(
+      'BUNNY_CREATE_FAILED',
+      502,
+      `Bunny rejected the video creation request (${res.status}).`,
+    );
+  }
+
+  const data = (await res.json()) as { guid?: string };
+  if (!data.guid) {
+    throw new AppError('BUNNY_CREATE_FAILED', 502, 'Bunny did not return a video ID.');
+  }
+
+  return { bunnyVideoId: data.guid };
+};
+
+export interface BunnyTusUpload {
+  /** Browser-side upload target — a tus-js-client `endpoint`. */
+  endpoint: string;
+  libraryId: string;
+  videoId: string;
+  /** TUS `AuthorizationSignature` header value. */
+  signature: string;
+  /** TUS `AuthorizationExpire` header value (Unix seconds). */
+  expire: number;
+}
+
+/**
+ * Computes the signed TUS (resumable upload) authorization for a Bunny video.
+ * The browser uses this directly against Bunny's TUS endpoint — our server
+ * never receives the video bytes (architecture §5.6, direct-to-cloud).
+ *
+ * Formula per Bunny's TUS docs (https://docs.bunny.net/docs/stream-uploading#tus-resumable-uploads):
+ *   signature = SHA256(libraryId + apiKey + expiration + videoId)  [hex, not HMAC]
+ */
+export const generateBunnyTusUpload = (bunnyVideoId: string): BunnyTusUpload => {
+  assertBunnyConfigured();
+
+  const expire = Math.floor(Date.now() / 1000) + BUNNY_UPLOAD_AUTH_TTL_SECONDS;
+  const signature = createHash('sha256')
+    .update(`${env.BUNNY_LIBRARY_ID}${env.BUNNY_API_KEY}${expire}${bunnyVideoId}`)
+    .digest('hex');
+
+  return {
+    endpoint: BUNNY_TUS_UPLOAD_ENDPOINT,
+    libraryId: env.BUNNY_LIBRARY_ID,
+    videoId: bunnyVideoId,
+    signature,
+    expire,
+  };
+};
+
+/**
+ * Bunny's Video Library webhook status codes
+ * (https://docs.bunny.net/docs/stream-webhooks). We only act on the terminal
+ * states — everything else (Created/Uploaded/Processing/Transcoding) is left
+ * as UPLOADING so we never flip a still-processing video to a wrong state.
+ */
+const BUNNY_STATUS_FINISHED = 4;
+const BUNNY_STATUS_ERROR = 5;
+const BUNNY_STATUS_UPLOAD_FAILED = 6;
+
+/** Maps a Bunny webhook `Status` code to our VideoStatus, or `null` if it's a mid-flight status we don't act on. */
+export const resolveBunnyWebhookStatus = (status: number): 'READY' | 'FAILED' | null => {
+  if (status === BUNNY_STATUS_FINISHED) return 'READY';
+  if (status === BUNNY_STATUS_ERROR || status === BUNNY_STATUS_UPLOAD_FAILED) return 'FAILED';
+  return null;
 };

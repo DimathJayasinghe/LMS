@@ -8,15 +8,16 @@
 
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| POST | `/api/submissions` | STUDENT | Start submission (get upload URL or submit MCQ) |
+| POST | `/api/submissions` | STUDENT | Start submission (get upload URL or submit MCQ/typed) |
 | PATCH | `/api/submissions/:id/complete` | STUDENT | Mark PDF upload as complete |
+| GET | `/api/submissions/mine` | STUDENT | List the caller's own submissions (marks gated on publish) |
 | GET | `/api/submissions/exam/:examId` | ADMIN, MARKER (assigned) | List submissions for an exam |
 | PATCH | `/api/submissions/:id/marks` | MARKER (assigned) | Submit marks (idempotent) |
 | POST | `/api/submissions/exam/:examId/publish` | ADMIN | Publish results for an exam |
 
 > **Roles updated (2026-07-09)**: `ADMIN` → **`SUPER_ADMIN`**; list + publish now also allow the exam's **`TEACHER`**; grading stays **`MARKER`** (assigned).
 >
-> **New**: alongside `answers` (MCQ) and `answerPdfUrl` (scanned upload), students may submit typed essay/structured answers via **`writtenAnswers`** (JSON, keyed by question/part). The exam's `allowTypedAnswers` / `allowPdfUpload` flags decide which channels are accepted.
+> **Typed answers (2026-07-10)**: alongside `answers` (MCQ) and `answerPdfUrl` (scanned upload), students may submit typed essay/structured answers via **`writtenAnswers`** (JSON, keyed by question/part). The exam's `allowTypedAnswers` / `allowPdfUpload` flags decide which channels are accepted. A typed-only written submission needs no PDF upload, so it finalizes immediately (`status = COMPLETED`, `marks = null` until a marker grades).
 
 ---
 
@@ -43,9 +44,16 @@
   "answers": {                           // Required for MCQ/HYBRID
     "q1": ["o1", "o3"],
     "q2": ["o2"]
+  },
+  "writtenAnswers": {                    // Optional typed answers for WRITTEN/HYBRID
+    "q3": "The derivation follows from …"  //   (only if allowTypedAnswers = true)
   }
 }
 ```
+
+**Written channel (WRITTEN / HYBRID):** the written portion must arrive via **exactly one** channel — either typed `writtenAnswers` (when `allowTypedAnswers`) **or** a PDF upload via `fileName`/`contentType`/`fileSizeBytes` (when `allowPdfUpload`). Typed-only submissions return no `uploadUrl` and are `COMPLETED` immediately; PDF submissions return an upload URL and stay `UPLOADING` until `PATCH /:id/complete`.
+
+**Additional error codes:** `TYPED_NOT_ALLOWED` (400), `PDF_NOT_ALLOWED` (400), `WRITTEN_ANSWER_REQUIRED` (400 — neither channel supplied for a WRITTEN/HYBRID exam).
 
 ### Success Response (201)
 
@@ -128,6 +136,49 @@
 
 ---
 
+## GET `/api/submissions/mine`
+
+**List My Submissions** — A student reads their **own** submissions across exams (or one exam via `?examId=`). This is how the student UI shows "already submitted" and, once published, the result.
+
+### Auth
+- Requires: `access_token` cookie
+- Role: `STUDENT`
+
+### Query Params
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `examId` | UUID | No | Restrict to a single exam. Omit to list all. |
+
+### Success Response (200)
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "status": "COMPLETED",
+      "answers": { "q1": ["o1"] },
+      "writtenAnswers": null,
+      "answerPdfUrl": "https://presigned-download-url...",
+      "marks": 85,
+      "feedback": "Good work",
+      "published": true,
+      "examId": "uuid",
+      "exam": { "id": "uuid", "title": "Physics Midterm", "type": "MCQ", "totalMarks": 100, "isPublished": true },
+      "submittedAt": "2026-05-20T08:00:00.000Z",
+      "gradedAt": "2026-05-20T10:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+> **`marks`, `feedback`, and `gradedAt` are `null` until the exam's results are published** (`exam.isPublished = true`). `answerPdfUrl` is a short-lived presigned URL to the student's own uploaded answer PDF (or `null`).
+
+---
+
 ## GET `/api/submissions/exam/:examId`
 
 **List Submissions** — View all submissions for a specific exam.
@@ -146,6 +197,10 @@
 | `status` | string | `all` | `all`, `UPLOADING`, `COMPLETED` |
 | `graded` | string | `all` | `all`, `graded`, `ungraded` |
 
+> **Grading context (2026-07-10)**: the list now also returns `answers` (MCQ selections) and
+> `writtenAnswers` (typed essay/structured answers) so the marker UI can grade without a second fetch.
+> `answerPdfUrl` remains a short-lived presigned download URL (or `null`).
+
 ### Success Response (200)
 
 ```json
@@ -156,6 +211,8 @@
       "id": "uuid",
       "status": "COMPLETED",
       "answerPdfUrl": "https://presigned-download-url...",
+      "answers": { "q1": ["o1"] },
+      "writtenAnswers": { "q3": "The derivation follows from …" },
       "marks": 85,
       "feedback": "Good work",
       "submittedAt": "2026-05-20T08:00:00.000Z",

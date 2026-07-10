@@ -18,6 +18,29 @@ All endpoints require the standard `access_token` HTTP-only cookie (except where
 - **`GET /class/:classId`** (list) — requires an **active enrollment** for students.
 - **Manage videos** (create/update/delete) — `SUPER_ADMIN` or the course's **`TEACHER`** (older tables say `ADMIN`).
 
+## Direct-to-Bunny upload (2026-07-10)
+
+Teachers upload the recording file **straight from the browser to Bunny.net** — it never passes through our
+server (architecture §5.6, same principle as R2 presigned uploads). This is a two-step, webhook-confirmed flow:
+
+1. **`POST /uploads`** (TEACHER/SUPER_ADMIN) — creates the Bunny video entry + a `VideoRecording` row with
+   `status: UPLOADING`, and returns a signed **TUS** (resumable upload) authorization. Use with
+   [`tus-js-client`](https://github.com/tus/tus-js-client) directly against Bunny — set these headers on the
+   upload: `AuthorizationSignature`, `AuthorizationExpire`, `VideoId`, `LibraryId` (all returned in `upload`).
+2. The browser uploads the file to `upload.endpoint` via TUS. **Reaching 100% here does *not* mean the video
+   is ready** — Bunny still needs to transcode it.
+3. **`POST /bunny-webhook`** — Bunny calls this server-to-server the moment processing finishes (or fails),
+   flipping the row to `READY` (or `FAILED`). **This is the only thing that marks a video ready** — so even
+   if the teacher's browser goes offline the instant the transfer finishes, the video is never lost or stuck:
+   completion is confirmed by Bunny, not by the client. Configure this URL in the Bunny dashboard under
+   *Library → Webhooks* as `https://api.<domain>/api/videos/bunny-webhook?secret=<BUNNY_WEBHOOK_SECRET>` —
+   Bunny's library webhook has no per-request signature, so this query-param secret is the verification
+   control (§5.8). Idempotent (`updateMany`, safe to receive twice or for an unknown video).
+- Until `READY`, a video is **hidden from students** in `GET /class/:classId` (staff still see it, with its
+  status, so they can monitor progress) and `GET /:id/stream` returns `409 VIDEO_NOT_READY`.
+- The older **`POST /`** (manual attach — paste an already-uploaded `bunnyVideoId`) still exists for
+  dashboard-uploaded or migrated videos; those go straight to `READY`.
+
 ## Video Record Shape
 
 Returned by most endpoints:
@@ -28,6 +51,7 @@ Returned by most endpoints:
   "title": "Week 1 — Introduction to Algebra",
   "bunnyVideoId": "abc123-bunny-stream-id",
   "durationSeconds": 5400,
+  "status": "READY",
   "classSessionId": "uuid",
   "createdAt": "2026-05-18T09:00:00.000Z",
   "updatedAt": "2026-05-18T09:00:00.000Z",
@@ -40,7 +64,7 @@ Returned by most endpoints:
 }
 ```
 
-> **Note:** `classSession` relation is included on create and list responses. It is omitted on update responses (metadata-only).
+> **Note:** `classSession` relation is included on create and list responses. It is omitted on update responses (metadata-only). `status` is one of `UPLOADING` | `READY` | `FAILED`.
 
 ---
 
@@ -48,12 +72,14 @@ Returned by most endpoints:
 
 | Method | Path | Auth Roles | Description |
 |--------|------|------------|-------------|
-| `POST` | `/` | `ADMIN` | Attach a Bunny Stream video to a class session. |
+| `POST` | `/uploads` | `TEACHER`, `SUPER_ADMIN` | Start a direct-to-Bunny upload; returns a signed TUS target. |
+| `POST` | `/bunny-webhook` | None (secret query param) | Bunny's processing-complete/failed callback. |
+| `POST` | `/` | `ADMIN` | Attach an already-on-Bunny video to a class session (legacy manual flow). |
 | `PATCH` | `/:id` | `ADMIN` | Update video title or duration metadata. |
 | `DELETE` | `/:id` | `ADMIN` | Remove the video DB record (Bunny asset untouched). |
-| `GET` | `/class/:classId` | Any authenticated | List all videos for a course (paginated). |
+| `GET` | `/class/:classId` | Any authenticated | List videos for a course (paginated); students see only `READY`. |
 | `GET` | `/:id` | Any authenticated | Get single video metadata. |
-| `GET` | `/:id/stream` | Any authenticated | Get IP-bound signed stream URL. |
+| `GET` | `/:id/stream` | Any authenticated | Get IP-bound signed stream URL. `409 VIDEO_NOT_READY` if not yet processed. |
 
 ---
 

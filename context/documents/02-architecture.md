@@ -190,6 +190,12 @@ These rules **must never be violated**. Every code review checks against this li
 ### 5.6 Direct-to-Cloud File Transfers
 - Files never pass through the Node.js server. Backend generates presigned URLs; client uploads directly to R2.
 - Large files use multipart chunked upload with automatic token refresh.
+- **Video recordings follow the same principle via Bunny Stream's TUS protocol** (2026-07-10): the backend
+  creates the Bunny video + a signed TUS authorization (`POST /videos/uploads`); the teacher's browser
+  uploads the file straight to Bunny. Unlike R2 (where the client's own "complete" call flips the status),
+  video completion is confirmed by **Bunny's webhook** (`POST /videos/bunny-webhook`, §5.8) — so the upload
+  is never lost even if the browser disconnects the instant the transfer finishes. See
+  `context/api_endpoints/video.endpoints.md`.
 
 ### 5.7 Distributed-Safe Background Jobs
 - All scheduled/recurring tasks run via **BullMQ**, never `node-cron` or `setTimeout`.
@@ -247,10 +253,34 @@ Teachers deliver classes **live through the site** and publish **recorded classe
 - **Per-student watermark overlay** (student index number + name) rendered over the player — a cheap, strong deterrent against screen-record redistribution.
 - DRM/HDCP is on; the player detects the "innocent black screen" (frame rate 0 with audio) and shows guidance rather than flooding support.
 
-**Live classes (Zoom Web SDK, embedded in the site):**
-- The live session runs **inside the site** via the Zoom Web SDK — students do not leave the LMS.
-- The join **signature is generated server-side per session**, short-lived, and only after the access gate passes — it cannot be pre-shared to non-enrolled users.
-- Joining fires the Zoom webhook → `upsert` attendance (see §5.8).
-- Optional lower-cost/self-hosted alternative (if Zoom cost becomes an issue): Bunny.net live streaming with the same token gate. Zoom is kept for v1 because it is already in the stack and gives interactivity.
+**Live classes (Zoom Meeting SDK, embedded in the site — implemented 2026-07-10):**
+- Teachers **schedule through the site**: `POST .../live/schedule` calls Zoom's REST API (Server-to-Server
+  OAuth app) to actually create the meeting, replacing the old "paste a Zoom link you made yourself" step.
+  Both host and students then **join embedded in the LMS** (`@zoom/meetingsdk`) — nobody leaves the site.
+- The join/host **JWT is generated server-side per attempt**, freshly minted (never cached/reused across
+  page loads) and only after the same enrolled+paid gate as recorded video — it cannot be pre-shared to
+  non-enrolled users. Zoom enforces a 30-minute floor on the JWT's own lifetime; a Redis-backed per-
+  `(session, user)` throttle (8s) is the actual "single-use-ish" control.
+- A single Zoom Licensed account hosts every meeting — **our own Enrollment/Payment tables decide who joins
+  as host vs participant, not Zoom's account model.** This means Zoom's On-Behalf-Of (OBF) token requirement
+  (added for apps joining meetings on a genuinely *external* account) does not apply here; a ZAK is still
+  fetched fresh per host-start. See `context/api_endpoints/live-class.endpoints.md` for the full auth model
+  — this area of Zoom's platform changed materially after most training data was collected, so that doc was
+  written against Zoom's live, current documentation, not assumed knowledge.
+- **Honest limit on anti-recording**: the Web Meeting SDK has no HDCP/OS-level capture prevention (unlike
+  the VOD player above) — that only exists on Zoom's *native* SDKs. The realistic ceiling here is deterrence,
+  not prevention: locked-down meeting settings (no cloud/local recording, waiting room, muted+video-off
+  entry), the same watermark-overlay philosophy as VOD (name + index + live timestamp, repositioning), and
+  basic UI hardening. A native mobile app (which *could* add real OS-level capture-blocking) was explicitly
+  scoped out for now — noted as a real future phase, not a gap.
+- Joining fires the existing Zoom webhook → `upsert` attendance (see §5.8) — unchanged, since it already
+  matched on `classSession.zoomMeetingId`, which this flow populates the same way.
 
 **Rate limits:** token/signature endpoints are rate-limited per user to stop scripted harvesting of stream credentials.
+
+**Frontend (implemented 2026-07-10):** `LiveClassAction` on the class detail page (schedule/start/join CTA,
+never a raw zoom.us link) and `LiveClassRoom` at `/classes/[classId]/live/[sessionId]` (dynamic-imports
+`@zoom/meetingsdk/embedded`, fetches a fresh token per visit, renders the repositioning watermark). See
+`context/frontend/06-frontend-roadmap.md` for the packaging notes (React 19 peer-dep override, private
+`@zoom/download-manager` stub). Verified against the full production container stack via a downstream Prisma
+fixture (Zoom credentials are still placeholders) — see that doc's entry for what was and wasn't exercised.

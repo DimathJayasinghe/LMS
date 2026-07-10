@@ -7,6 +7,13 @@ set -e
 if [ "$1" = "npm" ] && [ "$2" = "run" ] && [ "$3" = "start" ]; then
   echo "Running prisma db push..."
   npx prisma db push 2>&1 | grep -v "Datasource" || echo "Warning: prisma db push failed — DB may be out of sync"
+
+  if [ -n "$LMS_ADMIN_EMAIL" ] && [ -n "$LMS_ADMIN_PASSWORD" ]; then
+    echo "Seeding super admin account from LMS_ADMIN_EMAIL / LMS_ADMIN_PASSWORD..."
+    node dist/scripts/seed-admin.js || echo "Warning: admin seed failed — continuing startup"
+  else
+    echo "Skipping admin seed: LMS_ADMIN_EMAIL / LMS_ADMIN_PASSWORD not set"
+  fi
 fi
 
 # Execute the original command (npm run start / npm run worker)

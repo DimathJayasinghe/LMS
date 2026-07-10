@@ -23,7 +23,16 @@ _Last updated: 2026-07-10._
 | Enroll → pay | ✅ Wired | `EnrollPanel` (client): self-enroll (`POST /enrollments`, ONLINE/PHYSICAL), drop (`DELETE /enrollments/:id`), and **pay** (`POST /payments/initiate` → auto-POST form to PayHere checkout). Needs backend PayHere merchant config to complete a live charge. |
 | Timetable | ✅ Wired | `/timetable` server-fetches `GET /timetable/slots` + `GET /classes`, renders a Monday-first weekly view (time range, course/title, mode badge, Zoom join). |
 | Enrollment API (backend) | ✅ Added | `POST/GET/DELETE /api/enrollments` (+ `/my`) — the `Enrollment` model previously had no API; this unblocks the paid flow (see `context/api_endpoints/enrollments.endpoints.md`). |
-| `(app)` route stubs | 🟡 Placeholder | `exams`, `submissions`, `attendance`, `payments`, `admin/{users,subjects,institutes}` render `PageHeader` + `ComingSoon` — nav resolves; screens are Phase 3/4. |
+| Exams: list + sit + results | ✅ Wired | `/exams` (status filter, type/status badges, "Submitted/Results out" hints), `/exams/[examId]` sit flow: MCQ (checkboxes + visual countdown from server `endTime` + localStorage autosave + cross-tab `BroadcastChannel`), typed **or** PDF-upload written channel, one-shot submit, and a results view (marks/feedback gated on publish). **Backend**: `GET /submissions/mine`, typed `writtenAnswers` on `POST /submissions`, `allowTypedAnswers`/`allowPdfUpload` exposed on exam reads. |
+| Teacher: direct-to-Bunny video upload | ✅ Wired | `/classes/[classId]/videos/new` is now a real file-picker upload (not a manual Bunny-ID paste): `POST /videos/uploads` creates a Bunny video + a `VideoRecording` row (`status: UPLOADING`) and returns a signed **TUS** target; the browser (`tus-js-client`) uploads the file **directly to Bunny** with resumable/progress UI — the file never touches our server. `POST /videos/bunny-webhook` (Bunny → us, secret-query-param verified, idempotent) is the **only** thing that flips a video to `READY`/`FAILED`, so the upload survives the teacher going offline the instant the transfer finishes. Students never see non-`READY` videos; staff see a Processing/Failed badge. Streaming a non-`READY` video returns `409 VIDEO_NOT_READY`. ⚠️ **`BUNNY_API_KEY` in `backend/.env` is a malformed GUID** (confirmed via a real 401 from Bunny's management API) — upload creation is blocked until it's replaced with the real Video Library API key from the Bunny dashboard; this may also affect existing stream-token signing, which was never previously verified against Bunny's live CDN. |
+| Recorded video player | ✅ Wired | Class detail lists **Recordings** (`GET /videos/class/:id`, enrollment-gated); `/classes/[classId]/videos/[videoId]` plays the IP-bound Bunny HLS stream via `hls.js` (browser-fetched `GET /videos/:id/stream` so the token binds to the viewer's IP), with `402 PAYMENT_REQUIRED` / `403 NOT_ENROLLED` gates, retry, and the HDCP black-screen tip. Needs live Bunny config + seeded videos for end-to-end playback. |
+| QR attendance (student) | ✅ Wired | `/attendance` is role-aware: a STUDENT sees a scannable **QR of their `barcode`** (`qrcode.react`) to show at the entrance + their attendance history (`GET /attendance/student/:id`, self-scoped); staff still get the scanner placeholder (Phase 4). **Backend**: `/auth/me` now returns `barcode` + `setupCompleted` (it previously stripped them, so a student couldn't read their own code). Added STUDENT to the Attendance nav item. |
+| Marking: queue + grade + publish | ✅ Wired | `/submissions` lists gradable exams (active/ended); `/submissions/[examId]` is the grading queue (per-student rows, expand to see typed/MCQ answers or the answer-PDF link, enter marks + feedback → `PATCH /submissions/:id/marks` with an `Idempotency-Key`), plus a **Publish results** action for TEACHER/SUPER_ADMIN (gated until the exam ends). Markers not assigned get a friendly gate. **Backend**: exposed `answers` + `writtenAnswers` on the per-exam submissions list so typed answers are gradable. |
+| Teacher: content authoring | ✅ Wired | On the class detail page, staff get **New session** + **Attach recording** CTAs. `/classes/[classId]/sessions/new` (title, date, duration, mode, Zoom link → `POST /classes/:id/sessions`) and `/classes/[classId]/videos/new` (session picker + title + Bunny video ID + duration → `POST /videos`). Both gated to TEACHER/SUPER_ADMIN. Frontend-only. |
+| Live classes (Zoom Meeting SDK) | ✅ Wired | Every **ONLINE** session on the class detail page gets an in-site CTA (`LiveClassAction`, replacing the old raw `zoomLink` anchor): staff see **Schedule live class** (`POST .../live/schedule`, one-time — provisions a real Zoom meeting) until scheduled, then everyone sees **Start**/**Join**, both routing to `/classes/[classId]/live/[sessionId]` — never zoom.us. That page (`LiveClassRoom`, client) fetches a **fresh, never-cached** join token per visit (`POST .../live/token`), dynamically imports `@zoom/meetingsdk/embedded` (SSR-unsafe), and embeds the meeting via `client.init()`/`client.join()`. Deterrent layers per the endpoint doc's anti-recording section: repositioning watermark (server-derived name + live timestamp, no client-spoofable identity), context-menu suppression, and the backend's meeting-settings lockdown + throttled tokens. Gated errors (`NOT_ENROLLED`/`PAYMENT_REQUIRED`/`LIVE_CLASS_NOT_SCHEDULED`/`TOKEN_RATE_LIMITED`) render friendly states, not crashes; `connection-change` → `Closed` shows an "ended" screen. Packaging note: `@zoom/meetingsdk` peer-pins `react@18.2.0` against this project's `react@19` — installed via a repo `.npmrc` (`legacy-peer-deps=true`); its UMD bundle also statically references the private, unpublished `@zoom/download-manager` (an optional dep of a local-recording-download feature we don't use, since recording is disabled) — aliased to a no-op stub via `turbopack.resolveAlias` in `next.config.ts`, with real `jszip` installed for the bundle's other optional dep. ⚠️ All `ZOOM_*` env vars in `backend/.env` are still placeholders — verified end-to-end via a downstream Prisma fixture (seeding `zoomMeetingId` directly) since the real Zoom API can't be reached yet; blocked on real Server-to-Server OAuth + Meeting SDK credentials (see live-class.endpoints.md's setup checklist). The **Timetable**'s per-slot `zoomLink` (a separate, simpler `TimetableSlot` field for recurring slots) still opens raw zoom.us in a new tab — not yet folded into this in-site flow; flagged as a known follow-up, not done as part of this feature. |
+| Teacher: exam authoring | ✅ Wired | `/exams/new` (TEACHER/SUPER_ADMIN; others redirect): create an exam — title, course, type, window (datetime-local → ISO), total marks, written channels (typed/PDF), a **question-paper PDF upload** (direct-to-R2, server never touches the file — same presigned-PUT pattern as the student answer-PDF channel; retry-safe if only the upload leg fails, never duplicates the exam), and an **MCQ builder** (add questions/options, mark correct). Builds the `mcqPayload` (generated ids) and `POST /exams`. Staff get a **New exam** CTA on `/exams`. Marker assignment deferred (needs user-list access, which TEACHER lacks). Frontend-only (`POST /exams/:id/upload-url` already existed server-side, unwired until now). |
+| Admin: user management | ✅ Wired | `/admin/users` (SUPER_ADMIN/ADMIN; others redirect): searchable/filterable (role, status) paginated user table with inline actions — change role (SUPER_ADMIN only), activate/deactivate, assign/edit entrance **barcode**. All via `PATCH /users/:id/{role,status,barcode}`; self-row protected. Frontend-only (endpoints existed). |
+| `(app)` route stubs | 🟡 Placeholder | `payments`, `admin/{subjects,institutes}` render `PageHeader` + `ComingSoon` — nav resolves; screens are Phase 4. |
 | Student account-setup (NIC + barcode) | ❌ Blocked | **Backend upload endpoints not yet exposed** (see backend progress tracker). |
 | Student account-setup (NIC + barcode) | ❌ Missing | UI not built; **backend upload endpoints not yet exposed** (see backend progress tracker). |
 
@@ -48,6 +57,14 @@ _Still open:_
 6. **Accessibility:** icon-only controls audit ongoing (Doc 05 §1). Dark-mode toggle for the app area not wired yet.
 8. **Server-side token refresh:** the `(app)` guard redirects an expired-but-refreshable session to login instead
    of refreshing (RSC can't set cookies). Add a Next `middleware.ts` refresh later (Doc 04 §6).
+9. **🔴 `BUNNY_API_KEY` in `backend/.env` is malformed** (found 2026-07-10 via smoke test): the value is a
+   corrupted GUID (`8-4-4-12-4-4` hex segments instead of the valid `8-4-4-4-12`), so Bunny's management API
+   rejects it with a real `401 Authentication has been denied for this request.` This blocks the direct-to-Bunny
+   upload's video-creation step. Because `BUNNY_API_KEY` is also used to sign playback tokens
+   (`generateBunnyStreamUrl`), earlier "successful" stream-URL tests only proved our server *constructs* a
+   syntactically valid signed URL — they never proved Bunny's CDN *accepts* it. **Action needed:** replace
+   `BUNNY_API_KEY` in `backend/.env` with the real Video Library API Key (Bunny dashboard → Stream → select the
+   library → API), then re-verify both upload creation and actual HLS playback end-to-end.
 
 ---
 
@@ -74,15 +91,26 @@ _Still open:_
 - ✅ Browse subjects/courses → course detail → **enroll** → **pay** — `/classes`, `/classes/[classId]`,
   `EnrollPanel` (self-enroll + PayHere initiate). Added the backend enrollment endpoints to unblock it.
 - ✅ Timetable view (weekly) — `/timetable`. Class sessions list on the detail page (enrolled-gated).
-- ⬜ Recorded **video player** (stream token, enrolled+paid gate); live class join.
-- ⬜ Exams: list → sit (MCQ inline + timer) → upload/typed answers → results when published.
-- ⬜ QR attendance (student QR display; scan flow is staff-side).
+- ✅ Recorded **video player** (IP-bound stream token, enrolled+paid gate) — Recordings list on class
+  detail + `/classes/[classId]/videos/[videoId]` (`hls.js`, browser-side token fetch).
+- ✅ **Live classes** (Zoom Meeting SDK, embedded in-site) — schedule/start/join CTA on the class detail
+  page, `/classes/[classId]/live/[sessionId]` room with watermark + basic UI hardening. Blocked on real
+  Zoom credentials for a true end-to-end join (logic verified via a downstream fixture — see table below).
+- ✅ Exams: list → sit (MCQ inline + timer) → typed/PDF answers → results when published —
+  `/exams`, `/exams/[examId]`. Added backend `GET /submissions/mine`, `writtenAnswers`, and channel flags.
+- ✅ QR attendance (student QR display; scan flow is staff-side) — `/attendance` role-aware student view
+  (barcode QR + history). Added `barcode`/`setupCompleted` to `/auth/me`.
 
-**Phase 4 — Staff / teacher / marker / admin:**
-- TEACHER: manage own courses, sessions, timetable slots, videos, exams.
+**Phase 4 — Staff / teacher / marker / admin:** 🟡 **In progress (2026-07-10)**
+- 🟡 TEACHER: manage own courses, sessions, timetable slots, videos, exams. ✅ **Exam authoring**
+  (`/exams/new`), ✅ **content authoring** (sessions + attach recordings from the class page). Course
+  create/edit + timetable-slot authoring TBD.
 - ADMIN (front desk): users, enrollment, pay-at-entrance, attendance scanner (camera/QR).
-- MARKER: submissions queue → grade (marks + feedback).
-- SUPER_ADMIN: subjects, institutes, everything above + publish results.
+- ✅ MARKER: submissions queue → grade (marks + feedback) — `/submissions`, `/submissions/[examId]`;
+  publish results (TEACHER/SUPER_ADMIN). Exposed `answers`/`writtenAnswers` on the marker list.
+- ✅ ADMIN/SUPER_ADMIN: **user management** — `/admin/users` (search/filter, role change, activate/deactivate,
+  barcode assign). Ties into QR attendance (staff assign the barcode a student then shows).
+- SUPER_ADMIN: subjects, institutes; the rest of the admin/teacher tooling.
 
 **Phase 5 — Polish:**
 - Dark mode toggle for the app area, empty/error illustrations, skeletons everywhere, perf pass, a11y audit.
@@ -112,6 +140,29 @@ _Still open:_
 
 _(Move completed items here with date + PR.)_
 
+- 2026-07-10 — Phase 4 (part 5): **Direct-to-Bunny video upload**. Teachers now upload the recording file
+  itself through the site: `POST /videos/uploads` (new; TEACHER/SUPER_ADMIN) creates the Bunny video +
+  a `VideoRecording` row (`status: UPLOADING`, new `VideoStatus` enum) and returns a signed **TUS**
+  authorization (`generateBunnyTusUpload` — `sha256(libraryId+apiKey+expire+videoId)`, per Bunny's TUS
+  docs); the browser uploads directly to Bunny via `tus-js-client` (resumable, progress bar) — the file
+  never touches our server (architecture §5.6). `POST /videos/bunny-webhook` (new; Bunny → us, verified by
+  a `BUNNY_WEBHOOK_SECRET` query param since Bunny's library webhook has no per-request signature;
+  idempotent `updateMany`) is the **only** thing that flips a video to `READY`/`FAILED` — completion is
+  confirmed by Bunny, not the client, so the upload survives the teacher going offline the instant the
+  transfer finishes. `GET /videos/class/:id` now hides non-`READY` videos from students (staff still see
+  them, with status); `GET /:id/stream` returns `409 VIDEO_NOT_READY` (distinct message for processing vs.
+  failed) instead of ever streaming an unfinished video. The legacy manual-attach `POST /videos` (paste an
+  already-on-Bunny ID) is unchanged and still goes straight to `READY`. Frontend: rebuilt `VideoForm` as a
+  real file picker with a progress bar, added a Processing/Failed badge to the class-page recordings list,
+  and a distinct "not ready yet" retry card in `VideoPlayer`. New: `lib/types.ts` `VideoStatus`/
+  `BunnyTusUpload`/`InitiateUploadResult`, `tus-js-client` dep. Verified on the running production stack
+  (nginx + backend + worker + postgres + redis + backup, all up): **15/15** logic checks — TUS signature
+  proven byte-identical to an independent recomputation; role gate; visibility before/after; webhook
+  secret rejection, mid-flight no-op, unknown-GUID no-op, Finished→READY, idempotent replay, Error→FAILED;
+  stream 409 before/failed, 200 once ready; legacy attach still READY-immediately — plus SSR render of the
+  new upload form and status badges. **Found via this testing, not fixed (needs the real credential):**
+  `BUNNY_API_KEY` in `backend/.env` is a malformed GUID, confirmed by a real `401` from Bunny's management
+  API — logged as open issue #9 above. `lint` + `next build` green (21 routes); backend `tsc` green.
 - 2026-07-09 — Frontend agent docs authored (`context/frontend/00–06`, README).
 - 2026-07-09 — Phase 0 foundation: `lib/env.ts`, `lib/types.ts`, `lib/api.ts` (401→refresh→retry),
   `AuthProvider`/`useAuth`; mounted in root layout; `/`→`/home`; fixed workspace-root warning.
@@ -123,6 +174,71 @@ _(Move completed items here with date + PR.)_
 - 2026-07-10 — Phase 2 authenticated `(app)` shell: server auth-guard layout, `AppShell` (fixed sidebar + mobile
   drawer + sticky TopBar), role-based `Sidebar`/`lib/nav.ts`, `TopBar` user menu + logout, role-aware `/dashboard`,
   `PageHeader`/`ComingSoon` + route stubs. Guard + role filtering smoke-tested (SUPER_ADMIN vs STUDENT).
+- 2026-07-10 — Phase 4 (part 4): **Teacher content authoring**. Class detail page now shows staff-only
+  **New session** + **Attach recording** CTAs. `/classes/[classId]/sessions/new` (`SessionForm` — title,
+  date [datetime-local → ISO], duration, mode, Zoom link → `POST /classes/:id/sessions`) and
+  `/classes/[classId]/videos/new` (`VideoForm` — session picker + title + Bunny video ID + duration [min→s]
+  → `POST /videos`). Both routes gated to TEACHER/SUPER_ADMIN (else → class detail); static `new` segments
+  win over the `[sessionId]`/`[videoId]` dynamics. Frontend-only. Verified on the running stack: **7/7** —
+  create session → appears in course sessions → attach video → appears in recordings, linked to the session,
+  and the enrolled student sees both; plus SSR render of both forms + CTAs + student redirect. `lint` +
+  `next build` green (23 routes).
+- 2026-07-10 — Phase 4 (part 3): **Teacher exam authoring**. `/exams/new` (TEACHER/SUPER_ADMIN gate;
+  others → `/exams`): `ExamForm` (client) — title, course select (`GET /classes`), type, window
+  (datetime-local → ISO), total marks, written channels (typed/PDF, shown for WRITTEN/HYBRID), and
+  `McqBuilder` (client, shown for MCQ/HYBRID — add/remove questions + options, mark correct, per-question
+  marks). Client-validates then builds the `mcqPayload` (generated `q*/o*` ids) and `POST /exams`. Added a
+  **New exam** CTA (staff-only) to `/exams` and a role-aware description. Marker assignment deferred (needs
+  `GET /users?role=MARKER`, which TEACHER can't call). New: `lib/roles.ts` unaffected; frontend-only.
+  Verified on the running stack: **7/7** — the form's exact MCQ payload is accepted (201), staff detail
+  keeps `isCorrect`, the enrolled student sees it answer-stripped during the window and can submit; plus
+  SSR render of the form + staff CTA + student redirect. `lint` + `next build` green (21 routes).
+- 2026-07-10 — Phase 4 (part 2): **Admin user management**. `/admin/users` (SUPER_ADMIN/ADMIN gate; others
+  redirect to `/dashboard`): searchParams-driven search + role/status filters + pagination (server-fetched
+  `GET /users`); `UserFilters` (client) + `UsersTable` (client) with inline actions — change role
+  (SUPER_ADMIN only), activate/deactivate, and assign/edit the entrance **barcode**, each via
+  `PATCH /users/:id/{role,status,barcode}` + `router.refresh()`; self-row protected from role/status edits.
+  New: `lib/roles.ts` (`roleLabel`), route `loading.tsx`. Frontend-only (endpoints already existed).
+  Verified on the running stack: **8/8** API checks (list/search/role-filter, barcode persist, role change,
+  deactivate→inactive/hidden-from-active, reactivate) + SSR render (admin sees the table; a student is
+  redirected). `lint` + `next build` green (20 routes).
+- 2026-07-10 — Phase 4 (part 1): **Marking — grade queue + publish**. `/submissions` lists gradable
+  exams (active/ended, students redirected to `/exams`); `/submissions/[examId]` is the grading queue —
+  `GradeSubmissionRow` (client) expands to show the student's typed `writtenAnswers` / MCQ selections
+  (correct vs chosen) / answer-PDF link, then takes marks (0–totalMarks) + feedback via
+  `PATCH /submissions/:id/marks` (with `Idempotency-Key`); `PublishResultsButton` (client, TEACHER/
+  SUPER_ADMIN, confirm-gated, disabled until the exam ends). MARKER-not-assigned → friendly gate; reused
+  `ExamStatusBadge`/`ExamNotice`/`lib/exam`. New: `ExamSubmission`/`PublishResult` types, route
+  `loading.tsx` skeletons. **Backend**: added `answers` + `writtenAnswers` to `submissionListSelect` so
+  the marker can grade typed answers. Verified end-to-end on the running stack: **11/11** — student typed
+  submit → marker (assigned) sees the text → grades 82/100 → publish blocked while active
+  (`EXAM_STILL_ACTIVE`) → publish after end → **student sees the published mark + feedback**; plus SSR
+  render of both marker pages. `lint` + `next build` green (19 routes); backend `tsc` green.
+- 2026-07-10 — Phase 3 (part 4): **QR attendance (student)**. `/attendance` is now a role-aware server
+  page: a STUDENT sees a scannable QR of their `barcode` (`qrcode.react` `QRCodeSVG`, on a fixed white
+  plate) to show at the entrance, plus their attendance history (`GET /attendance/student/:id`, self-scoped,
+  best-effort); non-students keep the scanner `ComingSoon`. New: `qrcode.react` dep, `AttendanceRecord`
+  type, `lib/attendance.ts`, route `_components/AttendanceQr`. Added STUDENT to the Attendance nav item.
+  **Backend**: `/auth/me` now returns `barcode` + `setupCompleted` (the getMe select stripped them, so a
+  student had no way to read their own entrance code). Verified end-to-end against the running stack:
+  6/6 attendance API checks (barcode assign → staff manual scan → student reads own history; cross-student
+  read blocked 403) + SSR render of the QR page. `lint` + `next build` green (18 routes); backend `tsc` green.
+- 2026-07-10 — Phase 3 (part 3): **Recorded video player**. Class detail now lists **Recordings**
+  (`GET /videos/class/:id`, enrollment-gated, best-effort); new route `/classes/[classId]/videos/[videoId]`
+  renders a `VideoPlayer` (`components/features/VideoPlayer.tsx`, client) that browser-fetches the IP-bound
+  `GET /videos/:id/stream` and plays the Bunny HLS `.m3u8` via `hls.js` (native HLS on Safari), with
+  `402`/`403` gate cards, retry, token-expiry handling, and the HDCP black-screen tip. Added `hls.js` dep,
+  `VideoRecording`/`StreamData` types, `lib/video.ts` (`formatDuration`), route `loading.tsx`. Frontend-only
+  (no backend change — video endpoints already existed). `lint` + `next build` green (18 routes).
+- 2026-07-10 — Phase 3 (part 2): **Exams**. `/exams` list (status filter, type/status badges, submission
+  hints) + `/exams/[examId]` sit flow (MCQ checkboxes, visual countdown from server `endTime`, localStorage
+  autosave + `BroadcastChannel` cross-tab sync, typed **or** PDF-upload written channel, one-shot submit) and a
+  results view (marks/feedback gated on `isPublished`). New: `lib/exam.ts`, `components/features/ExamStatusBadge`,
+  route-private `ExamCard`/`ExamSit`/`McqQuestionList`/`WrittenAnswerPanel`/`CountdownTimer`/`ExamResult`/`ExamNotice`,
+  `loading.tsx` skeletons. Fixed `lib/types.ts` `Exam` (was `startsAt`/`endsAt`) + added submission types.
+  **Backend** (companion PR): `GET /submissions/mine` (marks gated on publish), typed `writtenAnswers` on
+  `POST /submissions` (typed-only → `COMPLETED`), `allowTypedAnswers`/`allowPdfUpload` on exam list+detail reads;
+  docs updated. `lint` + `next build` green (17 routes); backend `tsc` green.
 - 2026-07-10 — Phase 3 (part 1): `/classes` browse (search, subject names, enrolled badges), `/classes/[classId]`
   detail (sessions gated on `NOT_ENROLLED`) + `EnrollPanel` (self-enroll / drop / PayHere pay), `/timetable` weekly
   view. Extended `Course` type (`monthlyFee`/`description`/`isActive`), added `ClassSession`/`Enrollment` types +

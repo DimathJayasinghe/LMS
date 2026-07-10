@@ -43,6 +43,27 @@ export const RATE_LIMIT_STREAM_WINDOW_MS = 60 * 1000;
 /** Allowed timestamp skew for Zoom webhook signatures (seconds) */
 export const ZOOM_WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
 
+// ─── Zoom Live Classes (Meeting SDK) ────────────────────────
+
+/**
+ * Meeting SDK JWT lifetime. Zoom enforces a 30-min FLOOR (`exp - iat` must be
+ * between 1800 and 172800 seconds) — this is the minimum allowed, kept short
+ * per the "single-use, short-lived" join-token requirement. We don't persist
+ * or reuse a token across page loads; a fresh one is minted on every join.
+ */
+export const ZOOM_SDK_JWT_TTL_SECONDS = 30 * 60;
+
+/** Server-to-Server OAuth access tokens last ~1h; cache a bit under that. */
+export const ZOOM_ACCESS_TOKEN_CACHE_TTL_SECONDS = 50 * 60;
+
+/**
+ * Throttle window for join-token issuance, per (session, user) — Redis SET NX.
+ * Blocks trivial rapid-fire re-issuance (e.g. two tabs opened at once, a
+ * link handed to someone else and clicked seconds later) without punishing a
+ * legitimate reconnect a few seconds on.
+ */
+export const ZOOM_JOIN_TOKEN_THROTTLE_SECONDS = 8;
+
 // ─── Idempotency ────────────────────────────────────────────
 
 /** HTTP header name for the client-provided idempotency key */
@@ -58,6 +79,20 @@ export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
  * Long enough to watch a full lecture; short enough to limit replay attacks.
  */
 export const BUNNY_TOKEN_TTL_SECONDS = 4 * 60 * 60;
+
+/** Bunny Stream management API base (create video, etc). */
+export const BUNNY_MANAGEMENT_BASE_URL = 'https://video.bunnycdn.com/library';
+
+/** Bunny's TUS (resumable upload) endpoint — the browser uploads here directly. */
+export const BUNNY_TUS_UPLOAD_ENDPOINT = 'https://video.bunnycdn.com/tusupload';
+
+/**
+ * How long a signed TUS upload authorization stays valid (2 hours). Generous
+ * relative to the 15-min R2 presign TTL because raw lecture video files are
+ * large and teachers may be on slow connections; tus-js-client resumes across
+ * network drops as long as the signature hasn't expired.
+ */
+export const BUNNY_UPLOAD_AUTH_TTL_SECONDS = 2 * 60 * 60;
 
 // ─── Exams + R2 (Paper PDFs) ───────────────────────────────
 

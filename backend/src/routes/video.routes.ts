@@ -10,9 +10,27 @@ import {
   videoIdParamSchema,
   classIdParamSchema,
   videoListQuerySchema,
+  initiateVideoUploadSchema,
 } from '@/schemas/video.schema';
 
 export const videoRoutes = Router();
+
+// ─── POST /api/videos/uploads ──────────────────────────────────
+// Teacher/Super Admin starts a direct-to-Bunny upload (TUS). Registered
+// before the other literal/`:id` routes for clarity; no path conflict exists
+// since there is no other POST on a literal `/uploads` segment.
+videoRoutes.post(
+  '/uploads',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+  validateBody(initiateVideoUploadSchema),
+  VideoController.initiateUpload,
+);
+
+// ─── POST /api/videos/bunny-webhook ────────────────────────────
+// Bunny's server-to-server callback — no user session, verified by a shared
+// secret query param (see VideoController.bunnyWebhook).
+videoRoutes.post('/bunny-webhook', VideoController.bunnyWebhook);
 
 // ─── POST /api/videos ─────────────────────────────────────────
 // Super Admin attaches a Bunny Stream video to a class session
