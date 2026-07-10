@@ -3,7 +3,7 @@
 > The build order and page inventory for the frontend, mirroring the backend's `06-progress-tracker.md`.
 > Keep this current: when a screen is done (per Doc 00 §7), move it to **Done** with the date.
 
-_Last updated: 2026-07-09._
+_Last updated: 2026-07-10._
 
 ---
 
@@ -13,12 +13,14 @@ _Last updated: 2026-07-09._
 |---|---|---|
 | Next.js 16 + Tailwind v4 + shadcn scaffold | ✅ Done | `components/ui/` primitives, `components.json`, tokens in `globals.css`. |
 | Poppins font wired | ✅ Done | `app/layout.tsx` (`--font-poppins`). |
-| Marketing landing (`/home`) | 🟡 Partial | Grid backdrop, pill Nav, hero Header + Rainbow CTA, StudentReviews, CourseCard grid, Footer. Migrated off `styled-components` → Tailwind + `<Link>`. Still uses static demo data + some raw color classes (token cleanup pending). |
-| Auth screens (`/auth/login`, `/auth/signup`) | ✅ Wired | Real login (email+password → `POST /auth/login`) and register (→ `POST /auth/register`); shared `AuthAside` panel; API + field-error mapping; redirect to `/dashboard`. |
+| Marketing landing (`/home`) | ✅ Done | Grid backdrop, pill Nav, hero Header + Rainbow CTA, StudentReviews, CourseCard grid, real LMS Footer. Off `styled-components` → Tailwind + `<Link>`; **all colors on design tokens**, icons on **lucide** (FontAwesome removed). Still uses static demo data (real data on `/classes`). |
+| Auth screens (`/auth/login`, `/auth/signup`) | ✅ Wired | Real login (email+password → `POST /auth/login`) and register (→ `POST /auth/register`); shared `AuthAside`; **show/hide password toggle**; API + field-error mapping; redirect to `/dashboard`. |
 | Root `/` | ✅ Done | Redirects to `/home` (`app/page.tsx`). |
 | API client / auth context | ✅ Done | `lib/env.ts`, `lib/types.ts`, `lib/api.ts` (401→refresh→retry), `lib/hooks/useAuth.tsx` (`AuthProvider`/`useAuth`) mounted in root layout. |
-| Minimal authed `/dashboard` | ✅ Done | Placeholder that closes login→dashboard→logout. Full role shell still pending. |
-| Dashboard shell / `(app)` area | ❌ Missing | No authenticated layout, sidebar, or role dashboards yet. |
+| Authenticated `(app)` shell | ✅ Done | `app/(app)/layout.tsx` server auth-guard (`/auth/me`, forwarded cookies → redirect to login); `AppShell` (fixed sidebar + mobile drawer + sticky TopBar); role-based `Sidebar` (`lib/nav.ts`), `TopBar` user menu + logout. |
+| Role-aware `/dashboard` | ✅ Done | Moved into `(app)`; greets user + renders role-filtered quick-link cards. |
+| `(app)` route stubs | 🟡 Placeholder | `classes`, `timetable`, `exams`, `submissions`, `attendance`, `payments`, `admin/{users,subjects,institutes}` render `PageHeader` + `ComingSoon` — nav resolves; screens are Phase 3+. |
+| Student account-setup (NIC + barcode) | ❌ Blocked | **Backend upload endpoints not yet exposed** (see backend progress tracker). |
 | Student account-setup (NIC + barcode) | ❌ Missing | UI not built; **backend upload endpoints not yet exposed** (see backend progress tracker). |
 
 ---
@@ -32,14 +34,16 @@ _Resolved 2026-07-09:_
 3. ~~styled-components under RSC.~~ **Fixed** — `Grid`, `Nav`, `Header`, `home/page`, and the auth panel migrated
    to Tailwind (+ `<Link>`); `styled-components` no longer imported anywhere in `app/`/`components/`.
 
+_Resolved 2026-07-10:_
+4. ~~Raw color classes in `CourseCard`/`StudentReviews`/`Footer`/`/home`.~~ **Fixed** — migrated to design
+   tokens (dark-mode safe); fixed invalid Tailwind classes (`w-15`, `-rotate-25`); FontAwesome → lucide (dep removed).
+5. ~~Placeholder `href="#"` links.~~ **Fixed** — `CourseCard`/`Footer` now use real routes (`<Link>`).
+7. ~~Vendored Magic UI lint errors.~~ **Fixed** — scoped `eslint-disable` with justification; `lint` is now clean.
+
 _Still open:_
-4. **Raw color classes** (`bg-white`, `text-gray-*`) linger in `CourseCard`, `StudentReviews`, `Footer`, and the
-   `/home` section — migrate to tokens for dark-mode correctness (Doc 05 §7).
-5. **Placeholder `href="#"`** links in `CourseCard`/`Footer` need real routes.
-6. **Accessibility:** the hero is a single large `<h1>`; icon-only controls in vendored components need labels
-   (Doc 05 §1).
-7. **Vendored Magic UI lint errors** (`text-animate.tsx`, `typing-animation.tsx`: setState-in-effect) pre-date
-   this work; clean up or replace when convenient.
+6. **Accessibility:** icon-only controls audit ongoing (Doc 05 §1). Dark-mode toggle for the app area not wired yet.
+8. **Server-side token refresh:** the `(app)` guard redirects an expired-but-refreshable session to login instead
+   of refreshing (RSC can't set cookies). Add a Next `middleware.ts` refresh later (Doc 04 §6).
 
 ---
 
@@ -58,8 +62,8 @@ _Still open:_
 - Student **account setup** (NIC front/back upload, per-institute barcode) — gate on `setupCompleted`
   (backend flow pending; see backend progress tracker).
 
-**Phase 2 — Authenticated shell:**
-- `(app)/layout.tsx`: auth guard (server `/auth/me`), Sidebar + TopBar (role-based nav), mobile drawer/bottom nav.
+**Phase 2 — Authenticated shell:** ✅ **Done (2026-07-10)**
+- `(app)/layout.tsx`: auth guard (server `/auth/me`), Sidebar + TopBar (role-based nav), mobile drawer.
 - Role-aware `/dashboard` landing.
 
 **Phase 3 — Student core:**
@@ -108,3 +112,9 @@ _(Move completed items here with date + PR.)_
   `AuthProvider`/`useAuth`; mounted in root layout; `/`→`/home`; fixed workspace-root warning.
 - 2026-07-09 — Phase 1 (partial): wired login + signup to `/auth/login`·`/register` with field-error mapping;
   shared `AuthAside`; minimal authed `/dashboard`. Migrated landing/auth off `styled-components` → Tailwind.
+- 2026-07-10 — Landing + auth refined to code standards (PR #44): design tokens throughout, FontAwesome → lucide
+  (dep removed), invalid Tailwind classes fixed, real LMS footer, show/hide password toggle, `--font-sans` fix;
+  vendored Magic UI lint suppressed. `lint` + `tsc` + `next build` green.
+- 2026-07-10 — Phase 2 authenticated `(app)` shell: server auth-guard layout, `AppShell` (fixed sidebar + mobile
+  drawer + sticky TopBar), role-based `Sidebar`/`lib/nav.ts`, `TopBar` user menu + logout, role-aware `/dashboard`,
+  `PageHeader`/`ComingSoon` + route stubs. Guard + role filtering smoke-tested (SUPER_ADMIN vs STUDENT).
