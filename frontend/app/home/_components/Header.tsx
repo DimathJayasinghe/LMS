@@ -1,31 +1,24 @@
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import styled from "styled-components"
-import { faRecordVinyl } from '@fortawesome/free-solid-svg-icons'
-import { RainbowButton } from "@/components/ui/rainbow-button"
-
+import Link from "next/link";
+import { RainbowButton } from "@/components/ui/rainbow-button";
 
 function ButtonRegister() {
-    return <a href="/auth/signup">
-        <RainbowButton
-            className="rounded-full w-fit h-fit text-2xl inline-block m-auto outline-1 outline-black outline-offset-2 mt-10">
-            {/* <FontAwesomeIcon className="text-white w-full aspect-square" icon={faRecordVinyl} /> */}
-            <div className="m-5 capitalize">
-                Register to class
-            </div>
-        </RainbowButton>
-    </a>
+  return (
+    <Link href="/auth/signup">
+      <RainbowButton className="mt-10 inline-block h-fit w-fit rounded-full text-2xl capitalize outline outline-1 outline-offset-2 outline-foreground">
+        <span className="m-5 block">Register to class</span>
+      </RainbowButton>
+    </Link>
+  );
 }
 
-
 export default function Header() {
-    return <h1 className="z-50 text-black text-[5rem] relative text-center leading-none m-auto select-none flex flex-col">
-        <div>
-            Discover your path towards <br />
-            <span>your goals</span>
-        </div>
-
-        <ButtonRegister />
-
-
-    </h1>
+  return (
+    <div className="relative z-50 m-auto flex select-none flex-col text-center text-foreground">
+      <h1 className="text-[5rem] leading-none">
+        Discover your path towards <br />
+        <span>your goals</span>
+      </h1>
+      <ButtonRegister />
+    </div>
+  );
 }
