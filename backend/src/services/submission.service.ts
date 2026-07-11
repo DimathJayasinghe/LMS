@@ -1,4 +1,4 @@
-import { ExamType, Prisma, Role, SubmissionStatus } from '@prisma/client';
+import { ExamType, NotificationType, Prisma, Role, SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/constants';
@@ -11,6 +11,7 @@ import type {
   McqAnswersInput,
 } from '@/schemas/submission.schema';
 import * as StreamService from '@/services/stream.service';
+import * as NotificationService from '@/services/notification.service';
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -543,11 +544,12 @@ export const publishResults = async (examId: string): Promise<PublishResult> => 
     );
   }
 
-  // Count submissions for the response summary
-  const [totalSubmissions, gradedSubmissions] = await Promise.all([
-    prisma.submission.count({ where: { examId } }),
+  // Count submissions for the response summary, and collect who to notify
+  const [submitters, gradedSubmissions] = await Promise.all([
+    prisma.submission.findMany({ where: { examId }, select: { userId: true } }),
     prisma.submission.count({ where: { examId, marks: { not: null } } }),
   ]);
+  const totalSubmissions = submitters.length;
 
   const publishedAt = new Date();
 
@@ -562,6 +564,18 @@ export const publishResults = async (examId: string): Promise<PublishResult> => 
     examTitle: exam.title,
     publishedAt: publishedAt.toISOString(),
   });
+
+  // Per-student in-app + SMS notification (settings-gated) — the broadcast
+  // above is a course-wide "refresh your view" signal, this is the durable,
+  // per-user "you have a new result" inbox entry.
+  for (const { userId } of submitters) {
+    void NotificationService.dispatch({
+      type: NotificationType.RESULTS_PUBLISHED,
+      userId,
+      link: `/exams/${examId}`,
+      params: { examTitle: exam.title },
+    });
+  }
 
   return {
     examId,

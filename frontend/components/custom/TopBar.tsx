@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, IdCard, LogOut, Menu } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/custom/NotificationBell";
 import { useAuth } from "@/lib/hooks/useAuth";
 import type { User } from "@/lib/types";
 import { formatRole } from "@/lib/utils";
@@ -65,7 +66,10 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
       {/* Spacer keeps the user menu right-aligned on desktop where there's no toggle. */}
       <div className="hidden lg:block" />
 
-      <div className="relative" ref={menuRef}>
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+
+        <div className="relative" ref={menuRef}>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -124,6 +128,7 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
             </button>
           </div>
         )}
+        </div>
       </div>
     </header>
   );

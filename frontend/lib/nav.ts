@@ -1,4 +1,5 @@
 import {
+  Bell,
   BookOpen,
   Building2,
   CalendarDays,
@@ -92,6 +93,12 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Audit log",
         href: "/admin/audit",
         icon: ClipboardList,
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        label: "Notification settings",
+        href: "/admin/notification-settings",
+        icon: Bell,
         roles: ["SUPER_ADMIN"],
       },
     ],

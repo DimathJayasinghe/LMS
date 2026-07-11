@@ -216,6 +216,23 @@ export const broadcastTimetableUpdated = async (params: {
   );
 };
 
+export const broadcastNotificationCreated = async (params: {
+  notificationId: string;
+  userId: string;
+  type: string;
+  title: string;
+}): Promise<void> => {
+  await publishEvent(
+    'NOTIFICATION_CREATED',
+    {
+      notificationId: params.notificationId,
+      type: params.type,
+      title: params.title,
+    },
+    { userIds: [params.userId] },
+  );
+};
+
 export const broadcastExamControl = async (params: {
   examId: string;
   courseId: string;

@@ -70,6 +70,21 @@ enum ExamType {
   INCLASS
 }
 
+// Scenarios that can fire a notification. Add new values here as new triggers
+// ship — NotificationSettingService seeds a row per (type, channel) on demand.
+enum NotificationType {
+  RESULTS_PUBLISHED
+  PAYMENT_CONFIRMED
+  PAYMENT_OVERRIDDEN
+}
+
+// EMAIL deliberately omitted — no email-sending infra exists yet (see Progress
+// Tracker Decisions Log, "Email out of scope for v1"). Add it here when it does.
+enum NotificationChannel {
+  IN_APP
+  SMS
+}
+
 // ─────────────────────────────── IDENTITY ───────────────────────────────
 
 model User {
@@ -101,6 +116,7 @@ model User {
   markerAssignments MarkerAssignment[] @relation("AssignedMarker")
   collectedPayments Payment[]          @relation("PaymentCollector") // ENTRANCE/MANUAL payments taken
   smsLogs           SmsLog[]
+  notifications     Notification[]
   refreshTokens     RefreshToken[]
 
   createdAt DateTime @default(now())
@@ -433,6 +449,41 @@ model SmsLog {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+// Per-user in-app notification inbox. Written by NotificationService.dispatch(),
+// which also decides whether an SMS goes out for the same event based on
+// NotificationSetting below. Read by the frontend bell (GET /notifications/me).
+model Notification {
+  id      String           @id @default(uuid())
+  type    NotificationType
+  title   String
+  message String
+  link    String? // optional deep link, e.g. /exams/:id
+  isRead  Boolean          @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// Super-admin-configurable on/off switch per (scenario, channel). One row per
+// combination; NotificationSettingService seeds any missing combination as
+// enabled=true on first read, so adding a new NotificationType never requires
+// a manual data migration.
+model NotificationSetting {
+  id      String              @id @default(uuid())
+  type    NotificationType
+  channel NotificationChannel
+  enabled Boolean             @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, channel])
 }
 
 // ─────────────────────── PHYSICAL INSTITUTES ───────────────────────
