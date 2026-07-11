@@ -184,3 +184,48 @@ Upload an Excel file to process multiple payments at once.
 - **Method:** `POST`
 - **Auth:** Required (Role: `ADMIN`, `STAFF`)
 - **Body:** `multipart/form-data` with `file` field.
+
+---
+
+## Sandbox testing (PayHere)
+
+`PAYHERE_BASE_URL=https://sandbox.payhere.lk` in `backend/.env`. Use PayHere's published
+**sandbox test cards** on the checkout page — these are dummy numbers that only work against the
+sandbox merchant, never a real charge:
+
+| Card | Number | Expiry | CVV |
+|---|---|---|---|
+| Visa | `4916217501611292` | any future date (e.g. `12/29`) | any 3 digits (e.g. `123`) |
+| MasterCard | `5307732125531191` | any future date | any 3 digits |
+| Amex | `346781005510225` | any future date | any 4 digits (e.g. `1234`) |
+
+- **Name on card:** anything. **3-D Secure / OTP page (sandbox):** enter `123456`.
+- A **successful** sandbox payment uses the numbers above as-is. To simulate a **failure**, use any
+  other/invalid card number.
+
+### Callback URLs — required for an end-to-end status flip
+A PayHere charge only becomes `SUCCESS` in our DB when PayHere calls **`notify_url`**
+(`/api/payments/payhere/notify`, the signed webhook) — **not** when the browser returns. Therefore:
+
+- **`PAYHERE_NOTIFY_URL` must be publicly reachable by PayHere's servers.** On a laptop/VPS behind
+  NAT this means a tunnel (e.g. `ngrok http 80` → set `PAYHERE_NOTIFY_URL` to
+  `https://<tunnel>/api/payments/payhere/notify`). With a non-reachable notify URL, the student can
+  complete checkout but the payment **stays `PENDING`** (and the admin summary's *Collected* won't
+  move) — this is expected, not a bug.
+- **`PAYHERE_RETURN_URL` / `PAYHERE_CANCEL_URL`** should point back into the app
+  (e.g. `http://localhost:3000/payments`). ⚠️ As of 2026-07-11 all three are the placeholder
+  `localhost.com` in `backend/.env`; set them before real sandbox testing or the post-payment
+  redirect leaves the app.
+
+## Idempotency & duplicate-charge safety (verified 2026-07-11)
+
+`POST /initiate` requires a UUID `Idempotency-Key` (§1). Behaviour, confirmed against the live stack:
+
+- **Same key replayed** (e.g. the API client's 401→refresh→retry) → the first response is cached and
+  replayed; the handler does **not** run twice.
+- **Different key, same `(enrollmentId, paymentMonth)`** (e.g. a user clicking Pay twice) → the
+  service `upsert`s the **same** `Payment` row (unique `@@unique([enrollmentId, paymentMonth])`), so
+  there is never a second row and never a second charge — the final charge is settled by PayHere
+  against that one `order_id = payment.id`.
+- The frontend also disables the Pay button while a request is in flight (`StudentPayments`,
+  `EnrollPanel`), so an in-flight double-click can't fire two requests.
