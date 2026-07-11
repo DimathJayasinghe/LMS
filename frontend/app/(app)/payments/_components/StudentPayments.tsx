@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BadgeCheck, CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { initiatePayherePayment, redirectToPayhere } from "@/lib/payhere";
+import { initiatePayherePayment, startPayherePayment } from "@/lib/payhere";
+import { PayhereScript } from "@/components/custom/PayhereScript";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
 import type { Enrollment, Payment, PaymentStatus } from "@/lib/types";
 
@@ -18,16 +20,34 @@ interface Props {
 type StatusFilter = "all" | PaymentStatus;
 
 export function StudentPayments({ enrollments, payments, currentMonth }: Props) {
+  const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<{ id: string; msg: string } | null>(null);
+  const [notice, setNotice] = useState<{ id: string; msg: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const pay = async (enrollmentId: string): Promise<void> => {
     setBusyId(enrollmentId);
     setError(null);
+    setNotice(null);
     try {
       const res = await initiatePayherePayment(enrollmentId, currentMonth);
-      redirectToPayhere(res.data.checkoutUrl, res.data.payload);
+      // Onsite modal — the button stays busy until a callback fires.
+      startPayherePayment(res.data, {
+        onCompleted: () => {
+          setBusyId(null);
+          setNotice({
+            id: enrollmentId,
+            msg: "Payment submitted — it'll show as paid once confirmed.",
+          });
+          router.refresh();
+        },
+        onDismissed: () => setBusyId(null),
+        onError: (msg) => {
+          setBusyId(null);
+          setError({ id: enrollmentId, msg: msg || "Payment failed. Please try again." });
+        },
+      });
     } catch (e) {
       const msg =
         e instanceof ApiError
@@ -47,6 +67,7 @@ export function StudentPayments({ enrollments, payments, currentMonth }: Props) 
 
   return (
     <div className="space-y-8">
+      <PayhereScript />
       <section>
         <h2 className="mb-3 text-sm font-semibold text-foreground">This month · {currentMonth}</h2>
         {enrollments.length === 0 ? (
@@ -88,6 +109,11 @@ export function StudentPayments({ enrollments, payments, currentMonth }: Props) 
                   </div>
                   {error?.id === e.id && (
                     <p className="mt-2 text-xs text-destructive">{error.msg}</p>
+                  )}
+                  {notice?.id === e.id && (
+                    <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+                      {notice.msg}
+                    </p>
                   )}
                 </div>
               );

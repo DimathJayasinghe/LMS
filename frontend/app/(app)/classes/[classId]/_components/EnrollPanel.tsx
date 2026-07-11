@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import type { EnrollmentMode } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
-import { currentPaymentMonth, initiatePayherePayment, redirectToPayhere } from "@/lib/payhere";
+import { currentPaymentMonth, initiatePayherePayment, startPayherePayment } from "@/lib/payhere";
+import { PayhereScript } from "@/components/custom/PayhereScript";
 
 interface ActiveEnrollment {
   id: string;
@@ -61,7 +62,11 @@ export default function EnrollPanel({
     run("pay", async () => {
       if (!active) return;
       const res = await initiatePayherePayment(active.id, currentPaymentMonth());
-      redirectToPayhere(res.data.checkoutUrl, res.data.payload);
+      // Onsite modal on this page (falls back to redirect if payhere.js is blocked).
+      startPayherePayment(res.data, {
+        onCompleted: () => router.refresh(),
+        onError: (msg) => setError(msg || "Payment failed. Please try again."),
+      });
     });
 
   const handleDrop = () =>
@@ -87,6 +92,7 @@ export default function EnrollPanel({
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
+      <PayhereScript />
       <p className="text-lg font-semibold text-foreground">
         {formatCurrency(monthlyFee)}
         <span className="text-sm font-normal text-muted-foreground"> / month</span>

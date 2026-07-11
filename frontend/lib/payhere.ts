@@ -48,3 +48,50 @@ export function redirectToPayhere(url: string, fields: Record<string, string>): 
   document.body.appendChild(form);
   form.submit();
 }
+
+// ── Onsite (in-app) checkout — payhere.js SDK ────────────────────────────────
+
+/** The subset of the global `payhere` object (from payhere.js) we use. */
+interface PayhereSdk {
+  startPayment: (payment: Record<string, string | boolean | undefined>) => void;
+  onCompleted?: (orderId: string) => void;
+  onDismissed?: () => void;
+  onError?: (error: string) => void;
+}
+
+declare global {
+  interface Window {
+    payhere?: PayhereSdk;
+  }
+}
+
+export interface PayhereHandlers {
+  /** Fired when the popup flow finishes. NOT authoritative — the notify webhook confirms. */
+  onCompleted?: (orderId: string) => void;
+  /** Fired when the user closes the popup without finishing. */
+  onDismissed?: () => void;
+  /** Fired on a checkout error. */
+  onError?: (error: string) => void;
+}
+
+/**
+ * Open PayHere's **onsite** checkout (a modal on our own page) for a payment
+ * already initiated server-side. The card fields render inside PayHere's secure
+ * iframe, so we never touch card data. Falls back to the classic full-page
+ * redirect if `payhere.js` hasn't loaded (script blocked/offline).
+ */
+export function startPayherePayment(
+  init: Pick<PayhereInitiation, "checkoutUrl" | "payload">,
+  handlers: PayhereHandlers = {},
+): void {
+  const ph = typeof window !== "undefined" ? window.payhere : undefined;
+  if (!ph || typeof ph.startPayment !== "function") {
+    redirectToPayhere(init.checkoutUrl, init.payload);
+    return;
+  }
+  ph.onCompleted = handlers.onCompleted;
+  ph.onDismissed = handlers.onDismissed;
+  ph.onError = handlers.onError;
+  // `sandbox` selects PayHere's test environment; derive it from the checkout host.
+  ph.startPayment({ ...init.payload, sandbox: init.checkoutUrl.includes("sandbox") });
+}

@@ -193,15 +193,37 @@ Upload an Excel file to process multiple payments at once.
 **sandbox test cards** on the checkout page — these are dummy numbers that only work against the
 sandbox merchant, never a real charge:
 
-| Card | Number | Expiry | CVV |
-|---|---|---|---|
-| Visa | `4916217501611292` | any future date (e.g. `12/29`) | any 3 digits (e.g. `123`) |
-| MasterCard | `5307732125531191` | any future date | any 3 digits |
-| Amex | `346781005510225` | any future date | any 4 digits (e.g. `1234`) |
+Source: <https://support.payhere.lk/sandbox-and-testing>. For **Name on Card / CVV / Expiry** enter
+any valid-looking data (future expiry). **Any card other than the ones below results in a failed
+payment.**
 
-- **Name on card:** anything. **3-D Secure / OTP page (sandbox):** enter `123456`.
-- A **successful** sandbox payment uses the numbers above as-is. To simulate a **failure**, use any
-  other/invalid card number.
+**Successful payment:**
+
+| Card | Number |
+|---|---|
+| Visa | `4916217501611292` |
+| MasterCard | `5307732125531191` |
+| Amex | `346781005510225` |
+
+**Decline scenarios** (to exercise our failure handling):
+
+| Scenario | Visa | MasterCard | Amex |
+|---|---|---|---|
+| Insufficient Funds | `4024007194349121` | `5459051433777487` | `370787711978928` |
+| Limit Exceeded | `4929119799365646` | `5491182243178283` | `340701811823469` |
+| Do Not Honor | `4929768900837248` | `5388172137367973` | `374664175202812` |
+| Network Error | `4024007120869333` | `5237980565185003` | `373433500205887` |
+
+Sandbox never processes a real charge — outcomes are simulated. Sandbox is a **separate** deployment
+from Live; sandbox credentials/details can't be reused for a Live account.
+
+### In-app (onsite) checkout
+Paying uses PayHere's **onsite JS checkout** (`payhere.startPayment`, loaded via
+`components/custom/PayhereScript.tsx` → `lib/payhere.ts` `startPayherePayment`): the checkout opens
+in a **modal on our own page** (card fields inside PayHere's secure iframe — we never touch card
+data, no PCI scope), falling back to the classic full-page redirect only if `payhere.js` is blocked.
+`sandbox` is derived from the checkout host. `onCompleted` is **not** authoritative — SUCCESS/FAILED
+is confirmed by the notify webhook (below); the UI shows "submitted, confirming" until then.
 
 ### Callback URLs — required for an end-to-end status flip
 A PayHere charge only becomes `SUCCESS` in our DB when PayHere calls **`notify_url`**
