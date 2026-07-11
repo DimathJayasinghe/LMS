@@ -455,3 +455,29 @@ export interface NotificationSetting {
   enabled: boolean;
   updatedAt: string;
 }
+
+/** GET /classes/public — unauthenticated, marketing-safe fields only. */
+export interface PublicCourse {
+  id: string;
+  name: string;
+  year: number;
+  description: string | null;
+  monthlyFee: string;
+  bannerUrl: string | null;
+  backdropUrl: string | null;
+  subject: { name: string };
+  teacher: { name: string };
+}
+
+/** GET /timetable/public/upcoming — unauthenticated, marketing-safe fields only. */
+export interface PublicUpcomingSession {
+  id: string;
+  title: string;
+  date: string;
+  durationMinutes: number;
+  classType: ClassType;
+  course: {
+    name: string;
+    subject: { name: string };
+  };
+}

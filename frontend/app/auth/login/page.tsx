@@ -51,7 +51,15 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen">
-      <AuthAside tagline="Welcome back — pick up right where you left off." />
+      <AuthAside
+        tagline="Welcome back — pick up right where you left off."
+        tips={[
+          "Catch up on any class you missed, right from your dashboard.",
+          "Check this month's payment status without leaving your dashboard.",
+          "Live classes open right in the browser — no separate app needed.",
+          "Your results and attendance are always one click away.",
+        ]}
+      />
 
       <main className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-sm">

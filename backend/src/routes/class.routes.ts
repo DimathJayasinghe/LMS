@@ -9,6 +9,7 @@ import {
 	classIdParamSchema,
 	createClassSchema,
 	listClassesQuerySchema,
+	listPublicClassesQuerySchema,
 	updateClassSchema,
 } from '@/schemas/class.schema';
 
@@ -16,6 +17,15 @@ export const classRoutes = Router();
 
 // ─── Class Sessions (Nested) ───────────────────────────────
 classRoutes.use('/:classId/sessions', classSessionRoutes);
+
+// ─── Public (unauthenticated) — marketing /courses page ─────
+// Must be registered before `GET /:classId` below, or Express would match
+// this path as classId="public" and 401 it.
+classRoutes.get(
+	'/public',
+	validateQuery(listPublicClassesQuerySchema),
+	ClassController.listPublicClasses,
+);
 
 // ─── Classes (Courses) ────────────────────────────────────
 classRoutes.post(

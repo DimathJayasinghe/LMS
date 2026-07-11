@@ -32,3 +32,11 @@ export const listClassesQuerySchema = z.object({
 });
 
 export type ListClassesQuery = z.infer<typeof listClassesQuerySchema>;
+
+// ─── Public listing (marketing page, unauthenticated) ───────
+export const listPublicClassesQuerySchema = z.object({
+  search: z.string().trim().min(1).optional(),
+  year: z.coerce.number().int().positive().optional(),
+});
+
+export type ListPublicClassesQuery = z.infer<typeof listPublicClassesQuerySchema>;

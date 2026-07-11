@@ -13,13 +13,22 @@ http://localhost:5000/api/timetable
 
 ## Auth
 
-All endpoints require the `access_token` cookie.
+All endpoints require the `access_token` cookie **except** `GET /public/upcoming`,
+which is deliberately unauthenticated (consumed by the marketing landing page
+before login).
 
 ## Roles
 
 - **Slot writes** (`POST/PATCH/DELETE /slots`) — `SUPER_ADMIN`, the course's `TEACHER`, or `ADMIN` (front-desk scheduler). A TEACHER may only touch slots for **their own** courses (`403 FORBIDDEN_COURSE` otherwise).
 - **Reads** (`GET /slots`) — any authenticated user (the schedule).
 - **Generate** (`POST /generate`) — `SUPER_ADMIN`, `ADMIN`.
+- **Public read** (`GET /public/upcoming`) — no auth. Select list is
+  deliberately narrow (`id`, `title`, `date`, `durationMinutes`, `classType`,
+  `course.name`, `course.subject.name`) — **never** `zoomLink` /
+  `zoomMeetingId` / `zoomPassword`, since those are the actual join
+  credentials for a live class and must stay behind the enrolled+paid gate
+  (see CLAUDE.md "Content protection"). Covered by the existing global rate
+  limiter (`/api` — 100 req/min/IP).
 
 ## Data Shape
 
@@ -51,12 +60,36 @@ All endpoints require the `access_token` cookie.
 
 | Method | Path | Roles | Description |
 | ------ | ---- | ----- | ----------- |
+| GET | `/api/timetable/public/upcoming` | None (public) | Combined upcoming sessions, marketing-safe fields only |
 | POST | `/api/timetable/slots` | SUPER_ADMIN, TEACHER(own), ADMIN | Create a weekly slot |
 | GET | `/api/timetable/slots` | Any | List slots (the timetable) |
 | GET | `/api/timetable/slots/:id` | Any | Get a slot |
 | PATCH | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Update a slot |
 | DELETE | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Delete a slot |
 | POST | `/api/timetable/generate` | SUPER_ADMIN, ADMIN | Materialize sessions for a date range |
+
+### GET `/api/timetable/public/upcoming`
+
+Query (all optional): `days` (1–30, default 14), `limit` (1–50, default 20).
+
+`200` →
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "title": "Physics Theory",
+      "date": "2026-07-14T10:30:00.000Z",
+      "durationMinutes": 120,
+      "classType": "PHYSICAL",
+      "course": { "name": "Advanced Level Physics 2027", "subject": { "name": "Physics" } }
+    }
+  ],
+  "count": 1
+}
+```
+Only sessions on **active** courses, not soft-deleted. Ordered by date ascending.
 
 ### POST `/api/timetable/slots`
 

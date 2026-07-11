@@ -71,7 +71,15 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen">
-      <AuthAside tagline="Your journey begins with a single step — sign up and unlock your potential." />
+      <AuthAside
+        tagline="Your journey begins with a single step — sign up and unlock your potential."
+        tips={[
+          "Pay online and access unlocks automatically once it clears.",
+          "Missed a live class? The recording is ready right after.",
+          "Attendance is tracked with a quick QR scan at the door.",
+          "Exam results land in your account as soon as they're marked.",
+        ]}
+      />
 
       <main className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-sm">

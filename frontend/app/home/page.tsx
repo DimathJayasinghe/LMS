@@ -5,50 +5,64 @@ import Footer from "@/components/custom/Footer";
 import Grid from "./_components/Grid";
 import StudentReviews from "./_components/StudentReviews";
 import Header from "./_components/Header";
-import CourseCard, { type CourseCardData } from "./_components/CourseCard";
-
-// Sample tiles for the marketing grid. Real courses are fetched on /courses.
-const SAMPLE_COURSES: CourseCardData[] = Array.from({ length: 9 }, (_, i) => ({
-  title: `Advanced Level Physics ${2026 + (i % 3)}`,
-  year: `${2026 + (i % 3)} A/L`,
-  schedule: "Monday · 3.00PM – 5.00PM",
-  image: "/Courses/1.png",
-  href: "/courses",
-}));
+import FadeIn from "./_components/FadeIn";
+import Features from "./_components/Features";
+import SubjectShowcase from "./_components/SubjectShowcase";
+import HowItWorks from "./_components/HowItWorks";
+import Magnetic from "./_components/Magnetic";
+import ScrollReveal from "./_components/ScrollReveal";
+import { Separator } from "@/components/ui/separator";
 
 export default function Home() {
   return (
     <>
-      <main>
+      {/* `relative` gives Grid's `absolute` backdrop a defined containing
+          block, instead of falling back to the nearest positioned ancestor
+          up the tree (fragile — see Grid.tsx for the stacking-context note). */}
+      <main className="relative overflow-hidden">
         <Grid />
         <Nav />
-        <StudentReviews />
-        <Header />
+        <FadeIn>
+          <StudentReviews />
+        </FadeIn>
+        <FadeIn delay={0.1}>
+          <Header />
+        </FadeIn>
       </main>
 
-      <section className="z-40 mt-60 min-h-[400px] border-t border-border bg-muted/40 p-10 pt-40">
-        <h2 className="text-center text-5xl font-medium text-foreground">
-          Discover Classes
-        </h2>
-        <p className="m-auto mt-4 max-w-[50rem] text-center italic leading-7 text-muted-foreground">
-          Find the best classes you want to join based on your interests, career
-          goals, and skills you want to improve. Choose classes that are useful,
-          engaging, and helpful for your future development.
-        </p>
+      {/* Breathing room + a visual break between the hero and the rest of
+          the page — otherwise Features' own top padding was the only thing
+          separating it from the hero, which read as cramped. */}
+      <div className="relative z-40 mx-auto flex max-w-4xl items-center px-6 py-16 sm:py-24">
+        <Separator className="flex-1" />
+        <span aria-hidden className="mx-4 shrink-0 text-border">
+          ✦
+        </span>
+        <Separator className="flex-1" />
+      </div>
 
-        <div className="m-auto mt-10 flex w-full max-w-[75rem] flex-wrap justify-center gap-10">
-          {SAMPLE_COURSES.map((course, i) => (
-            <CourseCard key={i} course={course} />
-          ))}
-        </div>
+      <Features />
+      <SubjectShowcase />
+      <HowItWorks />
 
-        <Link
-          href="/courses"
-          className="relative m-auto mb-10 mt-10 flex w-fit items-center gap-3 rounded-full bg-primary px-10 py-5 text-lg text-primary-foreground transition duration-300 hover:scale-110 motion-reduce:hover:scale-100"
-        >
-          All classes
-          <ArrowRight className="size-5" aria-hidden />
-        </Link>
+      <section className="z-40 border-t border-border bg-muted/40 px-6 py-24 text-center sm:py-32">
+        <ScrollReveal className="mx-auto flex max-w-2xl flex-col items-center">
+          <h2 className="text-2xl font-medium text-foreground sm:text-3xl">
+            Ready to get started?
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            Browse our current classes and find the one that fits your goals.
+          </p>
+          <Magnetic>
+            <Link
+              href="/courses"
+              className="mt-10 inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-primary-foreground transition hover:opacity-90"
+            >
+              Browse classes
+              <ArrowRight className="size-5" aria-hidden />
+            </Link>
+          </Magnetic>
+        </ScrollReveal>
       </section>
 
       <Footer />
