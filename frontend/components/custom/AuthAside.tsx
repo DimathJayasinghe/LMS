@@ -1,9 +1,10 @@
 import { TextAnimate } from "@/components/ui/text-animate";
+import GridBackdrop from "@/components/custom/GridBackdrop";
 
 /**
- * Decorative side panel for the auth screens — the signature "grid that lights
- * up" motif from the landing page, migrated off styled-components to Tailwind
- * (see context/frontend/02-component-architecture.md §5).
+ * Decorative side panel for the auth screens — shares the landing page's
+ * "grid that reacts to you" motif via `GridBackdrop` (see that file for why
+ * it isn't 100+ individual hover-tracked boxes anymore).
  *
  * Purely presentational; hidden below `lg` so the form takes the full width on
  * mobile/tablet.
@@ -19,17 +20,9 @@ export default function AuthAside({ quote, tagline }: AuthAsideProps) {
   return (
     <aside
       aria-hidden
-      className="relative hidden w-1/2 overflow-hidden bg-background lg:flex lg:flex-wrap lg:content-center"
+      className="relative hidden w-1/2 overflow-hidden bg-background lg:flex lg:items-center lg:justify-center"
     >
-      {/* The grid texture — CSS-only hover, so no client JS and no hydration risk. */}
-      <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center">
-        {Array.from({ length: 120 }).map((_, i) => (
-          <span
-            key={i}
-            className="pointer-events-auto aspect-square w-[10%] border border-border/30 transition-colors duration-500 hover:bg-foreground/[0.06] hover:duration-100 motion-reduce:transition-none"
-          />
-        ))}
-      </div>
+      <GridBackdrop />
 
       {/* Top & bottom fade masks. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background to-transparent" />

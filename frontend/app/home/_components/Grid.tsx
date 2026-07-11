@@ -1,11 +1,8 @@
-"use client";
-
-import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
+import GridBackdrop from "@/components/custom/GridBackdrop";
 
 /**
- * The signature graph-paper backdrop behind the hero. CSS-only hover, plus a
- * subtle scroll-linked parallax drift (translateY tied to scroll progress)
- * for depth as the page scrolls past the hero.
+ * The graph-paper backdrop behind the hero. See `GridBackdrop` for the
+ * pattern/spotlight implementation — this just sizes and positions it.
  *
  * `-z-10` is load-bearing, not decoration: any sibling that gets a CSS
  * `transform` (from framer-motion or otherwise) is promoted into its own
@@ -15,21 +12,10 @@ import { motion, useReducedMotion, useScroll, useTransform } from "motion/react"
  * stacking on top of the hero text instead of behind it.
  */
 export default function Grid() {
-  const reduceMotion = useReducedMotion();
-  const { scrollY } = useScroll();
-  const y = useTransform(scrollY, [0, 800], [0, reduceMotion ? 0 : 120]);
-
   return (
-    <motion.div
-      style={{ y }}
-      className="absolute inset-x-0 top-0 -z-10 flex h-[80vh] flex-wrap items-center overflow-hidden"
-    >
-      {Array.from({ length: 100 }).map((_, i) => (
-        <span
-          key={i}
-          className="aspect-square w-[8%] rounded-lg border border-border/40 bg-background transition-colors duration-100 hover:border-primary/20 hover:bg-muted/50"
-        />
-      ))}
-    </motion.div>
+    <div className="absolute inset-x-0 top-0 -z-10 h-[80vh] overflow-hidden">
+      <GridBackdrop parallax />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background to-transparent" />
+    </div>
   );
 }
