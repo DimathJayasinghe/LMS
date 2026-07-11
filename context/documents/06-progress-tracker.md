@@ -75,7 +75,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
 | 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; UI pending |
 | 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener |
-| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); institutes + subjects pages are `ComingSoon` placeholders, not built; audit log viewer ✅ (2026-07-10); financial reports still missing |
+| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — `lint`+`build` green; live smoke matrix pending owner run); audit log viewer ✅ (2026-07-10); financial reports still missing |
 | 8 | Student Dashboard | 🟡 In Progress | Home/dashboard, classes, timetable, exams (incl. taking), submissions, payments, attendance, video player, live classes — all built |
 | 9 | Polish & Hardening | 🟡 In Progress | Backend hardening in progress; frontend polish pending |
 | 10 | Deployment | ⬜ Not Started | Vercel + EC2 + Upstash setup, DNS, staging/prod pipeline, monitoring |
