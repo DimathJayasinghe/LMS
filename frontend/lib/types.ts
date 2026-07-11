@@ -405,3 +405,25 @@ export interface AttendanceRecord {
     courseId: string;
   };
 }
+
+// ── Audit log (see audit.endpoints.md) ───────────────────────────────────────
+/** One privileged-mutation event. SUPER_ADMIN only (see 2026-07-10 role-guard fix). */
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  description: string | null;
+  targetType: string | null;
+  targetId: string | null;
+  metadata: Record<string, unknown> | null;
+  ip: string | null;
+  userAgent: string | null;
+  actorId: string;
+  actorRole: Role;
+  createdAt: string;
+  actor: {
+    id: string;
+    name: string;
+    email: string;
+    role: Role;
+  };
+}

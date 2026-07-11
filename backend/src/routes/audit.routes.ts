@@ -8,11 +8,11 @@ import { listAuditLogsQuerySchema } from '@/schemas/audit.schema';
 
 export const auditRoutes = Router();
 
-// GET /api/audit-logs — List audit logs (Admin only)
+// GET /api/audit-logs — List audit logs (Super Admin only)
 auditRoutes.get(
 	'/',
 	verifyToken,
-	requireRole(Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN),
 	validateQuery(listAuditLogsQuerySchema),
 	AuditController.listAuditLogs,
 );
