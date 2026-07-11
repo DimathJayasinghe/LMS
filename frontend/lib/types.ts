@@ -444,6 +444,14 @@ export interface AttendanceRecord {
   classSessionId: string;
   createdAt: string;
   updatedAt: string;
+  /** Included on scan/manual/roster reads (not on webhook/video responses). */
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    indexNumber: number;
+    barcode?: string | null;
+  };
   classSession?: {
     id: string;
     title?: string | null;

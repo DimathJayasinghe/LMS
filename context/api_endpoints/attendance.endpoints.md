@@ -35,6 +35,13 @@ since the schema anticipates more than the code currently does:
    reader scanning a student's institute-issued card has no way to resolve through our system
    yet. Wiring `/scan` (or a new institute-scoped variant) to also check `(instituteId, barcode) →
    student` via `StudentBarcode` is the real follow-up here, not just a docs note.
+   - **Frontend (2026-07-11):** the staff `/attendance` scanner is now built (`StaffScanner`) —
+     pick class → session, then check students in by **keyboard-wedge** (a focused field a scan-gun
+     types into + Enter) **or camera QR** (`@zxing/browser`), with a live deduped roster and a
+     **manual mark-by-name** fallback (`GET /users?search` → `POST /manual`). ⚠️ **Camera mode needs
+     a secure context** — `getUserMedia` only works over **HTTPS or `localhost`**; on a plain-HTTP
+     LAN IP the camera is hidden and staff use the wedge field. Both input paths still send the same
+     `barcode` string to `POST /scan`.
 2. **Live Zoom join (`POST /zoom-webhook`).** Fully automatic — Zoom's `meeting.participant_joined`
    webhook fires on join, matched by `classSession.zoomMeetingId`. This is real and working
    (subject to real Zoom credentials being configured — see `live-class.endpoints.md`).

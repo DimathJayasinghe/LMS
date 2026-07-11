@@ -5,9 +5,10 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { ComingSoon } from "@/components/custom/ComingSoon";
 import { Badge } from "@/components/ui/badge";
 import { AttendanceQr } from "./_components/AttendanceQr";
+import { StaffScanner } from "./_components/StaffScanner";
 import { api } from "@/lib/api";
 import { attendanceSourceLabel } from "@/lib/attendance";
-import type { ApiList, ApiSuccess, AttendanceRecord, User } from "@/lib/types";
+import type { ApiList, ApiSuccess, AttendanceRecord, Course, User } from "@/lib/types";
 
 export const metadata = { title: "Attendance · LMS" };
 
@@ -27,7 +28,21 @@ export default async function AttendancePage() {
     redirect("/auth/login");
   }
 
-  // Staff scanner is Phase 4 — students get their check-in code + history.
+  // Front-desk (SUPER_ADMIN/ADMIN) get the entrance scanner.
+  if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
+    const classes = await api
+      .get<ApiList<Course>>("/classes", { cookie })
+      .then((r) => r.data)
+      .catch(() => [] as Course[]);
+    return (
+      <div className="mx-auto max-w-5xl">
+        <PageHeader title="Attendance" description="Scan students in at the entrance." />
+        <StaffScanner classes={classes} />
+      </div>
+    );
+  }
+
+  // TEACHER/MARKER: read-only roster is a later phase.
   if (user.role !== "STUDENT") {
     return (
       <div className="mx-auto max-w-5xl">
