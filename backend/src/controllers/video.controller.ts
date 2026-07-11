@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { logger } from '@/config/logger';
-import { env } from '@/config/env';
 import * as VideoService from '@/services/video.service';
+import { verifyBunnyWebhookSignature } from '@/utils/bunny';
 import {
   createVideoSchema,
   updateVideoSchema,
@@ -36,8 +36,11 @@ export const initiateUpload = asyncHandler(
 // library webhook has no per-request signature to check).
 export const bunnyWebhook = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    if (!env.BUNNY_WEBHOOK_SECRET || req.query.secret !== env.BUNNY_WEBHOOK_SECRET) {
-      res.status(401).json({ status: 'error', message: 'Invalid webhook secret.' });
+    // Verify Bunny's HMAC-SHA256 signature over the RAW body (read-only key),
+    // per https://docs.bunny.net/stream/webhooks — never the parsed/re-serialized body.
+    const signature = req.header('X-BunnyStream-Signature');
+    if (!verifyBunnyWebhookSignature(req.rawBody ?? '', signature)) {
+      res.status(401).json({ status: 'error', message: 'Invalid webhook signature.' });
       return;
     }
 
@@ -141,13 +144,8 @@ export const getStreamUrl = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
 
-    // req.ip is set by Express from the X-Forwarded-For header
-    // (when trust proxy is enabled) or from the TCP socket directly.
-    const clientIp = req.ip ?? '0.0.0.0';
-
-    const { video, streamUrl, embedUrl, expiresAt } = await VideoService.generateStreamUrl(
+    const { video, embedUrl, watermark, expiresAt } = await VideoService.generateStreamUrl(
       id,
-      clientIp,
       req.user!,
     );
 
@@ -157,11 +155,11 @@ export const getStreamUrl = asyncHandler(
         videoId: video.id,
         title: video.title,
         durationSeconds: video.durationSeconds,
-        streamUrl,   // HLS playlist URL (for custom player)
-        embedUrl,    // Bunny-hosted iframe player URL
+        embedUrl,    // token-authenticated Bunny iframe (DRM enforced by Bunny)
+        watermark,   // per-viewer overlay text the client renders over the player
         expiresAt,   // Unix timestamp — client can show expiry warning
       },
-      message: 'Stream URL generated. URL is IP-bound and expires automatically.',
+      message: 'Signed embed URL generated. Token expires automatically.',
     });
   },
 );
