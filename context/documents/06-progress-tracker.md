@@ -173,7 +173,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
 - [x] Implement Bunny.net video token generation (IP-bound)
 - [x] Build class schedule page (student view) — `(app)/timetable/page.tsx`
-- [ ] Build attendance scanner page (admin/front-desk view) — `(app)/attendance/page.tsx` has a real student view (QR code + history) but is a `ComingSoon` stub for staff
+- [x] Build attendance scanner page (admin/front-desk view) — `(app)/attendance/page.tsx` staff branch (SUPER_ADMIN/ADMIN) is a working entrance scanner (2026-07-11): class→session picker, keyboard-wedge + camera-QR (`@zxing/browser`) scanning → `POST /attendance/scan`, live deduped roster (`GET /attendance/session/:id`), and manual mark-by-name (`GET /users?search` → `POST /attendance/manual`). TEACHER/MARKER still `ComingSoon`
 - [ ] Build video player component with DRM black-screen detection — `components/features/VideoPlayer.tsx` (187 lines) plays video but has **no watermark overlay and no black-screen detection**; `02-architecture.md §7.1` describes these as if built for VOD — that description is aspirational/stale for the watermark specifically, don't trust it without checking the component
 
 ---
