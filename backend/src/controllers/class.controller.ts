@@ -8,6 +8,7 @@ import {
 	classIdParamSchema,
 	createClassSchema,
 	listClassesQuerySchema,
+	listPublicClassesQuerySchema,
 	updateClassSchema,
 } from '@/schemas/class.schema';
 
@@ -27,6 +28,17 @@ export const createClass = asyncHandler(async (req: Request, res: Response): Pro
 		status: 'success',
 		data: classData,
 		message: 'Class created successfully.',
+	});
+});
+
+export const listPublicClasses = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const query = listPublicClassesQuerySchema.parse(req.query);
+	const classes = await ClassService.listPublicClasses(query);
+
+	res.status(200).json({
+		status: 'success',
+		data: classes,
+		count: classes.length,
 	});
 });
 
