@@ -59,12 +59,26 @@ const parseDurationToSeconds = (duration: string): number => {
 // in backend/src/services/auth.service.ts
 const signAccessToken = (payload: JwtPayload): string => {
   const expiresInSeconds = parseDurationToSeconds(env.JWT_ACCESS_EXPIRES_IN);
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: expiresInSeconds });
+  // jwtid: see signRefreshToken below — same fix, for the same reason
+  // (consistency; access tokens aren't persisted so they can't 500, but two
+  // byte-identical tokens for the same user is still worth avoiding).
+  return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
+    expiresIn: expiresInSeconds,
+    jwtid: crypto.randomUUID(),
+  });
 };
 
 const signRefreshToken = (payload: JwtPayload): string => {
   const expiresInSeconds = parseDurationToSeconds(env.JWT_REFRESH_EXPIRES_IN);
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: expiresInSeconds });
+  // jwtid makes every issuance unique even for the same user within the same
+  // second (iat has only second-granularity) — without it, two refresh tokens
+  // signed in the same second are byte-identical, so their SHA-256 hashes
+  // collide on RefreshToken.token's unique constraint and the second issuance
+  // 500s (e.g. register() immediately followed by login()).
+  return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+    expiresIn: expiresInSeconds,
+    jwtid: crypto.randomUUID(),
+  });
 };
 
 /**
