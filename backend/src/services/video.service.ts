@@ -3,9 +3,8 @@ import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import {
   createBunnyVideo,
-  generateBunnyStreamUrl,
   generateBunnyTusUpload,
-  getBunnyEmbedUrl,
+  getSignedBunnyEmbedUrl,
   resolveBunnyWebhookStatus,
   type BunnyTusUpload,
 } from '@/utils/bunny';
@@ -273,18 +272,17 @@ export const getVideoById = async (videoId: string): Promise<VideoRecordWithSess
 
 export const generateStreamUrl = async (
   videoId: string,
-  clientIp: string,
   actor: AuthenticatedUser,
 ): Promise<{
   video: VideoRecordWithSession;
-  streamUrl: string;
   embedUrl: string;
+  watermark: string;
   expiresAt: number;
 }> => {
   const video = await getVideoById(videoId);
 
   // Gate: a student must be enrolled AND have paid the current month before we
-  // ever mint an IP-bound Bunny token (architecture §7.1 — content protection).
+  // ever mint a signed Bunny embed token (architecture §7.1 — content protection).
   await assertStudentContentAccess(actor, video.classSession.courseId, { requirePaid: true });
 
   if (video.status !== VideoStatus.READY) {
@@ -297,10 +295,17 @@ export const generateStreamUrl = async (
     );
   }
 
-  const { streamUrl, expiresAt } = generateBunnyStreamUrl(video.bunnyVideoId, clientIp);
-  const embedUrl = getBunnyEmbedUrl(video.bunnyVideoId);
+  // Token-authenticated Bunny iframe (DRM enforced by Bunny's player) + a
+  // per-viewer watermark string the client overlays to deter screen capture.
+  const { embedUrl, expiresAt } = getSignedBunnyEmbedUrl(video.bunnyVideoId);
 
-  return { video, streamUrl, embedUrl, expiresAt };
+  const viewer = await prisma.user.findUnique({
+    where: { id: actor.userId },
+    select: { name: true, indexNumber: true },
+  });
+  const watermark = viewer ? `${viewer.name} · #${viewer.indexNumber}` : `#${actor.userId.slice(0, 8)}`;
+
+  return { video, embedUrl, watermark, expiresAt };
 };
 
 // ─── Bunny Webhook (Upload/Processing Status) ─────────────────

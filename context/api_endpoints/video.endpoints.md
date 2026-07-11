@@ -14,7 +14,7 @@ All endpoints require the standard `access_token` HTTP-only cookie (except where
 
 ## Content gate (2026-07-09)
 
-- **`GET /:id/stream`** — a student must be **enrolled AND have paid the current month** before an IP-bound Bunny token is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Privileged roles bypass. Additionally rate-limited (30/min/IP).
+- **`GET /:id/stream`** — a student must be **enrolled AND have paid the current month** before a token-authenticated Bunny embed is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Privileged roles bypass. Additionally rate-limited (30/min/IP).
 - **`GET /class/:classId`** (list) — requires an **active enrollment** for students.
 - **Manage videos** (create/update/delete) — `SUPER_ADMIN` or the course's **`TEACHER`** (older tables say `ADMIN`).
 
@@ -33,9 +33,14 @@ server (architecture §5.6, same principle as R2 presigned uploads). This is a t
    flipping the row to `READY` (or `FAILED`). **This is the only thing that marks a video ready** — so even
    if the teacher's browser goes offline the instant the transfer finishes, the video is never lost or stuck:
    completion is confirmed by Bunny, not by the client. Configure this URL in the Bunny dashboard under
-   *Library → Webhooks* as `https://api.<domain>/api/videos/bunny-webhook?secret=<BUNNY_WEBHOOK_SECRET>` —
-   Bunny's library webhook has no per-request signature, so this query-param secret is the verification
-   control (§5.8). Idempotent (`updateMany`, safe to receive twice or for an unknown video).
+   *Stream → library → Webhook* as `https://<public-host>/api/videos/bunny-webhook` (dev: an `ngrok http 80`
+   tunnel — Bunny can't reach `localhost`). **Verification is Bunny's HMAC-SHA256 signature**
+   (`X-BunnyStream-Signature`) over the **raw body**, keyed by the library's **Read-Only API key**
+   (`BUNNY_READ_ONLY_API_KEY`), constant-time compared (`verifyBunnyWebhookSignature`) — per
+   <https://docs.bunny.net/stream/webhooks>. `Status` mapping: **`3` (Finished) or `4` (Resolution
+   finished) → `READY`; `5` (Failed) or `8` (PresignedUploadFailed) → `FAILED`;** everything else is
+   mid-flight and ignored (note `6` = *PresignedUploadStarted*, **not** a failure). Idempotent
+   (`updateMany`, safe to receive twice or for an unknown video).
 - Until `READY`, a video is **hidden from students** in `GET /class/:classId` (staff still see it, with its
   status, so they can monitor progress) and `GET /:id/stream` returns `409 VIDEO_NOT_READY`.
 - The older **`POST /`** (manual attach — paste an already-uploaded `bunnyVideoId`) still exists for
@@ -73,13 +78,13 @@ Returned by most endpoints:
 | Method | Path | Auth Roles | Description |
 |--------|------|------------|-------------|
 | `POST` | `/uploads` | `TEACHER`, `SUPER_ADMIN` | Start a direct-to-Bunny upload; returns a signed TUS target. |
-| `POST` | `/bunny-webhook` | None (secret query param) | Bunny's processing-complete/failed callback. |
+| `POST` | `/bunny-webhook` | None (HMAC signature, read-only key) | Bunny's processing-complete/failed callback. |
 | `POST` | `/` | `ADMIN` | Attach an already-on-Bunny video to a class session (legacy manual flow). |
 | `PATCH` | `/:id` | `ADMIN` | Update video title or duration metadata. |
 | `DELETE` | `/:id` | `ADMIN` | Remove the video DB record (Bunny asset untouched). |
 | `GET` | `/class/:classId` | Any authenticated | List videos for a course (paginated); students see only `READY`. |
 | `GET` | `/:id` | Any authenticated | Get single video metadata. |
-| `GET` | `/:id/stream` | Any authenticated | Get IP-bound signed stream URL. `409 VIDEO_NOT_READY` if not yet processed. |
+| `GET` | `/:id/stream` | Any authenticated | Get token-authenticated signed embed URL (+ watermark). `409 VIDEO_NOT_READY` if not yet processed. |
 
 ---
 
@@ -258,17 +263,22 @@ Fetches metadata for a single video recording. Does **not** generate a stream UR
 
 ### `GET /:id/stream`
 
-Generates an **IP-bound**, time-limited signed URL for streaming a video directly from Bunny's CDN. This is the primary DRM mechanism.
+Issues a **token-authenticated Bunny embed URL** (time-limited) for a video, only after the
+enrolled-AND-paid gate. Playback protection is Bunny's own: **Embed View Token Authentication**
+(+ optional **MediaCage DRM** — Widevine/FairPlay) enabled on the library; we additionally overlay a
+per-student watermark client-side.
 
-**Roles:** Any authenticated user
+**Roles:** Any authenticated user (student path runs the enrolled+paid gate)
 
-**Security Model (plan §13 — The Telegram Pirate Fix)**
+**Security model**
 
-The returned `streamUrl` is signed using the student's current IP address (`req.ip`) embedded in the HMAC-SHA256 signature. If the URL is shared externally (e.g. posted in Telegram), Bunny.net's CDN rejects the request with `403 Forbidden` because the viewer's IP does not match the IP embedded in the token.
-
-- Token lifetime: **4 hours** (configurable via `BUNNY_TOKEN_TTL_SECONDS`)
-- Token algorithm: `HMAC-SHA256(securityKey, signaturePath + expires + signingData + clientIp)`
-- Token format: `HS256-` prefix + Base64 URL-safe encoded digest
+- The library must have **Embed View Token Authentication** enabled (Stream → library → Security), and
+  its **Token Authentication Key** set as `BUNNY_TOKEN_KEY`. Direct-play is off, so an unsigned URL
+  won't play.
+- Embed token = `SHA256_HEX(BUNNY_TOKEN_KEY + videoId + expires)`, appended as `?token=…&expires=…`
+  (`generateBunnyEmbedToken`) — signed **server-side only**.
+- Token lifetime: **4 hours** (`BUNNY_TOKEN_TTL_SECONDS`). DRM (if enabled) blocks download/capture in
+  the browser; the moving watermark deters phone-camera capture.
 
 **Response Shape**
 
@@ -279,18 +289,18 @@ The returned `streamUrl` is signed using the student's current IP address (`req.
     "videoId": "uuid",
     "title": "Week 1 — Introduction to Algebra",
     "durationSeconds": 5400,
-    "streamUrl": "https://vz-example.b-cdn.net/123456/abc123/playlist.m3u8?token=HS256-xxxxx&expires=1234567890",
-    "embedUrl": "https://iframe.mediadelivery.net/embed/123456/abc123",
+    "embedUrl": "https://iframe.mediadelivery.net/embed/123456/abc123?token=<hex>&expires=1234567890&autoplay=false&preload=false",
+    "watermark": "Nimal Perera · #42",
     "expiresAt": 1234567890
   },
-  "message": "Stream URL generated. URL is IP-bound and expires automatically."
+  "message": "Signed embed URL generated. Token expires automatically."
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `streamUrl` | HLS M3U8 playlist URL — use with HLS.js or a native `<video>` player |
-| `embedUrl` | Bunny-hosted iframe player — use when you want Bunny's built-in player UI |
+| `embedUrl` | Token-authenticated Bunny iframe player — the frontend renders it in an `<iframe allow="encrypted-media …">` (DRM enforced by Bunny) |
+| `watermark` | Per-viewer text (`name · #index`) the client overlays over the player |
 | `expiresAt` | Unix timestamp when the token expires — use for client-side expiry countdown |
 
 **Black Screen Detection (plan §9)**

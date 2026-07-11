@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { env } from '@/config/env';
 import { AppError } from '@/utils/app-error';
 import {
@@ -86,13 +86,57 @@ export const generateBunnyStreamUrl = (
   return { streamUrl, expiresAt: Number(expires) };
 };
 
+/** Fails fast if the playback token key isn't configured (needed to sign embeds). */
+const assertBunnyTokenConfigured = (): void => {
+  assertBunnyConfigured();
+  if (!env.BUNNY_TOKEN_KEY) {
+    throw new AppError(
+      'BUNNY_NOT_CONFIGURED',
+      503,
+      'Secure video playback is not configured. Set BUNNY_TOKEN_KEY (the library Token Authentication Key) in the server environment.',
+    );
+  }
+};
+
 /**
- * Constructs the Bunny Stream embed URL (iframe-based player).
- * Used when the client wants to use the Bunny-hosted player instead of HLS.js.
- * This URL is not token-signed — token auth must be configured at the pull-zone level.
+ * Bunny Stream **embed token authentication**
+ * (https://docs.bunny.net/docs/stream-embed-token-authentication):
+ *   token = SHA256_HEX( tokenKey + videoId + expiration )
+ * signed with the library's Token Authentication Key. Server-side only — the
+ * key must never reach the browser.
  */
-export const getBunnyEmbedUrl = (bunnyVideoId: string): string => {
-  return `https://iframe.mediadelivery.net/embed/${env.BUNNY_LIBRARY_ID}/${bunnyVideoId}`;
+export const generateBunnyEmbedToken = (
+  bunnyVideoId: string,
+  expires: number,
+): string => {
+  return createHash('sha256')
+    .update(`${env.BUNNY_TOKEN_KEY}${bunnyVideoId}${expires}`)
+    .digest('hex');
+};
+
+export interface BunnySignedEmbed {
+  /** Token-authenticated iframe URL for Bunny's player (DRM handled by Bunny). */
+  embedUrl: string;
+  /** Token expiry as a Unix timestamp. */
+  expiresAt: number;
+}
+
+/**
+ * Builds a token-authenticated Bunny Stream **iframe embed** URL. Bunny's player
+ * enforces the token + any DRM (MediaCage) configured on the library; we add a
+ * per-student watermark overlay client-side.
+ */
+export const getSignedBunnyEmbedUrl = (bunnyVideoId: string): BunnySignedEmbed => {
+  assertBunnyTokenConfigured();
+
+  const expiresAt = Math.floor(Date.now() / 1000) + BUNNY_TOKEN_TTL_SECONDS;
+  const token = generateBunnyEmbedToken(bunnyVideoId, expiresAt);
+
+  const embedUrl =
+    `https://iframe.mediadelivery.net/embed/${env.BUNNY_LIBRARY_ID}/${bunnyVideoId}` +
+    `?token=${token}&expires=${expiresAt}&autoplay=false&preload=false`;
+
+  return { embedUrl, expiresAt };
 };
 
 /**
@@ -168,18 +212,43 @@ export const generateBunnyTusUpload = (bunnyVideoId: string): BunnyTusUpload => 
 };
 
 /**
- * Bunny's Video Library webhook status codes
- * (https://docs.bunny.net/docs/stream-webhooks). We only act on the terminal
- * states — everything else (Created/Uploaded/Processing/Transcoding) is left
- * as UPLOADING so we never flip a still-processing video to a wrong state.
+ * Bunny's Video Library webhook `Status` codes (https://docs.bunny.net/stream/webhooks):
+ *   0 Queued · 1 Processing · 2 Encoding · 3 Finished (fully available) ·
+ *   4 Resolution finished (now playable) · 5 Failed encoding ·
+ *   6 PresignedUploadStarted · 7 PresignedUploadFinished · 8 PresignedUploadFailed ·
+ *   9 CaptionsGenerated · 10 Title/DescriptionGenerated.
+ * We only act on the terminal states; everything else stays UPLOADING so a
+ * still-processing video is never flipped to a wrong state.
  */
-const BUNNY_STATUS_FINISHED = 4;
-const BUNNY_STATUS_ERROR = 5;
-const BUNNY_STATUS_UPLOAD_FAILED = 6;
+const BUNNY_STATUS_FINISHED = 3;
+const BUNNY_STATUS_RESOLUTION_FINISHED = 4;
+const BUNNY_STATUS_FAILED = 5;
+const BUNNY_STATUS_PRESIGNED_UPLOAD_FAILED = 8;
 
 /** Maps a Bunny webhook `Status` code to our VideoStatus, or `null` if it's a mid-flight status we don't act on. */
 export const resolveBunnyWebhookStatus = (status: number): 'READY' | 'FAILED' | null => {
-  if (status === BUNNY_STATUS_FINISHED) return 'READY';
-  if (status === BUNNY_STATUS_ERROR || status === BUNNY_STATUS_UPLOAD_FAILED) return 'FAILED';
+  if (status === BUNNY_STATUS_RESOLUTION_FINISHED || status === BUNNY_STATUS_FINISHED) return 'READY';
+  if (status === BUNNY_STATUS_FAILED || status === BUNNY_STATUS_PRESIGNED_UPLOAD_FAILED) return 'FAILED';
   return null;
+};
+
+/**
+ * Verifies a Bunny Stream webhook signature (https://docs.bunny.net/stream/webhooks):
+ * HMAC-SHA256 over the **exact raw request body**, keyed by the library's
+ * **Read-Only API key**, compared constant-time to the `X-BunnyStream-Signature`
+ * header (64-char lowercase hex). Returns false on any mismatch/missing input.
+ */
+export const verifyBunnyWebhookSignature = (
+  rawBody: string | Buffer,
+  signatureHeader: string | undefined,
+): boolean => {
+  if (!signatureHeader || !env.BUNNY_READ_ONLY_API_KEY) return false;
+
+  const expected = createHmac('sha256', env.BUNNY_READ_ONLY_API_KEY).update(rawBody).digest('hex');
+
+  // Both must be equal-length buffers for timingSafeEqual.
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(signatureHeader, 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 };

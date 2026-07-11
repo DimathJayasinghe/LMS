@@ -334,10 +334,10 @@ export interface StreamData {
   videoId: string;
   title: string;
   durationSeconds?: number | null;
-  /** HLS M3U8 playlist — feed to hls.js (or native `<video>` on Safari). */
-  streamUrl: string;
-  /** Bunny-hosted iframe player (not IP-bound); fallback only. */
+  /** Token-authenticated Bunny iframe player URL (DRM enforced by Bunny). */
   embedUrl: string;
+  /** Per-viewer watermark text to overlay over the player (deters capture). */
+  watermark: string;
   /** Unix seconds when the token expires (4h default). */
   expiresAt: number;
 }

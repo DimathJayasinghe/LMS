@@ -44,13 +44,17 @@ const envSchema = z.object({
   // Server starts without these; a clear AppError is thrown if they are missing
   // when a student tries to get a stream URL.
   BUNNY_API_KEY: z.string().default(''),
+  // Read-Only API key — the HMAC secret Bunny signs Stream webhooks with
+  // (https://docs.bunny.net/stream/webhooks).
+  BUNNY_READ_ONLY_API_KEY: z.string().default(''),
   BUNNY_LIBRARY_ID: z.string().default(''),
   // The pull-zone CDN base URL, e.g. https://vz-xxxxxxxx.b-cdn.net
   BUNNY_CDN_HOSTNAME: z.string().default(''),
-  // Shared secret appended as a query param to the webhook URL configured in
-  // the Bunny dashboard (Library > Webhooks). Bunny's library webhook has no
-  // per-request signature, so this query-param secret is the compensating
-  // control for architecture §5.8 (webhook signature verification).
+  // The library "Token Authentication Key" (Stream > library > Security), used to
+  // sign the embed player token: SHA256(tokenKey + videoId + expires).
+  BUNNY_TOKEN_KEY: z.string().default(''),
+  // Legacy shared secret (query param). Superseded by the HMAC signature above;
+  // kept for backward compatibility / optional defense-in-depth.
   BUNNY_WEBHOOK_SECRET: z.string().default(''),
 
   // Zoom — Server-to-Server OAuth app (Webhooks + REST API: create meetings, fetch ZAK).

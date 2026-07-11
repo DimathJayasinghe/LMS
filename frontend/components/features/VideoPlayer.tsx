@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, Clock, CreditCard, Loader2, Lock, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,20 +13,28 @@ interface VideoPlayerProps {
   courseId: string;
 }
 
+// Watermark parks in one of these spots and hops between them so it can't be
+// reliably cropped out of a screen recording.
+const WATERMARK_SPOTS = [
+  "top-3 left-3",
+  "top-3 right-3",
+  "bottom-12 left-3",
+  "bottom-12 right-3",
+  "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+];
+
 /**
- * Plays a Bunny-hosted recording. The signed `streamUrl` is IP-bound, so it is
- * fetched here in the browser (not in the parent Server Component) — otherwise
- * Bunny would bind the token to the Next server's IP and the CDN would 403.
+ * Plays a Bunny-hosted recording through Bunny's **token-authenticated iframe
+ * player** (DRM enforced by Bunny). The signed embed URL is fetched here in the
+ * browser (not the parent Server Component) so gating runs per-viewer, and a
+ * per-student watermark is overlaid to deter screen/phone capture.
  */
 export function VideoPlayer({ videoId, courseId }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<StreamData | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [spot, setSpot] = useState(0);
 
-  // 1. Fetch the IP-bound signed URL (browser-side; see class doc note above).
-  //    videoId changes remount this component, and a retry resets state in the
-  //    handler, so the effect never needs to null state synchronously here.
   useEffect(() => {
     let active = true;
     api
@@ -47,50 +55,16 @@ export function VideoPlayer({ videoId, courseId }: VideoPlayerProps) {
     };
   }, [videoId, reloadKey]);
 
-  // 2. Attach the HLS stream once we have a URL. hls.js is dynamically imported
-  //    so it never runs during SSR (it touches MediaSource / window).
+  // Reposition the watermark on an interval while a video is loaded.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !stream) return;
-
-    let destroyed = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let hls: any = null;
-
-    // Safari (and iOS) play HLS natively — no library needed.
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = stream.streamUrl;
-      return;
-    }
-
-    import("hls.js").then(({ default: Hls }) => {
-      if (destroyed || !Hls.isSupported()) {
-        if (!destroyed && !Hls.isSupported()) {
-          setError({ message: "Your browser can't play this video format." });
-        }
-        return;
-      }
-      hls = new Hls({ maxBufferLength: 30 });
-      hls.loadSource(stream.streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, (_e: unknown, data: { fatal?: boolean }) => {
-        // A fatal error late in playback usually means the 4h token expired.
-        if (data.fatal) {
-          setError({ message: "Playback was interrupted. The stream link may have expired." });
-        }
-      });
-    });
-
-    return () => {
-      destroyed = true;
-      if (hls) hls.destroy();
-    };
+    if (!stream) return;
+    const t = setInterval(() => setSpot((s) => (s + 1) % WATERMARK_SPOTS.length), 4000);
+    return () => clearInterval(t);
   }, [stream]);
 
   if (error) {
-    // Still processing on Bunny's side — the upload succeeded, but their
-    // webhook hasn't confirmed encoding is done yet. Worth a retry, not a
-    // dead end (see video.endpoints.md — direct-to-Bunny upload flow).
+    // Still processing on Bunny's side — the upload succeeded, but their webhook
+    // hasn't confirmed encoding is done yet. Worth a retry, not a dead end.
     if (error.code === "VIDEO_NOT_READY") {
       return (
         <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/30 p-6 text-center">
@@ -174,14 +148,21 @@ export function VideoPlayer({ videoId, courseId }: VideoPlayerProps) {
   }
 
   return (
-    <video
-      ref={videoRef}
-      controls
-      controlsList="nodownload"
-      onContextMenu={(e) => e.preventDefault()}
-      className="aspect-video w-full rounded-2xl border border-border bg-black"
-    >
-      Your browser does not support the video tag.
-    </video>
+    <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-border bg-black">
+      <iframe
+        key={stream.videoId}
+        src={stream.embedUrl}
+        title={stream.title}
+        loading="lazy"
+        allow="encrypted-media; accelerometer; gyroscope; fullscreen; picture-in-picture"
+        allowFullScreen
+        className="absolute inset-0 size-full"
+      />
+      <span
+        className={`pointer-events-none absolute z-10 select-none rounded bg-black/20 px-1.5 py-0.5 text-[11px] font-medium text-white/45 transition-all duration-1000 ${WATERMARK_SPOTS[spot]}`}
+      >
+        {stream.watermark}
+      </span>
+    </div>
   );
 }
