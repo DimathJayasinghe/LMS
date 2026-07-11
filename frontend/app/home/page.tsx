@@ -11,6 +11,7 @@ import Marquee from "./_components/Marquee";
 import HowItWorks from "./_components/HowItWorks";
 import Magnetic from "./_components/Magnetic";
 import ScrollReveal from "./_components/ScrollReveal";
+import { Separator } from "@/components/ui/separator";
 
 export default function Home() {
   return (
@@ -28,6 +29,17 @@ export default function Home() {
           <Header />
         </FadeIn>
       </main>
+
+      {/* Breathing room + a visual break between the hero and the rest of
+          the page — otherwise Features' own top padding was the only thing
+          separating it from the hero, which read as cramped. */}
+      <div className="relative z-40 mx-auto flex max-w-4xl items-center px-6 py-16 sm:py-24">
+        <Separator className="flex-1" />
+        <span aria-hidden className="mx-4 shrink-0 text-border">
+          ✦
+        </span>
+        <Separator className="flex-1" />
+      </div>
 
       <Features />
       <Marquee />
