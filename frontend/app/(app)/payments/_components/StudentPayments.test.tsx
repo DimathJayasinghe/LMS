@@ -7,7 +7,7 @@ import type { Enrollment, Payment, PaymentStatus } from "@/lib/types";
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 const { post } = vi.hoisted(() => ({ post: vi.fn() }));
-const { redirectToPayhere } = vi.hoisted(() => ({ redirectToPayhere: vi.fn() }));
+const { startPayherePayment } = vi.hoisted(() => ({ startPayherePayment: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -16,8 +16,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
 });
 vi.mock("@/lib/payhere", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/payhere")>();
-  return { ...actual, redirectToPayhere };
+  return { ...actual, startPayherePayment };
 });
+vi.mock("@/components/custom/PayhereScript", () => ({ PayhereScript: () => null }));
+
+/** Grab the handlers object passed to the mocked startPayherePayment. */
+const lastHandlers = () => startPayherePayment.mock.calls.at(-1)![1];
 
 const MONTH = "2026-07";
 
@@ -67,7 +71,7 @@ beforeEach(() => {
   push.mockReset();
   refresh.mockReset();
   post.mockReset();
-  redirectToPayhere.mockReset();
+  startPayherePayment.mockReset();
 });
 
 describe("StudentPayments — this month", () => {
@@ -83,9 +87,9 @@ describe("StudentPayments — this month", () => {
     expect(screen.queryByRole("button", { name: /Pay/ })).not.toBeInTheDocument();
   });
 
-  it("shows a Pay button when this month is unpaid, and initiates PayHere on click", async () => {
+  it("shows a Pay button when this month is unpaid, and opens onsite checkout on click", async () => {
     post.mockResolvedValue({
-      data: { checkoutUrl: "https://pay", payload: { order_id: "p1" }, payment: {} },
+      data: { checkoutUrl: "https://sandbox.payhere.lk/pay", payload: { order_id: "p1" }, payment: {} },
     });
     const user = userEvent.setup();
     render(
@@ -96,8 +100,7 @@ describe("StudentPayments — this month", () => {
       />,
     );
 
-    const payBtn = screen.getByRole("button", { name: /Pay/ });
-    await user.click(payBtn);
+    await user.click(screen.getByRole("button", { name: /Pay/ }));
 
     // Goes through initiatePayherePayment, which attaches a UUID Idempotency-Key.
     expect(post).toHaveBeenCalledWith(
@@ -107,7 +110,43 @@ describe("StudentPayments — this month", () => {
         headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
       }),
     );
-    expect(redirectToPayhere).toHaveBeenCalledWith("https://pay", { order_id: "p1" });
+    // Onsite modal, not a redirect: startPayherePayment gets the initiation + handlers.
+    expect(startPayherePayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkoutUrl: "https://sandbox.payhere.lk/pay",
+        payload: { order_id: "p1" },
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("shows a submitted notice when the popup completes, and clears busy when dismissed", async () => {
+    post.mockResolvedValue({
+      data: { checkoutUrl: "https://sandbox.payhere.lk/pay", payload: {}, payment: {} },
+    });
+    const user = userEvent.setup();
+    render(
+      <StudentPayments enrollments={[enrollment("e1", "Physics", "2500")]} payments={[]} currentMonth={MONTH} />,
+    );
+    await user.click(screen.getByRole("button", { name: /Pay/ }));
+
+    lastHandlers().onCompleted("order-1");
+    expect(await screen.findByText(/show as paid once confirmed/i)).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("surfaces an onError message from the popup", async () => {
+    post.mockResolvedValue({
+      data: { checkoutUrl: "https://sandbox.payhere.lk/pay", payload: {}, payment: {} },
+    });
+    const user = userEvent.setup();
+    render(
+      <StudentPayments enrollments={[enrollment("e1", "Physics", "2500")]} payments={[]} currentMonth={MONTH} />,
+    );
+    await user.click(screen.getByRole("button", { name: /Pay/ }));
+
+    lastHandlers().onError("Card declined");
+    expect(await screen.findByText("Card declined")).toBeInTheDocument();
   });
 
   it("maps PAYHERE_NOT_CONFIGURED to an inline message and does not redirect", async () => {
@@ -124,7 +163,7 @@ describe("StudentPayments — this month", () => {
     await user.click(screen.getByRole("button", { name: /Pay/ }));
 
     expect(await screen.findByText(/isn't available yet/i)).toBeInTheDocument();
-    expect(redirectToPayhere).not.toHaveBeenCalled();
+    expect(startPayherePayment).not.toHaveBeenCalled();
   });
 
   it("shows the empty state with no active enrollments", () => {
