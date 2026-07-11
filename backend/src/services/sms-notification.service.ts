@@ -1,22 +1,25 @@
 // SMS notification service — template-based SMS orchestration.
 // Renders templates from constants.ts, enqueues via BullMQ, and creates SmsLog rows.
-// Adding a new event requires only: (1) add template to SMS_TEMPLATES, (2) call sendSms().
+// Adding a new event requires only: (1) add a template to NOTIFICATION_TEMPLATES,
+// (2) add the matching NotificationType to schema.prisma, (3) call NotificationService.dispatch().
+// Called by NotificationService.dispatch() — not directly by feature services, so the
+// SmsLog-persisting + settings-gating behavior lives in exactly one place.
 
 import { prisma } from '@/config/database';
 import { logger } from '@/config/logger';
 import { enqueueSmsJob } from '@/jobs/notification.queue';
-import { SMS_TEMPLATES } from '@/utils/constants';
-import type { SmsTemplateKey } from '@/utils/constants';
+import { NOTIFICATION_TEMPLATES } from '@/utils/constants';
+import type { NotificationTemplateKey } from '@/utils/constants';
 
 /**
  * Render a template by replacing `{placeholder}` tokens with values.
  * Example: renderTemplate('RESULTS_PUBLISHED', { examTitle: 'Math Final' })
  */
 export const renderTemplate = (
-	templateKey: SmsTemplateKey,
+	templateKey: NotificationTemplateKey,
 	variables: Record<string, string>,
 ): string => {
-	let message: string = SMS_TEMPLATES[templateKey];
+	let message: string = NOTIFICATION_TEMPLATES[templateKey].sms;
 
 	for (const [key, value] of Object.entries(variables)) {
 		message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
@@ -27,7 +30,7 @@ export const renderTemplate = (
 
 interface SendSmsInput {
 	phoneNumber: string;
-	templateKey: SmsTemplateKey;
+	templateKey: NotificationTemplateKey;
 	variables: Record<string, string>;
 	userId?: string;
 }
@@ -87,7 +90,7 @@ export const sendSms = async (input: SendSmsInput): Promise<void> => {
  */
 export const sendBulkSms = async (
 	recipients: Array<{ phoneNumber: string; userId?: string }>,
-	templateKey: SmsTemplateKey,
+	templateKey: NotificationTemplateKey,
 	variables: Record<string, string>,
 ): Promise<void> => {
 	for (const recipient of recipients) {

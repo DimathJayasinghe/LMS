@@ -58,8 +58,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`)
 - [ ] Recorded-video attendance: `POST /attendance/video` exists server-side but `VideoPlayer.tsx` never calls it — watching a recording currently marks no attendance in practice
 - [x] **Audit log viewer** (2026-07-10) — `/admin/audit` (SUPER_ADMIN-gated), action + date-range filters, expandable rows for IP/user-agent/metadata. Also fixed a real bug found while building it: the route was gated to `Role.ADMIN` (front-desk) instead of `Role.SUPER_ADMIN` — a leftover from before the 2026-07-09 role-enum remap that locked the actual super-admin out and let front-desk read the full trail. See `audit.endpoints.md`.
-- [ ] **Notification bell** (frontend) — SSE endpoint + Redis pub/sub fan-out exist (Phase 6, backend); no frontend consumer
+- [x] **Notification bell + settings** (2026-07-10) — new `Notification`/`NotificationSetting` models, `NotificationService.dispatch()` single entry point (in-app + settings-gated SMS, fires SSE `NOTIFICATION_CREATED`), wired into results-published and payment confirmed/overridden. `/admin/notification-settings` (SUPER_ADMIN) toggles per (scenario, channel); the bell in `TopBar` is the **first frontend SSE consumer** in the codebase — `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` still have no frontend listener, a separate pre-existing gap. See `notifications.endpoints.md`.
 - [ ] Actor-vs-target privilege guard audit: `assertCanManagePrivilegedTarget` now covers `PATCH /:id/status` and `PATCH /:id/barcode` (2026-07-10 fix, see Decisions Log) — `PATCH /:id/role` is separately SUPER_ADMIN-only at the route level so needs no change, but re-check any *new* admin-on-user mutation for the same actor/target gap before shipping it
+- [ ] **Refresh-token collision on rapid re-auth** (found 2026-07-10, not yet fixed): `signRefreshToken`/`signAccessToken` in `auth.service.ts` call `jwt.sign(payload, secret, { expiresIn })` with no `jti` (nonce) claim. `jsonwebtoken`'s `iat` claim has second-level granularity, so two token issuances for the *same* `(userId, role)` within the same second produce a byte-identical JWT — and since the DB stores `RefreshToken.token` as a hash of the raw token with a unique constraint, the second insert throws `P2002` and the request 500s. Reproduced live: registering then immediately logging in as the same fresh user. Fix is small (add `{ jwtid: randomUUID() }` to both `jwt.sign` calls) but is a distinct concern from notifications — flagged here rather than fixed inline.
 
 ---
 
@@ -73,7 +74,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
 | 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; UI pending |
-| 6 | Notifications & Real-Time | 🟡 In Progress | Backend done; notification UI pending |
+| 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener |
 | 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); institutes + subjects pages are `ComingSoon` placeholders, not built; audit log viewer ✅ (2026-07-10); financial reports still missing |
 | 8 | Student Dashboard | 🟡 In Progress | Home/dashboard, classes, timetable, exams (incl. taking), submissions, payments, attendance, video player, live classes — all built |
 | 9 | Polish & Hardening | 🟡 In Progress | Backend hardening in progress; frontend polish pending |
@@ -231,7 +232,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Create BullMQ worker entry point (`worker.ts`)
 - [x] Implement SMS job (Notify.lk integration)
 - [x] Implement email notification job (optional)
-- [ ] Build notification bell component (frontend)
+- [x] Build notification bell component (frontend) — 2026-07-10, see Phase S follow-ups above
 
 ---
 
@@ -334,6 +335,10 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2026-07-10 | **Student account-setup**: LMS-QR auto-generated at registration; NIC upload + institute barcodes are self-service, no admin-approval gate | Reduces admin workload; fraud/abnormal-account detection deferred as a documented follow-up until there's real usage data to design against |
 | 2026-07-10 | **Actor-vs-target privilege guard required for admin-on-user mutations** | Incident: a front-desk `ADMIN` deactivated a `SUPER_ADMIN` account twice (`PATCH /:id/status` was gated only by the caller's own role, not the target's). Fixed via `assertCanManagePrivilegedTarget` in `user.service.ts`, applied to `/:id/status` and `/:id/barcode`. Any new endpoint where one role acts on another user's account must be checked for the same gap — see `CLAUDE.md` |
 | 2026-07-10 | **Vitest introduced; unit tests + edge-case brainstorming required for every implementation going forward** | Same incident above — the missing test coverage let the gap ship unnoticed. `backend/vitest.config.ts` + `npm run test`; see `04-ai-workflow-rules.md §3.4` for the actor×target-matrix + check-ordering testing pattern |
+| 2026-07-10 | **Notification bell: full persisted inbox, not an ephemeral toast** | User explicitly chose the bigger option over the lighter SSE-only recommendation — wanted unread counts, mark-as-read, and history, not just live pop-ups |
+| 2026-07-10 | **Notification channels: IN_APP + SMS only, no EMAIL toggle** | Matches the existing "email out of scope for v1" decision — a toggle with no sender behind it would be a dead control. `NotificationChannel` enum is structured to extend cleanly when email infra exists |
+| 2026-07-10 | **Notification settings are SUPER_ADMIN-only, not ADMIN** | Consistent with the audit-log-access decision the same session — front-desk doesn't get to decide whether students get contacted, only the owner does |
+| 2026-07-10 | **Consolidated payment SMS into NotificationService.dispatch(), removed the old per-controller helpers** | `payment.controller.ts` already had `sendPaymentConfirmationSms`/`sendPaymentOverrideSms` calling `SmsNotificationService.sendSms` directly, with no settings gate and at risk of double-sending once the new dispatch-based calls were added in the service layer. Removed the controller-level versions; `NotificationService.dispatch` is now the only path, and it respects the super-admin toggle. `sendBulkPaymentSms` (bulk upload) was left as the pre-existing no-op — it never sent anything before this change either, wiring it up needs `bulkUploadPayments` to expose per-row recipients first |
 
 ---
 

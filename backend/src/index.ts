@@ -25,6 +25,8 @@ import { submissionRoutes } from './routes/submission.routes';
 import { paymentRoutes } from './routes/payment.routes';
 import { streamRoutes } from './routes/stream.routes';
 import { auditRoutes } from './routes/audit.routes';
+import { notificationRoutes } from './routes/notification.routes';
+import { notificationSettingRoutes } from './routes/notification-setting.routes';
 
 initSentry();
 
@@ -88,6 +90,8 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/payments', paymentRoutes);
   app.use('/api/stream', streamRoutes);
   app.use('/api/audit-logs', auditRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/notification-settings', notificationSettingRoutes);
 
   // ─── Global Error Handler (must be last) ─────────────────────
   app.use(errorHandler);

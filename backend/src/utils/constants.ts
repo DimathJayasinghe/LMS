@@ -260,18 +260,35 @@ export const AUDIT_ACTION = {
 	// Attendance
 	ATTENDANCE_MANUAL: 'ATTENDANCE_MANUAL',
 	ATTENDANCE_BARCODE: 'ATTENDANCE_BARCODE',
+
+	// Notifications
+	NOTIFICATION_SETTING_UPDATED: 'NOTIFICATION_SETTING_UPDATED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
-// ─── SMS Templates ─────────────────────────────────────────
-// Mustache-style placeholders. New events require only a new entry here.
-
-export const SMS_TEMPLATES = {
-	RESULTS_PUBLISHED: 'Results published for {examTitle}. Log in to view.',
-	PAYMENT_CONFIRMED: 'Payment received for {courseName} {paymentMonth}. Thank you.',
-	PAYMENT_OVERRIDE: 'Payment for {courseName} {paymentMonth} has been updated. Status: {status}.',
+// ─── Notification Templates ─────────────────────────────────
+// Keyed by NotificationType (Prisma enum) — one title + message pair for the
+// in-app Notification row, one body for SMS. Mustache-style {placeholder}s
+// filled by NotificationService.dispatch(). New scenarios need only a new
+// entry here (plus the matching NotificationType enum value in schema.prisma).
+export const NOTIFICATION_TEMPLATES = {
+	RESULTS_PUBLISHED: {
+		title: 'Results published',
+		inApp: 'Results for {examTitle} are now available.',
+		sms: 'Results published for {examTitle}. Log in to view.',
+	},
+	PAYMENT_CONFIRMED: {
+		title: 'Payment confirmed',
+		inApp: 'Your payment for {courseName} ({paymentMonth}) was confirmed.',
+		sms: 'Payment received for {courseName} {paymentMonth}. Thank you.',
+	},
+	PAYMENT_OVERRIDDEN: {
+		title: 'Payment updated',
+		inApp: 'Your payment for {courseName} ({paymentMonth}) was updated. Status: {status}.',
+		sms: 'Payment for {courseName} {paymentMonth} has been updated. Status: {status}.',
+	},
 } as const;
 
-export type SmsTemplateKey = keyof typeof SMS_TEMPLATES;
+export type NotificationTemplateKey = keyof typeof NOTIFICATION_TEMPLATES;
 

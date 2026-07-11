@@ -427,3 +427,31 @@ export interface AuditLogEntry {
     role: Role;
   };
 }
+
+// ── Notifications (see notification.endpoints.md) ────────────────────────────
+export type NotificationType = "RESULTS_PUBLISHED" | "PAYMENT_CONFIRMED" | "PAYMENT_OVERRIDDEN";
+export type NotificationChannel = "IN_APP" | "SMS";
+
+export interface NotificationEntry {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  link: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+/** GET /notifications/me — ApiList<NotificationEntry> plus an unread count. */
+export interface NotificationListResponse extends ApiList<NotificationEntry> {
+  unreadCount: number;
+}
+
+/** Super-admin-configurable per-(type, channel) on/off switch. */
+export interface NotificationSetting {
+  id: string;
+  type: NotificationType;
+  channel: NotificationChannel;
+  enabled: boolean;
+  updatedAt: string;
+}

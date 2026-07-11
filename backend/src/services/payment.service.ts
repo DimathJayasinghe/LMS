@@ -1,9 +1,10 @@
-import { ClassType, PaymentStatus, Prisma, Role } from '@prisma/client';
+import { ClassType, NotificationType, PaymentStatus, Prisma, Role } from '@prisma/client';
 import xlsx from 'xlsx';
 import { prisma } from '@/config/database';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { AppError } from '@/utils/app-error';
+import * as NotificationService from '@/services/notification.service';
 import {
 	PAYHERE_CHECKOUT_PATH,
 	PAYHERE_COUNTRY,
@@ -370,6 +371,18 @@ export const handlePayhereNotify = async (
 		'PayHere payment updated',
 	);
 
+	if (nextStatus === PaymentStatus.SUCCESS) {
+		void NotificationService.dispatch({
+			type: NotificationType.PAYMENT_CONFIRMED,
+			userId: updated.enrollment.userId,
+			link: '/payments',
+			params: {
+				courseName: updated.enrollment.course.name,
+				paymentMonth: updated.paymentMonth,
+			},
+		});
+	}
+
 	return updated;
 };
 
@@ -454,7 +467,7 @@ export const overridePayment = async (
 		throw new AppError('PAYMENT_NOT_FOUND', 404, 'Payment not found.');
 	}
 
-	return prisma.payment.update({
+	const updated = await prisma.payment.update({
 		where: { id: paymentId },
 		data: {
 			status: input.status,
@@ -463,6 +476,19 @@ export const overridePayment = async (
 		},
 		select: paymentSelect,
 	});
+
+	void NotificationService.dispatch({
+		type: NotificationType.PAYMENT_OVERRIDDEN,
+		userId: updated.enrollment.userId,
+		link: '/payments',
+		params: {
+			courseName: updated.enrollment.course.name,
+			paymentMonth: updated.paymentMonth,
+			status: updated.status,
+		},
+	});
+
+	return updated;
 };
 
 const normalizeHeader = (header: string): string => {
