@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from "motion/react";
-import type { PointerEvent } from "react";
+import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { cn } from "@/lib/utils";
 
 // Fixed px cell (not a percentage of the container) — a percentage-based
@@ -18,7 +10,6 @@ import { cn } from "@/lib/utils";
 // undistorted at any width — the actual box count is "dynamic" per
 // viewport, not a fixed layout baked in for one breakpoint.
 const CELL = 96;
-const GAP = 0;
 // Generous upper bound so even a large desktop hero never runs out of cells
 // before the bottom edge — `overflow-hidden` on the container crops the rest.
 const CELL_COUNT = 320;
@@ -37,14 +28,10 @@ interface GridBackdropProps {
 }
 
 /**
- * The site's "grid that reacts to you" motif — shared by the landing-page
- * hero and the auth-screen aside so both get the same fix in one place.
- *
- * Two aligned `auto-fill`/`minmax` CSS grids of real bordered, rounded
- * boxes stacked on top of each other: a dim base layer, and a primary-
- * tinted copy masked to a circle that follows the pointer via
- * `onPointerMove` (covers touch/pen, not just mouse) so it lights up
- * wherever the pointer actually is, not just on an exact tiny cell hit.
+ * The graph-paper backdrop shared by the landing-page hero and the
+ * auth-screen aside. A static `auto-fill`/`minmax` CSS grid of real
+ * bordered, rounded boxes — no per-cell DOM-width math, so it can't
+ * distort at any viewport width.
  */
 export default function GridBackdrop({
   className,
@@ -55,62 +42,23 @@ export default function GridBackdrop({
   const { scrollY } = useScroll();
   const y = useTransform(scrollY, [0, 800], [0, parallax && !reduceMotion ? 120 : 0]);
 
-  // Off-screen until the first pointer event so the spotlight doesn't default
-  // to the top-left corner before anyone has moved the pointer.
-  const pointerX = useMotionValue(-9999);
-  const pointerY = useMotionValue(-9999);
-
-  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    pointerX.set(e.clientX - rect.left);
-    pointerY.set(e.clientY - rect.top);
-  };
-
-  const handlePointerLeave = () => {
-    pointerX.set(-9999);
-    pointerY.set(-9999);
-  };
-
-  const glow = useMotionTemplate`radial-gradient(380px circle at ${pointerX}px ${pointerY}px, var(--color-primary) 0%, transparent 70%)`;
-  const spotlightMask = useMotionTemplate`radial-gradient(260px circle at ${pointerX}px ${pointerY}px, black, transparent 70%)`;
-
   const gridStyle = {
     display: "grid",
     gridTemplateColumns: `repeat(auto-fill, minmax(${CELL}px, 1fr))`,
-    gap: `${GAP}px`,
+    gap: 0,
   };
 
   return (
     <motion.div
       aria-hidden
       style={parallax ? { y } : undefined}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
       className={cn("absolute inset-0 overflow-hidden", className)}
     >
-      {/* Base boxes — always visible, independent of pointer position. */}
       <div style={gridStyle} className="absolute inset-0 opacity-70">
         {cells.map((_, i) => (
           <div key={i} className="aspect-square rounded-xl border border-border/50" />
         ))}
       </div>
-
-      {/* Soft ambient glow under the pointer. */}
-      <motion.div
-        className="pointer-events-none absolute inset-0 opacity-20"
-        style={{ background: glow }}
-      />
-
-      {/* Primary-tinted copy of the same boxes, masked to a circle that
-          tracks the pointer — the part that actually reacts. */}
-      <motion.div
-        style={{ ...gridStyle, WebkitMaskImage: spotlightMask, maskImage: spotlightMask }}
-        className="pointer-events-none absolute inset-0"
-      >
-        {cells.map((_, i) => (
-          <div key={i} className="aspect-square rounded-xl border border-primary/70 bg-primary/10" />
-        ))}
-      </motion.div>
 
       {/* Fades the boxes to background around the center so overlaid
           content (e.g. the hero heading) reads cleanly against plain space

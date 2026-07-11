@@ -1,5 +1,6 @@
 import { TextAnimate } from "@/components/ui/text-animate";
 import GridBackdrop from "@/components/custom/GridBackdrop";
+import TypingTips from "@/components/custom/TypingTips";
 
 /**
  * Decorative side panel for the auth screens — shares the landing page's
@@ -14,9 +15,12 @@ interface AuthAsideProps {
   quote?: string;
   /** The larger animated line. */
   tagline: string;
+  /** Short, page-relevant tips typed out on a loop underneath the tagline —
+   * something useful to read while the form gets filled in. */
+  tips?: string[];
 }
 
-export default function AuthAside({ quote, tagline }: AuthAsideProps) {
+export default function AuthAside({ quote, tagline, tips }: AuthAsideProps) {
   return (
     <aside
       aria-hidden
@@ -46,6 +50,15 @@ export default function AuthAside({ quote, tagline }: AuthAsideProps) {
         >
           {tagline}
         </TextAnimate>
+
+        {tips && tips.length > 0 && (
+          <p className="flex min-h-[3.5em] items-start gap-2 text-sm text-muted-foreground/80 sm:min-h-[2.5em]">
+            <span className="mt-0.5 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium tracking-wide text-primary uppercase">
+              Tip
+            </span>
+            <TypingTips tips={tips} />
+          </p>
+        )}
       </div>
     </aside>
   );
