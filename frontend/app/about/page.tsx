@@ -27,9 +27,7 @@ const POINTS = [
 export default function AboutPage() {
   return (
     <>
-      <div className="mx-auto max-w-6xl px-6 pt-8">
-        <Nav />
-      </div>
+      <Nav />
 
       <section className="px-6 py-16 text-center sm:py-24">
         <ScrollReveal className="mx-auto max-w-2xl">
