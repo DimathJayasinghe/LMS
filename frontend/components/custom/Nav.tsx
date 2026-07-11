@@ -10,7 +10,7 @@ const LINKS = [
 
 export default function Nav() {
   return (
-    <nav className="relative z-50 mx-auto my-8 flex w-full min-w-fit max-w-[50rem] items-center justify-between rounded-full border border-foreground bg-background p-1.5">
+    <nav className="relative z-50 mx-4 mb-8 mt-8 flex w-auto min-w-fit max-w-[50rem] items-center justify-between rounded-full border border-foreground bg-background p-1.5 sm:mx-auto sm:mt-14 sm:w-full">
       <Link
         href="/home"
         aria-label="Home"

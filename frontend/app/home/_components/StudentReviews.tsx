@@ -13,7 +13,7 @@ const FACES = [
  */
 export default function StudentReviews() {
   return (
-    <div className="mx-auto mt-20 flex justify-center">
+    <div className="relative z-50 mx-auto mt-16 flex justify-center sm:mt-24">
       <div className="flex items-center">
         <div className="flex">
           {FACES.map((face, i) => (
