@@ -12,6 +12,9 @@ Generates the payload required to redirect a student to PayHere checkout.
 - **URL:** `/initiate` or `/payhere/checkout`
 - **Method:** `POST`
 - **Auth:** Required (Role: `STUDENT`)
+- **Headers:** `Idempotency-Key: <uuid>` **required** (high-stakes POST invariant; `checkIdempotency`
+  middleware rejects a missing/non-UUID key with 400). The frontend mints one per attempt in
+  `lib/payhere.ts`'s `initiatePayherePayment`.
 - **Body:**
   ```json
   {
@@ -112,6 +115,29 @@ Specific endpoint to check the status of a PayHere transaction.
     }
   }
   ```
+
+### 4b. Month Summary (Admin)
+Aggregate one month's payments for the admin dashboard.
+
+- **URL:** `/summary`
+- **Method:** `GET`
+- **Auth:** Required (Role: `SUPER_ADMIN`, `ADMIN`)
+- **Query Params:** `month` (required, `YYYY-MM`)
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "month": "2026-07",
+      "collectedTotal": "22000.00",
+      "paidCount": 7,
+      "pendingCount": 1,
+      "failedCount": 0
+    }
+  }
+  ```
+  > `collectedTotal` sums `amount` over `status = SUCCESS` for the month. Route is registered
+  > **before** `GET /:id` so `summary` isn't parsed as a payment id.
 
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.

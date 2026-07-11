@@ -418,6 +418,40 @@ export const listPayments = async (
 	return { data, count };
 };
 
+export interface MonthPaymentSummary {
+	month: string;
+	/** Sum of `amount` over SUCCESS payments that month, as a fixed(2) string. */
+	collectedTotal: string;
+	paidCount: number;
+	pendingCount: number;
+	failedCount: number;
+}
+
+/**
+ * Aggregate the month's payments for the admin dashboard: total collected
+ * (SUCCESS only) plus per-status counts. Read-only; SUPER_ADMIN/ADMIN gated at
+ * the route.
+ */
+export const getPaymentsSummary = async (month: string): Promise<MonthPaymentSummary> => {
+	const [sum, paidCount, pendingCount, failedCount] = await Promise.all([
+		prisma.payment.aggregate({
+			_sum: { amount: true },
+			where: { paymentMonth: month, status: PaymentStatus.SUCCESS },
+		}),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.SUCCESS } }),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.PENDING } }),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.FAILED } }),
+	]);
+
+	return {
+		month,
+		collectedTotal: (sum._sum.amount ?? new Prisma.Decimal(0)).toFixed(2),
+		paidCount,
+		pendingCount,
+		failedCount,
+	};
+};
+
 export const listMyPayments = async (
 	userId: string,
 	query: ListMyPaymentsQuery,

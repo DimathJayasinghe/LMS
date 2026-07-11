@@ -13,6 +13,7 @@ import {
 	overridePaymentSchema,
 	payhereNotifySchema,
 	paymentIdParamSchema,
+	paymentsSummaryQuerySchema,
 } from '@/schemas/payment.schema';
 
 type RequestWithFile = Request & { file?: Express.Multer.File };
@@ -53,6 +54,16 @@ export const listPayments = asyncHandler(async (req: Request, res: Response): Pr
 		status: 'success',
 		data,
 		count,
+	});
+});
+
+export const getPaymentsSummary = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { month } = paymentsSummaryQuerySchema.parse(req.query);
+	const data = await PaymentService.getPaymentsSummary(month);
+
+	res.status(200).json({
+		status: 'success',
+		data,
 	});
 });
 

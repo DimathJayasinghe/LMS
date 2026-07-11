@@ -73,7 +73,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
-| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; UI pending |
+| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; role-aware `/payments` UI ✅ (2026-07-11) — student overview/history + admin summary/records/bulk-upload; new `GET /payments/summary` aggregate. PayHere live charge now works end-to-end (fixed a missing `Idempotency-Key` on initiate). Refunds/receipts still absent |
 | 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener |
 | 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — verified: 18 Vitest+RTL unit tests, `tsc`+`build` green, and a headless-Chromium UI smoke on the live Docker stack: create/edit/deactivate/filter/duplicate-409 for both + ADMIN bounced by the SSR gate); audit log viewer ✅ (2026-07-10); financial reports still missing |
 | 8 | Student Dashboard | 🟡 In Progress | Home/dashboard, classes, timetable, exams (incl. taking), submissions, payments, attendance, video player, live classes — all built |
@@ -216,8 +216,8 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement PayHere payment initiation + webhook handler
 - [x] Implement idempotency middleware for payment routes
 - [x] Implement Excel bulk payment upload (Admin)
-- [ ] Build payment page (student view) — `(app)/payments/page.tsx` is a `ComingSoon` placeholder, not built (correcting an earlier pass of this doc that assumed file-existence meant done — check content, not just presence, before marking a page complete)
-- [ ] Build payment dashboard (admin view) — same file, same placeholder
+- [x] Build payment page (student view) — `(app)/payments/page.tsx` role-aware: STUDENT sees per-course this-month Pay/Paid cards (reuses the initiate→PayHere flow) + filterable history (2026-07-11)
+- [x] Build payment dashboard (admin view) — SUPER_ADMIN/ADMIN: month summary (`GET /payments/summary`), status/month-filtered records table, and Excel bulk upload with per-row results (2026-07-11)
 - [ ] Build payment override UI (super admin) — backend `PAYMENT_OVERRIDDEN` audit action exists; frontend not built
 - [ ] Pay-at-entrance is not wired at all yet (backend), see Phase S follow-ups above — a UI here would need that first
 

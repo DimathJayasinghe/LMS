@@ -386,7 +386,53 @@ export interface LiveClassToken {
 
 // ── Payments & attendance ────────────────────────────────────────────────────
 export type PaymentMethod = "ONLINE" | "ENTRANCE" | "BULK" | "MANUAL";
+export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED";
 export type AttendanceSource = "QR" | "BARCODE" | "ZOOM_WEBHOOK" | "MANUAL";
+
+/** A payment row (see payments.endpoints.md). Matches the service's `paymentSelect`. */
+export interface Payment {
+  id: string;
+  amount: string; // decimal as string
+  status: PaymentStatus;
+  payhereId?: string | null;
+  paymentMonth: string; // "YYYY-MM"
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  enrollment: {
+    id: string;
+    classType: EnrollmentMode;
+    userId: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      indexNumber: number;
+      phone?: string | null;
+      address?: string | null;
+      city?: string | null;
+    };
+    course: { id: string; name: string; year: number; monthlyFee: string };
+  };
+}
+
+/** GET /payments/summary?month= — admin month aggregate. */
+export interface PaymentSummary {
+  month: string;
+  collectedTotal: string; // "N.NN"
+  paidCount: number;
+  pendingCount: number;
+  failedCount: number;
+}
+
+/** POST /payments/bulk-upload result envelope. */
+export interface BulkUploadResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+}
 
 /** An attendance record (see attendance.endpoints.md). Relations included on query reads. */
 export interface AttendanceRecord {
