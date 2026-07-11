@@ -18,6 +18,9 @@ Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` =
 
 - `AttendanceSource` now includes **`QR`** (default) alongside `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`.
 - Institute-scoped scanning (`(instituteId, barcode) → student`, per-institute barcodes) is a follow-up.
+- **`TEACHER` can now read attendance for their own courses (2026-07-10)** — `GET /session/:sessionId`
+  and `GET /class/:classId` were `SUPER_ADMIN`+`ADMIN` only; added `TEACHER`, scoped via
+  `assertCourseAccess` (same ownership gate as session/exam/video mutations).
 
 ## Attendance channels — current state vs. intent (clarified 2026-07-10)
 
@@ -82,8 +85,8 @@ Returned in most endpoints:
 | POST | `/zoom-webhook` | None | Webhook from Zoom for `participant.joined`. |
 | POST | `/manual` | `ADMIN`, `STAFF` | Manually mark attendance (reconciliation). |
 | POST | `/video` | `STUDENT` | Log attendance on video playback. |
-| GET | `/session/:sessionId` | `ADMIN`, `STAFF` | Get all attendance for a specific session. |
-| GET | `/class/:classId` | `ADMIN`, `STAFF` | Get paginated attendance for a course. |
+| GET | `/session/:sessionId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get all attendance for a specific session. |
+| GET | `/class/:classId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get paginated attendance for a course. |
 | GET | `/student/:userId` | Any | Get student's attendance history (role-scoped). |
 
 ## Endpoint Details
@@ -217,7 +220,11 @@ Student logs attendance for watching a recorded video.
 
 ### GET `/session/:sessionId`
 
-Get a list of all attendance records for a specific class session. 
+Get a list of all attendance records for a specific class session.
+
+> **`TEACHER`-scoped (2026-07-10):** a `TEACHER` may only view sessions belonging to a course they
+> own (`assertCourseAccess`, the same ownership gate used by session/exam/video mutations —
+> `context/documents/06-progress-tracker.md` Phase S). `SUPER_ADMIN`/`ADMIN` are unrestricted.
 
 **Success (200)**
 
@@ -233,12 +240,16 @@ Get a list of all attendance records for a specific class session.
 
 **Errors**
 
-- 401 unauthorized (requires ADMIN or STAFF role)
+- 401 unauthorized (requires SUPER_ADMIN, ADMIN, or TEACHER)
+- 403 `FORBIDDEN_COURSE` — TEACHER does not own the session's course
 - 404 `CLASS_SESSION_NOT_FOUND`
 
 ### GET `/class/:classId`
 
 Get paginated attendance history across all sessions in a specific course.
+
+> **`TEACHER`-scoped (2026-07-10):** same `assertCourseAccess` gate as `/session/:sessionId` above
+> — a TEACHER only sees courses they own.
 
 **Query Parameters**
 
@@ -261,7 +272,8 @@ Get paginated attendance history across all sessions in a specific course.
 
 **Errors**
 
-- 401 unauthorized (requires ADMIN or STAFF role)
+- 401 unauthorized (requires SUPER_ADMIN, ADMIN, or TEACHER)
+- 403 `FORBIDDEN_COURSE` — TEACHER does not own the course
 - 404 `CLASS_NOT_FOUND`
 
 ### GET `/student/:userId`

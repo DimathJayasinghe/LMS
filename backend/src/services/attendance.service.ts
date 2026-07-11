@@ -2,6 +2,8 @@ import { AttendanceSource, Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { logger } from '@/config/logger';
+import { assertCourseAccess } from '@/services/class.service';
+import type { AuthenticatedUser } from '@/types/auth.types';
 import type { ScanBarcodeInput, ManualAttendanceInput, AttendanceQuery } from '@/schemas/attendance.schema';
 
 // ─── Return type for attendance records ──────────────────────
@@ -237,8 +239,10 @@ export const markVideoAttendance = async (
 
 export const getAttendanceBySession = async (
   sessionId: string,
+  actor: AuthenticatedUser,
 ): Promise<AttendanceRecord[]> => {
-  await ensureClassSessionExists(sessionId);
+  const session = await ensureClassSessionExists(sessionId);
+  await assertCourseAccess(session.courseId, actor);
 
   return prisma.attendance.findMany({
     where: { classSessionId: sessionId },
@@ -252,11 +256,11 @@ export const getAttendanceBySession = async (
 export const getAttendanceByCourse = async (
   courseId: string,
   query: AttendanceQuery,
+  actor: AuthenticatedUser,
 ): Promise<{ records: AttendanceRecord[]; total: number }> => {
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
-  if (!course) {
-    throw new AppError('CLASS_NOT_FOUND', 404, 'Class (course) not found.');
-  }
+  // Throws CLASS_NOT_FOUND (404) if missing, FORBIDDEN_COURSE (403) if a
+  // TEACHER doesn't own it. SUPER_ADMIN/ADMIN pass through unchecked.
+  await assertCourseAccess(courseId, actor);
 
   const where: Prisma.AttendanceWhereInput = {
     classSession: { courseId, deletedAt: null },
