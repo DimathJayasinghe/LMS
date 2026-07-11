@@ -58,20 +58,22 @@ attendanceRoutes.post(
 
 // ─── Query: By Session ───────────────────────────────────────
 // GET /api/attendance/session/:sessionId — All records for a session
+// TEACHER is scoped to sessions of courses they own (assertCourseAccess in the service).
 attendanceRoutes.get(
   '/session/:sessionId',
   verifyToken,
-  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
   validateParams(attendanceSessionParamsSchema),
   AttendanceController.getAttendanceBySession,
 );
 
 // ─── Query: By Course ────────────────────────────────────────
 // GET /api/attendance/class/:classId — Paginated course attendance
+// TEACHER is scoped to courses they own (assertCourseAccess in the service).
 attendanceRoutes.get(
   '/class/:classId',
   verifyToken,
-  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
   validateParams(attendanceClassParamsSchema),
   validateQuery(attendanceQuerySchema),
   AttendanceController.getAttendanceByCourse,
