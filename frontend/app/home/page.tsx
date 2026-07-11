@@ -7,6 +7,8 @@ import StudentReviews from "./_components/StudentReviews";
 import Header from "./_components/Header";
 import FadeIn from "./_components/FadeIn";
 import Features from "./_components/Features";
+import Marquee from "./_components/Marquee";
+import HowItWorks from "./_components/HowItWorks";
 import Magnetic from "./_components/Magnetic";
 import ScrollReveal from "./_components/ScrollReveal";
 
@@ -28,6 +30,8 @@ export default function Home() {
       </main>
 
       <Features />
+      <Marquee />
+      <HowItWorks />
 
       <section className="z-40 border-t border-border bg-muted/40 px-6 py-24 text-center sm:py-32">
         <ScrollReveal className="mx-auto flex max-w-2xl flex-col items-center">

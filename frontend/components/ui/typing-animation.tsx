@@ -227,13 +227,23 @@ export function TypingAnimation({
       {...props}
     >
       {displayedText}
-      {shouldShowCursor && (
-        <span
-          className={cn("inline-block", blinkCursor && "animate-blink-cursor")}
-        >
-          {getCursorChar()}
-        </span>
-      )}
+      {shouldShowCursor &&
+        (cursorStyle === "line" ? (
+          // A drawn caret rather than a "|" glyph — reads as an actual
+          // typing/insertion cursor instead of a stray punctuation mark,
+          // and its size/position is font-independent.
+          <span
+            aria-hidden
+            className={cn(
+              "ml-0.5 inline-block h-[0.85em] w-[3px] translate-y-[0.12em] rounded-full bg-current align-middle",
+              blinkCursor && "animate-blink-cursor",
+            )}
+          />
+        ) : (
+          <span className={cn("inline-block", blinkCursor && "animate-blink-cursor")}>
+            {getCursorChar()}
+          </span>
+        ))}
     </MotionComponent>
   )
 }
