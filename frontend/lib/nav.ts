@@ -64,7 +64,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Payments",
         href: "/payments",
         icon: CreditCard,
-        roles: ["ADMIN", "SUPER_ADMIN"],
+        roles: ["STUDENT", "ADMIN", "SUPER_ADMIN"],
       },
     ],
   },

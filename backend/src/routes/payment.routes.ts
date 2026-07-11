@@ -12,6 +12,7 @@ import {
 	listPaymentsQuerySchema,
 	overridePaymentSchema,
 	paymentIdParamSchema,
+	paymentsSummaryQuerySchema,
 } from '@/schemas/payment.schema';
 import { PAYMENTS_BULK_UPLOAD_MAX_BYTES } from '@/utils/constants';
 
@@ -69,6 +70,16 @@ paymentRoutes.get(
 	requireRole(Role.STUDENT),
 	validateQuery(listMyPaymentsQuerySchema),
 	PaymentController.listMyPayments,
+);
+
+// ─── Month Summary (Admin/Staff) ──────────────────────────
+// Registered BEFORE '/:id' so "summary" isn't captured as an id param.
+paymentRoutes.get(
+	'/summary',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateQuery(paymentsSummaryQuerySchema),
+	PaymentController.getPaymentsSummary,
 );
 
 // ─── Get Payment by Id (Owner/Admin/Staff) ────────────────

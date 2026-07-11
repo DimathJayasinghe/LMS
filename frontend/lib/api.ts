@@ -130,6 +130,14 @@ export const api = {
       body: data === undefined ? undefined : JSON.stringify(data),
     }),
 
+  /**
+   * Multipart upload (e.g. bulk payment Excel). Sends `FormData` untouched so
+   * the browser sets the `multipart/form-data` boundary; `post` can't be used
+   * because it JSON-stringifies its body.
+   */
+  upload: <T>(path: string, form: FormData, opts?: ApiOptions) =>
+    request<T>(path, { ...opts, method: "POST", body: form }),
+
   patch: <T>(path: string, data?: unknown, opts?: ApiOptions) =>
     request<T>(path, {
       ...opts,

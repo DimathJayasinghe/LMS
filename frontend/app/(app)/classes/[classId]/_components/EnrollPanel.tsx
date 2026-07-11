@@ -5,15 +5,9 @@ import { useRouter } from "next/navigation";
 import { BadgeCheck, CreditCard, Loader2, Monitor, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
-import type { ApiSuccess, EnrollmentMode } from "@/lib/types";
+import type { EnrollmentMode } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
-
-/** PayHere checkout initiation returned by POST /payments/initiate. */
-interface PayhereInitiation {
-  checkoutUrl: string;
-  payload: Record<string, string>;
-  payment: { id: string; amount: string; status: string; paymentMonth: string };
-}
+import { currentPaymentMonth, initiatePayherePayment, redirectToPayhere } from "@/lib/payhere";
 
 interface ActiveEnrollment {
   id: string;
@@ -27,27 +21,6 @@ interface EnrollPanelProps {
   active: ActiveEnrollment | null;
   /** Enroll/pay is student-only; staff see a passive note instead. */
   isStudent: boolean;
-}
-
-/** Current billing month in the API's "YYYY-MM" format. */
-function currentPaymentMonth(): string {
-  return new Date().toISOString().slice(0, 7);
-}
-
-/** PayHere expects an auto-submitted POST form, not a plain redirect. */
-function redirectToPayhere(url: string, fields: Record<string, string>) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = url;
-  for (const [name, value] of Object.entries(fields)) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-  document.body.appendChild(form);
-  form.submit();
 }
 
 const MODES: { value: EnrollmentMode; label: string; icon: typeof Monitor }[] = [
@@ -87,10 +60,7 @@ export default function EnrollPanel({
   const handlePay = () =>
     run("pay", async () => {
       if (!active) return;
-      const res = await api.post<ApiSuccess<PayhereInitiation>>("/payments/initiate", {
-        enrollmentId: active.id,
-        paymentMonth: currentPaymentMonth(),
-      });
+      const res = await initiatePayherePayment(active.id, currentPaymentMonth());
       redirectToPayhere(res.data.checkoutUrl, res.data.payload);
     });
 
