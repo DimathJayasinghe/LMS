@@ -12,6 +12,7 @@ import {
 import {
   motion,
   useInView,
+  useReducedMotion,
   type DOMMotionComponents,
   type HTMLMotionProps,
   type MotionProps,
@@ -79,6 +80,8 @@ export function TypingAnimation({
   const MotionComponent = motionElements[
     Component
   ] as TypingAnimationMotionComponent
+
+  const reduceMotion = useReducedMotion()
 
   const [displayedText, setDisplayedText] = useState<string>("")
   const [currentWordIndex, setCurrentWordIndex] = useState(0)
@@ -229,15 +232,31 @@ export function TypingAnimation({
       {displayedText}
       {shouldShowCursor &&
         (cursorStyle === "line" ? (
-          // A drawn caret rather than a "|" glyph — reads as an actual
-          // typing/insertion cursor instead of a stray punctuation mark,
-          // and its size/position is font-independent.
-          <span
+          // A drawn, primary-colored caret rather than a "|" glyph — reads as
+          // an actual insertion cursor, and its size/position is
+          // font-independent. It stays solid while a character is actively
+          // being typed/deleted and only pulses during the pause between
+          // words, matching how a real text cursor behaves (blinks when
+          // idle, not while you're typing) instead of blinking on a fixed
+          // clock the whole time.
+          <motion.span
             aria-hidden
-            className={cn(
-              "ml-0.5 inline-block h-[0.85em] w-[3px] translate-y-[0.12em] rounded-full bg-current align-middle",
-              blinkCursor && "animate-blink-cursor",
-            )}
+            // Default (baseline) vertical-align — an inline-block's bottom
+            // margin edge sits on the parent text's baseline, so the caret
+            // rests where a real cursor would instead of floating at the
+            // font's vertical middle.
+            className="ml-1 inline-block w-[3px] rounded-full bg-primary"
+            style={{ height: "0.9em" }}
+            animate={
+              blinkCursor && !reduceMotion && phase === "pause"
+                ? { opacity: [1, 1, 0, 0, 1] }
+                : { opacity: 1 }
+            }
+            transition={
+              phase === "pause"
+                ? { duration: 1, times: [0, 0.4, 0.5, 0.9, 1], repeat: Infinity, ease: "easeInOut" }
+                : { duration: 0.15 }
+            }
           />
         ) : (
           <span className={cn("inline-block", blinkCursor && "animate-blink-cursor")}>

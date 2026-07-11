@@ -11,34 +11,46 @@ import {
 import type { PointerEvent } from "react";
 import { cn } from "@/lib/utils";
 
-// Fixed px cell, not a percentage of the container — a percentage-based grid
-// (the old implementation) reflows into a different number of unevenly-sized
-// boxes at every viewport width, which is what fell apart on mobile. A fixed
-// cell size just tiles more or fewer times; the pattern itself never distorts.
-const CELL = 44;
+// Fixed px cell (not a percentage of the container) — a percentage-based
+// grid reflows into a different, sometimes-ragged column count at every
+// viewport width. `auto-fill`/`minmax` instead computes however many equal
+// columns fit and stretches them evenly, so cells stay square and
+// undistorted at any width — the actual box count is "dynamic" per
+// viewport, not a fixed layout baked in for one breakpoint.
+const CELL = 96;
+const GAP = 0;
+// Generous upper bound so even a large desktop hero never runs out of cells
+// before the bottom edge — `overflow-hidden` on the container crops the rest.
+const CELL_COUNT = 320;
+const cells = Array.from({ length: CELL_COUNT });
 
 interface GridBackdropProps {
   className?: string;
   /** Ties the grid to page scroll for a subtle parallax drift. Only the home
    * hero wants this; the auth aside stays static. */
   parallax?: boolean;
+  /** Fades the boxes into the background around the container's center (in
+   * relative %, so it scales with the container at any breakpoint) so
+   * content placed on top — like the hero heading — reads cleanly instead
+   * of fighting a wall of boxes underneath it. */
+  revealCenter?: boolean;
 }
 
 /**
  * The site's "grid that reacts to you" motif — shared by the landing-page
  * hero and the auth-screen aside so both get the same fix in one place.
  *
- * Previously this was ~100-120 individual `<span>`s with a per-cell CSS
- * `:hover`, which (a) required the pointer to land on one exact ~cell-sized
- * box to do anything, and (b) used percentage widths that produced a
- * different, sometimes-ragged column count at every breakpoint. This version
- * is two CSS background patterns (no per-cell DOM cost, so it can't distort)
- * plus a soft glow + a primary-tinted copy of the grid masked to a circle
- * that follows the pointer — genuinely interactive at any position over the
- * whole area, not just exact cell hits. `onPointerMove` (not `onMouseMove`)
- * so touch/pen input drives it too.
+ * Two aligned `auto-fill`/`minmax` CSS grids of real bordered, rounded
+ * boxes stacked on top of each other: a dim base layer, and a primary-
+ * tinted copy masked to a circle that follows the pointer via
+ * `onPointerMove` (covers touch/pen, not just mouse) so it lights up
+ * wherever the pointer actually is, not just on an exact tiny cell hit.
  */
-export default function GridBackdrop({ className, parallax = false }: GridBackdropProps) {
+export default function GridBackdrop({
+  className,
+  parallax = false,
+  revealCenter = false,
+}: GridBackdropProps) {
   const reduceMotion = useReducedMotion();
   const { scrollY } = useScroll();
   const y = useTransform(scrollY, [0, 800], [0, parallax && !reduceMotion ? 120 : 0]);
@@ -59,13 +71,14 @@ export default function GridBackdrop({ className, parallax = false }: GridBackdr
     pointerY.set(-9999);
   };
 
-  const glow = useMotionTemplate`radial-gradient(320px circle at ${pointerX}px ${pointerY}px, var(--color-primary) 0%, transparent 70%)`;
-  const spotlightMask = useMotionTemplate`radial-gradient(220px circle at ${pointerX}px ${pointerY}px, black, transparent 70%)`;
+  const glow = useMotionTemplate`radial-gradient(380px circle at ${pointerX}px ${pointerY}px, var(--color-primary) 0%, transparent 70%)`;
+  const spotlightMask = useMotionTemplate`radial-gradient(260px circle at ${pointerX}px ${pointerY}px, black, transparent 70%)`;
 
-  const lineStyle = (color: string) => ({
-    backgroundImage: `linear-gradient(to right, ${color} 1px, transparent 1px), linear-gradient(to bottom, ${color} 1px, transparent 1px)`,
-    backgroundSize: `${CELL}px ${CELL}px`,
-  });
+  const gridStyle = {
+    display: "grid",
+    gridTemplateColumns: `repeat(auto-fill, minmax(${CELL}px, 1fr))`,
+    gap: `${GAP}px`,
+  };
 
   return (
     <motion.div
@@ -75,8 +88,12 @@ export default function GridBackdrop({ className, parallax = false }: GridBackdr
       onPointerLeave={handlePointerLeave}
       className={cn("absolute inset-0 overflow-hidden", className)}
     >
-      {/* Base pattern — always visible, independent of pointer position. */}
-      <div className="absolute inset-0 opacity-40" style={lineStyle("var(--color-border)")} />
+      {/* Base boxes — always visible, independent of pointer position. */}
+      <div style={gridStyle} className="absolute inset-0 opacity-70">
+        {cells.map((_, i) => (
+          <div key={i} className="aspect-square rounded-xl border border-border/50" />
+        ))}
+      </div>
 
       {/* Soft ambient glow under the pointer. */}
       <motion.div
@@ -84,16 +101,30 @@ export default function GridBackdrop({ className, parallax = false }: GridBackdr
         style={{ background: glow }}
       />
 
-      {/* Primary-tinted copy of the same pattern, masked to a circle that
+      {/* Primary-tinted copy of the same boxes, masked to a circle that
           tracks the pointer — the part that actually reacts. */}
       <motion.div
+        style={{ ...gridStyle, WebkitMaskImage: spotlightMask, maskImage: spotlightMask }}
         className="pointer-events-none absolute inset-0"
-        style={{
-          ...lineStyle("var(--color-primary)"),
-          WebkitMaskImage: spotlightMask,
-          maskImage: spotlightMask,
-        }}
-      />
+      >
+        {cells.map((_, i) => (
+          <div key={i} className="aspect-square rounded-xl border border-primary/70 bg-primary/10" />
+        ))}
+      </motion.div>
+
+      {/* Fades the boxes to background around the center so overlaid
+          content (e.g. the hero heading) reads cleanly against plain space
+          instead of a wall of boxes. */}
+      {revealCenter && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 65% 60% at 50% 42%, var(--background) 40%, transparent 85%)",
+          }}
+        />
+      )}
     </motion.div>
   );
 }

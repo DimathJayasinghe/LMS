@@ -14,7 +14,7 @@ import GridBackdrop from "@/components/custom/GridBackdrop";
 export default function Grid() {
   return (
     <div className="absolute inset-x-0 top-0 -z-10 h-[80vh] overflow-hidden">
-      <GridBackdrop parallax />
+      <GridBackdrop parallax revealCenter />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background to-transparent" />
     </div>
   );
