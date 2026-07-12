@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 import AuthAside from "@/components/custom/AuthAside";
 import { PasswordInput } from "@/components/custom/PasswordInput";
@@ -63,6 +63,13 @@ export default function LoginPage() {
 
       <main className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-sm">
+          <Link
+            href="/home"
+            className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" aria-hidden />
+            Back
+          </Link>
           <h1 className="text-4xl font-bold tracking-tight">Welcome back</h1>
           <p className="mt-2 mb-8 text-muted-foreground">
             Sign in to continue to your classes.
