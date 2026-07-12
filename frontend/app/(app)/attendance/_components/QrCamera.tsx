@@ -46,10 +46,17 @@ export function QrCamera({ onDecode, onError }: Props) {
     const video = videoRef.current;
     if (!video) return;
 
+    // Prefer the rear/environment camera for scanning (`ideal` falls back to
+    // any camera on laptops). decodeFromConstraints is more reliable on mobile
+    // than passing an undefined deviceId.
     reader
-      .decodeFromVideoDevice(undefined, video, (result) => {
-        if (result) onDecodeRef.current(result.getText());
-      })
+      .decodeFromConstraints(
+        { audio: false, video: { facingMode: { ideal: "environment" } } },
+        video,
+        (result) => {
+          if (result) onDecodeRef.current(result.getText());
+        },
+      )
       .then((c) => {
         if (cancelled) c.stop();
         else controls = c;
@@ -64,7 +71,7 @@ export function QrCamera({ onDecode, onError }: Props) {
 
   return (
     <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-black">
-      <video ref={videoRef} className="size-full object-cover" muted playsInline />
+      <video ref={videoRef} className="size-full object-cover" autoPlay muted playsInline />
       <div className="pointer-events-none absolute inset-6 rounded-xl border-2 border-white/70" />
     </div>
   );
