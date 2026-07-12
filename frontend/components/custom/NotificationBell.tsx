@@ -84,7 +84,9 @@ export function NotificationBell() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-80 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg"
+          // Mobile-first: a fixed, viewport-inset panel so it never runs off the
+          // screen; on sm+ it becomes an anchored dropdown under the bell.
+          className="fixed inset-x-2 top-16 z-50 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <p className="text-sm font-medium text-foreground">Notifications</p>
