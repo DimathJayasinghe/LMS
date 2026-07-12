@@ -139,6 +139,40 @@ Aggregate one month's payments for the admin dashboard.
   > `collectedTotal` sums `amount` over `status = SUCCESS` for the month. Route is registered
   > **before** `GET /:id` so `summary` isn't parsed as a payment id.
 
+### 4c. Financial Report (Super Admin)
+Institute-wide financial analytics powering the `/admin/reports` page.
+
+- **URL:** `/reports`
+- **Method:** `GET`
+- **Auth:** Required (Role: `SUPER_ADMIN` **only** — front-desk `ADMIN` is bounced with 403)
+- **Query Params:** `month` (optional, `YYYY-MM`; defaults to the current payment month)
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "month": "2026-07",
+      "trend": [
+        { "month": "2025-08", "collected": "0.00", "paidCount": 0 },
+        { "month": "2026-07", "collected": "39500.00", "paidCount": 13 }
+      ],
+      "byCourse": [
+        { "courseId": "…", "name": "Chemistry", "year": 2026, "collected": "7000.00", "paidCount": 2 }
+      ],
+      "byMethod": [
+        { "method": "ONLINE", "collected": "26000.00", "paidCount": 8 }
+      ],
+      "outstanding": { "count": 9, "expected": "28000.00" }
+    }
+  }
+  ```
+  > `trend` is always exactly **12 entries**, oldest→newest, ending at `month`, zero-filled where a
+  > month has no `SUCCESS` payments. `byCourse`/`byMethod` aggregate `SUCCESS` payments for `month`
+  > (byCourse sorted by collected desc). `outstanding` counts **active** enrolments with no `SUCCESS`
+  > payment for `month`, and sums their course `monthlyFee` as `expected`. All money values are
+  > decimal strings (`"N.NN"`). Route is registered **before** `GET /:id` so `reports` isn't parsed
+  > as a payment id.
+
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.
 

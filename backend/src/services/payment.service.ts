@@ -1,4 +1,4 @@
-import { ClassType, NotificationType, PaymentStatus, Prisma, Role } from '@prisma/client';
+import { ClassType, NotificationType, PaymentMethod, PaymentStatus, Prisma, Role } from '@prisma/client';
 import xlsx from 'xlsx';
 import { prisma } from '@/config/database';
 import { env } from '@/config/env';
@@ -450,6 +450,99 @@ export const getPaymentsSummary = async (month: string): Promise<MonthPaymentSum
 		pendingCount,
 		failedCount,
 	};
+};
+
+// ─── Financial Reports (Super Admin) ──────────────────────
+
+export interface FinancialReport {
+	month: string;
+	/** 12 months ending at `month`, zero-filled. */
+	trend: { month: string; collected: string; paidCount: number }[];
+	byCourse: { courseId: string; name: string; year: number | null; collected: string; paidCount: number }[];
+	byMethod: { method: PaymentMethod; collected: string; paidCount: number }[];
+	/** Active enrollments with no SUCCESS payment this month. */
+	outstanding: { count: number; expected: string };
+}
+
+/** The N `YYYY-MM` labels ending at (and including) `month`, oldest first. */
+const monthsEndingAt = (month: string, n: number): string[] => {
+	const [y, m] = month.split('-').map(Number) as [number, number];
+	const labels: string[] = [];
+	for (let i = n - 1; i >= 0; i -= 1) {
+		const d = new Date(Date.UTC(y, m - 1 - i, 1));
+		labels.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+	}
+	return labels;
+};
+
+const money = (v: unknown): string => new Prisma.Decimal((v as Prisma.Decimal | number | string) ?? 0).toFixed(2);
+
+/**
+ * Owner financial report for a month: 12-month revenue trend, per-course and
+ * per-method breakdowns (SUCCESS only), and outstanding fees (active
+ * enrollments unpaid this month). Read-only; SUPER_ADMIN-gated at the route.
+ */
+export const getFinancialReport = async (month: string): Promise<FinancialReport> => {
+	const trendMonths = monthsEndingAt(month, 12);
+
+	const [trendRows, byCourseRows, methodRows, outstandingRows] = await Promise.all([
+		prisma.payment.groupBy({
+			by: ['paymentMonth'],
+			where: { status: PaymentStatus.SUCCESS, paymentMonth: { in: trendMonths } },
+			_sum: { amount: true },
+			_count: { _all: true },
+		}),
+		prisma.$queryRaw<Array<{ id: string; name: string; year: number | null; total: unknown; cnt: bigint }>>`
+			SELECT c.id, c.name, c.year, SUM(p.amount) AS total, COUNT(*) AS cnt
+			FROM "Payment" p
+			JOIN "Enrollment" e ON e.id = p."enrollmentId"
+			JOIN "Course" c ON c.id = e."courseId"
+			WHERE p.status = 'SUCCESS' AND p."paymentMonth" = ${month}
+			GROUP BY c.id, c.name, c.year
+			ORDER BY total DESC
+		`,
+		prisma.payment.groupBy({
+			by: ['method'],
+			where: { status: PaymentStatus.SUCCESS, paymentMonth: month },
+			_sum: { amount: true },
+			_count: { _all: true },
+		}),
+		prisma.$queryRaw<Array<{ cnt: bigint; expected: unknown }>>`
+			SELECT COUNT(*) AS cnt, COALESCE(SUM(c."monthlyFee"), 0) AS expected
+			FROM "Enrollment" e
+			JOIN "Course" c ON c.id = e."courseId"
+			WHERE e."isActive" = true
+			AND NOT EXISTS (
+				SELECT 1 FROM "Payment" p
+				WHERE p."enrollmentId" = e.id AND p."paymentMonth" = ${month} AND p.status = 'SUCCESS'
+			)
+		`,
+	]);
+
+	const trendMap = new Map(trendRows.map((r) => [r.paymentMonth, r]));
+	const trend = trendMonths.map((m) => {
+		const r = trendMap.get(m);
+		return { month: m, collected: money(r?._sum.amount), paidCount: r?._count._all ?? 0 };
+	});
+
+	const byCourse = byCourseRows.map((r) => ({
+		courseId: r.id,
+		name: r.name,
+		year: r.year,
+		collected: money(r.total),
+		paidCount: Number(r.cnt),
+	}));
+
+	const byMethod = methodRows.map((r) => ({
+		method: r.method,
+		collected: money(r._sum.amount),
+		paidCount: r._count._all,
+	}));
+
+	const out = outstandingRows[0];
+	const outstanding = { count: Number(out?.cnt ?? 0), expected: money(out?.expected) };
+
+	return { month, trend, byCourse, byMethod, outstanding };
 };
 
 export const listMyPayments = async (

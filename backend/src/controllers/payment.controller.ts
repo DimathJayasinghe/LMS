@@ -14,7 +14,9 @@ import {
 	payhereNotifySchema,
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
+	financialReportQuerySchema,
 } from '@/schemas/payment.schema';
+import { getCurrentPaymentMonth } from '@/services/access.service';
 
 type RequestWithFile = Request & { file?: Express.Multer.File };
 
@@ -60,6 +62,16 @@ export const listPayments = asyncHandler(async (req: Request, res: Response): Pr
 export const getPaymentsSummary = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { month } = paymentsSummaryQuerySchema.parse(req.query);
 	const data = await PaymentService.getPaymentsSummary(month);
+
+	res.status(200).json({
+		status: 'success',
+		data,
+	});
+});
+
+export const getFinancialReport = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { month } = financialReportQuerySchema.parse(req.query);
+	const data = await PaymentService.getFinancialReport(month ?? getCurrentPaymentMonth());
 
 	res.status(200).json({
 		status: 'success',
