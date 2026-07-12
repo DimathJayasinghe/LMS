@@ -130,6 +130,31 @@ services:
       - lms
     restart: unless-stopped
 
+  # ── DEV-ONLY: frontend in the stack ─────────────────────────────────────────
+  # In production the frontend ships to Vercel and this service does NOT exist —
+  # nginx only proxies /api (see nginx.conf). For local/ngrok development we run
+  # Next here so the WHOLE app is reachable on one origin (and one ngrok URL).
+  # Browser calls the API same-origin (`/api`, baked at build); SSR hits the
+  # backend directly (INTERNAL_API_URL). ⚠️ Remove this service for prod.
+  frontend:
+    image: lms-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://backend:5000/api
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lms
+    restart: unless-stopped
+
   # ── DEV-ONLY public tunnel ──────────────────────────────────────────────────
   # Exposes the local stack (via nginx:80) on a public HTTPS URL so external
   # webhooks — Bunny (video), Zoom (live-class attendance), PayHere (payments) —
