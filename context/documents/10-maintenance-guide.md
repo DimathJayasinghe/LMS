@@ -105,7 +105,7 @@ Use it for: publishing results (flip flag + snapshot), bulk payment import (all 
 | **Atomicity** — half-applied multi-step change | `prisma.$transaction([...])` |
 | **Consistency** — invalid state | Zod at the edge + DB constraints + `onDelete: Restrict` (never `Cascade`) |
 | **Isolation** — double-click / TOCTOU | Idempotency middleware (Redis `SET NX` lock) + unique constraints |
-| **Durability** — data survives crashes | Postgres on Neon (WAL + PITR); Redis AOF for the queue |
+| **Durability** — data survives crashes | Self-hosted Postgres on a persistent volume + the `backup` service (verified, encrypted, off-site dumps — see [12](./12-data-backup-and-recovery.md)); Redis AOF for the queue |
 
 ### 4.3 Race conditions — prefer the constraint
 `findUnique` → `if exists throw` → `create` is **not atomic**; two requests can both pass the check. The idempotency middleware closes this for high-stakes POSTs, but for everyday uniqueness, lean on the DB constraint and handle the conflict:
@@ -136,7 +136,7 @@ Before opening a PR:
 3. **Boundary intact** — no Prisma in controllers; services take `AuthenticatedUser`, not `req`.
 4. **Authorization** — new mutating route has `requireRole(...)`; course-scoped writes call `assertCourseAccess`.
 5. **Validation** — every body/param/query has a Zod schema in `validate` middleware.
-6. **Migrations** — schema change reviewed as SQL (see `Guides_And_Summeries/database_migration_guide.md`); additive-first; test on a Neon branch.
+6. **Migrations** — schema change reviewed as SQL (see `Guides_And_Summeries/database_migration_guide.md`); additive-first; test on a scratch DB restored from a backup (`backup restore --dbname lms_staging --create`), then `prisma migrate deploy` in-container.
 7. **Audit** — privileged mutations call `AuditService.log(...)`.
 8. **Secrets** — nothing added to git; new env var registered in `config/env.ts` (fail-fast).
 

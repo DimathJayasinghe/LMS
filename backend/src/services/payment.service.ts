@@ -1,9 +1,10 @@
-import { ClassType, PaymentStatus, Prisma, Role } from '@prisma/client';
+import { ClassType, NotificationType, PaymentStatus, Prisma, Role } from '@prisma/client';
 import xlsx from 'xlsx';
 import { prisma } from '@/config/database';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { AppError } from '@/utils/app-error';
+import * as NotificationService from '@/services/notification.service';
 import {
 	PAYHERE_CHECKOUT_PATH,
 	PAYHERE_COUNTRY,
@@ -370,6 +371,18 @@ export const handlePayhereNotify = async (
 		'PayHere payment updated',
 	);
 
+	if (nextStatus === PaymentStatus.SUCCESS) {
+		void NotificationService.dispatch({
+			type: NotificationType.PAYMENT_CONFIRMED,
+			userId: updated.enrollment.userId,
+			link: '/payments',
+			params: {
+				courseName: updated.enrollment.course.name,
+				paymentMonth: updated.paymentMonth,
+			},
+		});
+	}
+
 	return updated;
 };
 
@@ -403,6 +416,40 @@ export const listPayments = async (
 	]);
 
 	return { data, count };
+};
+
+export interface MonthPaymentSummary {
+	month: string;
+	/** Sum of `amount` over SUCCESS payments that month, as a fixed(2) string. */
+	collectedTotal: string;
+	paidCount: number;
+	pendingCount: number;
+	failedCount: number;
+}
+
+/**
+ * Aggregate the month's payments for the admin dashboard: total collected
+ * (SUCCESS only) plus per-status counts. Read-only; SUPER_ADMIN/ADMIN gated at
+ * the route.
+ */
+export const getPaymentsSummary = async (month: string): Promise<MonthPaymentSummary> => {
+	const [sum, paidCount, pendingCount, failedCount] = await Promise.all([
+		prisma.payment.aggregate({
+			_sum: { amount: true },
+			where: { paymentMonth: month, status: PaymentStatus.SUCCESS },
+		}),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.SUCCESS } }),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.PENDING } }),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.FAILED } }),
+	]);
+
+	return {
+		month,
+		collectedTotal: (sum._sum.amount ?? new Prisma.Decimal(0)).toFixed(2),
+		paidCount,
+		pendingCount,
+		failedCount,
+	};
 };
 
 export const listMyPayments = async (
@@ -454,7 +501,7 @@ export const overridePayment = async (
 		throw new AppError('PAYMENT_NOT_FOUND', 404, 'Payment not found.');
 	}
 
-	return prisma.payment.update({
+	const updated = await prisma.payment.update({
 		where: { id: paymentId },
 		data: {
 			status: input.status,
@@ -463,6 +510,19 @@ export const overridePayment = async (
 		},
 		select: paymentSelect,
 	});
+
+	void NotificationService.dispatch({
+		type: NotificationType.PAYMENT_OVERRIDDEN,
+		userId: updated.enrollment.userId,
+		link: '/payments',
+		params: {
+			courseName: updated.enrollment.course.name,
+			paymentMonth: updated.paymentMonth,
+			status: updated.status,
+		},
+	});
+
+	return updated;
 };
 
 const normalizeHeader = (header: string): string => {

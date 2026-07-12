@@ -21,7 +21,16 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 > **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**, `STAFF` now means **`ADMIN`**.
 
-> **New user fields** (account setup): `setupCompleted` (bool), `nicFrontUrl`, `nicBackUrl` (R2 keys). The student setup flow (NIC upload + per-institute barcodes) is not yet exposed — see Progress Tracker.
+> **Account setup** (implemented 2026-07-10): `setupCompleted` (bool) is exposed on `/auth/me`
+> along with `nicFrontUploaded`/`nicBackUploaded` (presence-only booleans — `/auth/me` never
+> returns the raw R2 key or a signed URL, to keep every SSR page's auth check cheap). The
+> NIC-upload and institute-barcode endpoints themselves live under `/api/users/me/...` — see
+> the dedicated `account-setup.endpoints.md` rather than duplicating them here.
+>
+> **`User.barcode` (the LMS QR) is now auto-generated at registration** (`LMS-<indexNumber
+> padded to 6 digits>`), not left null until an admin assigns one. `PATCH /:id/barcode` below
+> still exists for admin override/reassignment (e.g. a lost card) — it just no longer has to be
+> the *first* time a student gets a value.
 
 ## Response Shapes (Current Implementation)
 
@@ -210,6 +219,13 @@ Updates the user's role. ADMIN only.
 
 Activates or deactivates a user.
 
+> **Privileged-target guard (fixed 2026-07-10):** an `ADMIN` (front-desk) actor can no longer
+> change the status of an `ADMIN` or `SUPER_ADMIN` target — only `SUPER_ADMIN` can. Previously
+> the route was gated only by `requireRole(SUPER_ADMIN, ADMIN)` with no check on the *target's*
+> role, so front-desk could deactivate a super-admin account (this happened for real — see
+> `AuditLog`). The check lives in `UserService.updateStatus` via `assertCanManagePrivilegedTarget`,
+> shared with `PATCH /:id/barcode` below (same actor/target pattern, same fix).
+
 **Request body**
 
 ```json
@@ -233,6 +249,7 @@ Activates or deactivates a user.
 - 400 validation error
 - 401 auth middleware error
 - 403 forbidden (role guard)
+- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`
 - 404 `USER_NOT_FOUND` (service error shape)
 
 ### PATCH `/:id/barcode`
@@ -262,5 +279,6 @@ Assigns a barcode to a user.
 - 400 validation error
 - 401 auth middleware error
 - 403 forbidden (role guard)
+- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN` (same guard as `/:id/status`)
 - 404 `USER_NOT_FOUND` (service error shape)
 - 409 `BARCODE_IN_USE` (service error shape)

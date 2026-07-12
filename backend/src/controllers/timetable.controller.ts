@@ -8,6 +8,7 @@ import {
   createTimetableSlotSchema,
   generateSessionsSchema,
   listTimetableQuerySchema,
+  publicUpcomingQuerySchema,
   timetableSlotIdParamSchema,
   updateTimetableSlotSchema,
 } from '@/schemas/timetable.schema';
@@ -31,6 +32,13 @@ export const listSlots = asyncHandler(async (req: Request, res: Response): Promi
   const slots = await TimetableService.listSlots(query, req.user!);
 
   res.status(200).json({ status: 'success', data: slots, count: slots.length });
+});
+
+export const listPublicUpcoming = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const query = publicUpcomingQuerySchema.parse(req.query);
+  const sessions = await TimetableService.listPublicUpcoming(query);
+
+  res.status(200).json({ status: 'success', data: sessions, count: sessions.length });
 });
 
 export const getSlotById = asyncHandler(async (req: Request, res: Response): Promise<void> => {

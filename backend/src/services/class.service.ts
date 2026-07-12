@@ -5,6 +5,7 @@ import type { AuthenticatedUser } from '@/types/auth.types';
 import type {
 	CreateClassInput,
 	ListClassesQuery,
+	ListPublicClassesQuery,
 	UpdateClassInput,
 } from '@/schemas/class.schema';
 
@@ -141,6 +142,51 @@ export const createClass = async (
 			backdropUrl: input.backdropUrl ?? null,
 		},
 		select: classSelect,
+	});
+};
+
+interface PublicClassSummary {
+	id: string;
+	name: string;
+	year: number;
+	description: string | null;
+	monthlyFee: Prisma.Decimal;
+	bannerUrl: string | null;
+	backdropUrl: string | null;
+	subject: { name: string };
+	teacher: { name: string };
+}
+
+const publicClassSelect = {
+	id: true,
+	name: true,
+	year: true,
+	description: true,
+	monthlyFee: true,
+	bannerUrl: true,
+	backdropUrl: true,
+	subject: { select: { name: true } },
+	teacher: { select: { name: true } },
+} satisfies Prisma.CourseSelect;
+
+/**
+ * Marketing-page listing — no auth, so no email/phone/NIC/enrollment counts,
+ * just what a prospective student needs to decide whether to sign up. Active
+ * courses only (soft-disabled courses never appear pre-login).
+ */
+export const listPublicClasses = async (
+	query: ListPublicClassesQuery,
+): Promise<PublicClassSummary[]> => {
+	const where: Prisma.CourseWhereInput = {
+		...(query.search ? buildSearchFilter(query.search) : {}),
+		...(query.year ? { year: query.year } : {}),
+		isActive: true,
+	};
+
+	return prisma.course.findMany({
+		where,
+		select: publicClassSelect,
+		orderBy: { year: 'desc' },
 	});
 };
 

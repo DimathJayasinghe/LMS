@@ -7,6 +7,7 @@ import { assertCourseAccess } from '@/services/class.service';
 import type {
   CreateTimetableSlotInput,
   ListTimetableQuery,
+  PublicUpcomingQuery,
   UpdateTimetableSlotInput,
 } from '@/schemas/timetable.schema';
 
@@ -99,6 +100,35 @@ export const deleteSlot = async (id: string, actor: AuthenticatedUser): Promise<
   await assertCourseAccess(existing.courseId, actor);
   // Generated sessions keep (onDelete: SetNull nulls their timetableSlotId).
   await prisma.timetableSlot.delete({ where: { id } });
+};
+
+// ─── Public upcoming timetable (marketing page, unauthenticated) ───────
+// Deliberately its own query, not a reuse of `listSlots`/`slotSelect`:
+// callers here have no session and no enrollment, so the select list must
+// never include zoomLink/zoomMeetingId/zoomPassword — those are the actual
+// join credentials for a live class and gating them behind
+// enrolled+paid is a hard invariant (see CLAUDE.md "Content protection").
+export const listPublicUpcoming = async (query: PublicUpcomingQuery) => {
+  const now = new Date();
+  const to = new Date(now.getTime() + (query.days ?? 14) * 24 * 60 * 60 * 1000);
+
+  return prisma.classSession.findMany({
+    where: {
+      date: { gte: now, lte: to },
+      deletedAt: null,
+      course: { isActive: true },
+    },
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      durationMinutes: true,
+      classType: true,
+      course: { select: { name: true, subject: { select: { name: true } } } },
+    },
+    orderBy: { date: 'asc' },
+    take: query.limit ?? 20,
+  });
 };
 
 // ─── Session generation from slots ─────────────────────────

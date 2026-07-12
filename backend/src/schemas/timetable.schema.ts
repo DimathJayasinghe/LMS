@@ -32,6 +32,14 @@ export const listTimetableQuerySchema = z.object({
 
 export type ListTimetableQuery = z.infer<typeof listTimetableQuerySchema>;
 
+// ─── Public upcoming timetable (marketing page, unauthenticated) ─────────
+export const publicUpcomingQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(30).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+export type PublicUpcomingQuery = z.infer<typeof publicUpcomingQuerySchema>;
+
 // ─── Manual session generation ─────────────────────────────
 export const generateSessionsSchema = z
   .object({

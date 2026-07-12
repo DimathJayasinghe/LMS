@@ -87,6 +87,9 @@ export function AnimatedGridPattern({
 
   useEffect(() => {
     if (dimensions.width && dimensions.height) {
+      // Vendored Magic UI component: squares are regenerated once the measured
+      // container dimensions are known. Intentional post-measure sync.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSquares(generateSquares(numSquares))
     }
   }, [dimensions.width, dimensions.height, generateSquares, numSquares])

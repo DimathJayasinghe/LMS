@@ -43,6 +43,27 @@ export const RATE_LIMIT_STREAM_WINDOW_MS = 60 * 1000;
 /** Allowed timestamp skew for Zoom webhook signatures (seconds) */
 export const ZOOM_WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
 
+// ─── Zoom Live Classes (Meeting SDK) ────────────────────────
+
+/**
+ * Meeting SDK JWT lifetime. Zoom enforces a 30-min FLOOR (`exp - iat` must be
+ * between 1800 and 172800 seconds) — this is the minimum allowed, kept short
+ * per the "single-use, short-lived" join-token requirement. We don't persist
+ * or reuse a token across page loads; a fresh one is minted on every join.
+ */
+export const ZOOM_SDK_JWT_TTL_SECONDS = 30 * 60;
+
+/** Server-to-Server OAuth access tokens last ~1h; cache a bit under that. */
+export const ZOOM_ACCESS_TOKEN_CACHE_TTL_SECONDS = 50 * 60;
+
+/**
+ * Throttle window for join-token issuance, per (session, user) — Redis SET NX.
+ * Blocks trivial rapid-fire re-issuance (e.g. two tabs opened at once, a
+ * link handed to someone else and clicked seconds later) without punishing a
+ * legitimate reconnect a few seconds on.
+ */
+export const ZOOM_JOIN_TOKEN_THROTTLE_SECONDS = 8;
+
 // ─── Idempotency ────────────────────────────────────────────
 
 /** HTTP header name for the client-provided idempotency key */
@@ -58,6 +79,20 @@ export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
  * Long enough to watch a full lecture; short enough to limit replay attacks.
  */
 export const BUNNY_TOKEN_TTL_SECONDS = 4 * 60 * 60;
+
+/** Bunny Stream management API base (create video, etc). */
+export const BUNNY_MANAGEMENT_BASE_URL = 'https://video.bunnycdn.com/library';
+
+/** Bunny's TUS (resumable upload) endpoint — the browser uploads here directly. */
+export const BUNNY_TUS_UPLOAD_ENDPOINT = 'https://video.bunnycdn.com/tusupload';
+
+/**
+ * How long a signed TUS upload authorization stays valid (2 hours). Generous
+ * relative to the 15-min R2 presign TTL because raw lecture video files are
+ * large and teachers may be on slow connections; tus-js-client resumes across
+ * network drops as long as the signature hasn't expired.
+ */
+export const BUNNY_UPLOAD_AUTH_TTL_SECONDS = 2 * 60 * 60;
 
 // ─── Exams + R2 (Paper PDFs) ───────────────────────────────
 
@@ -86,6 +121,20 @@ export const ANSWER_PDF_URL_TTL_SECONDS = 15 * 60;
 
 /** R2 object key prefix for student answer PDFs */
 export const ANSWER_PDF_KEY_PREFIX = 'answers';
+
+// ─── Student Account Setup (NIC photos, R2) ────────────────
+
+/** Allowed MIME types for NIC front/back photo uploads */
+export const NIC_IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png'] as const;
+
+/** Max upload size per NIC photo (10 MB) */
+export const NIC_IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+
+/** Presigned URL lifetime for NIC photo uploads (15 minutes) */
+export const NIC_IMAGE_URL_TTL_SECONDS = 15 * 60;
+
+/** R2 object key prefix for NIC photos */
+export const NIC_IMAGE_KEY_PREFIX = 'nic';
 
 // ─── Payments + PayHere ───────────────────────────────────
 
@@ -161,6 +210,11 @@ export const AUDIT_ACTION = {
 	USER_DEACTIVATED: 'USER_DEACTIVATED',
 	BARCODE_ASSIGNED: 'BARCODE_ASSIGNED',
 
+	// Account setup (NIC photos + institute barcodes)
+	NIC_UPLOAD_URL: 'NIC_UPLOAD_URL',
+	STUDENT_BARCODE_ASSIGNED: 'STUDENT_BARCODE_ASSIGNED',
+	STUDENT_BARCODE_REMOVED: 'STUDENT_BARCODE_REMOVED',
+
 	// Subjects
 	SUBJECT_CREATED: 'SUBJECT_CREATED',
 	SUBJECT_UPDATED: 'SUBJECT_UPDATED',
@@ -195,6 +249,10 @@ export const AUDIT_ACTION = {
 	MARKS_SUBMITTED: 'MARKS_SUBMITTED',
 	RESULTS_PUBLISHED: 'RESULTS_PUBLISHED',
 
+	// Enrollments
+	ENROLLMENT_CREATED: 'ENROLLMENT_CREATED',
+	ENROLLMENT_CANCELLED: 'ENROLLMENT_CANCELLED',
+
 	// Payments
 	PAYMENT_OVERRIDDEN: 'PAYMENT_OVERRIDDEN',
 	PAYMENT_BULK_UPLOAD: 'PAYMENT_BULK_UPLOAD',
@@ -202,18 +260,35 @@ export const AUDIT_ACTION = {
 	// Attendance
 	ATTENDANCE_MANUAL: 'ATTENDANCE_MANUAL',
 	ATTENDANCE_BARCODE: 'ATTENDANCE_BARCODE',
+
+	// Notifications
+	NOTIFICATION_SETTING_UPDATED: 'NOTIFICATION_SETTING_UPDATED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
-// ─── SMS Templates ─────────────────────────────────────────
-// Mustache-style placeholders. New events require only a new entry here.
-
-export const SMS_TEMPLATES = {
-	RESULTS_PUBLISHED: 'Results published for {examTitle}. Log in to view.',
-	PAYMENT_CONFIRMED: 'Payment received for {courseName} {paymentMonth}. Thank you.',
-	PAYMENT_OVERRIDE: 'Payment for {courseName} {paymentMonth} has been updated. Status: {status}.',
+// ─── Notification Templates ─────────────────────────────────
+// Keyed by NotificationType (Prisma enum) — one title + message pair for the
+// in-app Notification row, one body for SMS. Mustache-style {placeholder}s
+// filled by NotificationService.dispatch(). New scenarios need only a new
+// entry here (plus the matching NotificationType enum value in schema.prisma).
+export const NOTIFICATION_TEMPLATES = {
+	RESULTS_PUBLISHED: {
+		title: 'Results published',
+		inApp: 'Results for {examTitle} are now available.',
+		sms: 'Results published for {examTitle}. Log in to view.',
+	},
+	PAYMENT_CONFIRMED: {
+		title: 'Payment confirmed',
+		inApp: 'Your payment for {courseName} ({paymentMonth}) was confirmed.',
+		sms: 'Payment received for {courseName} {paymentMonth}. Thank you.',
+	},
+	PAYMENT_OVERRIDDEN: {
+		title: 'Payment updated',
+		inApp: 'Your payment for {courseName} ({paymentMonth}) was updated. Status: {status}.',
+		sms: 'Payment for {courseName} {paymentMonth} has been updated. Status: {status}.',
+	},
 } as const;
 
-export type SmsTemplateKey = keyof typeof SMS_TEMPLATES;
+export type NotificationTemplateKey = keyof typeof NOTIFICATION_TEMPLATES;
 

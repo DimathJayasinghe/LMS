@@ -1,5 +1,6 @@
 import { Role } from '@prisma/client';
 import { z } from 'zod';
+import { NIC_IMAGE_CONTENT_TYPES, NIC_IMAGE_MAX_SIZE_BYTES } from '@/utils/constants';
 
 // ─── List Users ─────────────────────────────────────────────
 export const listUsersQuerySchema = z.object({
@@ -35,3 +36,29 @@ export const assignBarcodeSchema = z.object({
 });
 
 export type AssignBarcodeInput = z.infer<typeof assignBarcodeSchema>;
+
+// ─── Account Setup (NIC upload + institute barcodes) ────────
+export const nicUploadUrlSchema = z.object({
+	side: z.enum(['FRONT', 'BACK']),
+	fileName: z
+		.string()
+		.trim()
+		.min(1)
+		.max(120)
+		.regex(/^[A-Za-z0-9._-]+\.(jpg|jpeg|png)$/i, 'File name must be a .jpg/.jpeg/.png without spaces.'),
+	contentType: z.enum(NIC_IMAGE_CONTENT_TYPES),
+	fileSizeBytes: z.coerce.number().int().positive().max(NIC_IMAGE_MAX_SIZE_BYTES),
+});
+
+export type NicUploadUrlInput = z.infer<typeof nicUploadUrlSchema>;
+
+export const createStudentBarcodeSchema = z.object({
+	instituteId: z.string().uuid(),
+	barcode: z.string().trim().min(1).max(50),
+});
+
+export type CreateStudentBarcodeInput = z.infer<typeof createStudentBarcodeSchema>;
+
+export const studentBarcodeIdParamSchema = z.object({
+	barcodeId: z.string().uuid(),
+});

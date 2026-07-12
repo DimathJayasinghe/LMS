@@ -1,4 +1,4 @@
-import { ExamType, Prisma, Role, SubmissionStatus } from '@prisma/client';
+import { ExamType, NotificationType, Prisma, Role, SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/constants';
@@ -11,6 +11,7 @@ import type {
   McqAnswersInput,
 } from '@/schemas/submission.schema';
 import * as StreamService from '@/services/stream.service';
+import * as NotificationService from '@/services/notification.service';
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -28,6 +29,8 @@ interface SubmissionListItem {
   id: string;
   status: SubmissionStatus;
   answerPdfUrl: string | null;
+  answers: Prisma.JsonValue | null;
+  writtenAnswers: Prisma.JsonValue | null;
   marks: number | null;
   feedback: string | null;
   submittedAt: Date;
@@ -40,6 +43,7 @@ interface SubmissionResult {
   status: SubmissionStatus;
   answerPdfUrl: string | null;
   answers: Prisma.JsonValue | null;
+  writtenAnswers: Prisma.JsonValue | null;
   marks: number | null;
   feedback: string | null;
   examId: string;
@@ -47,6 +51,23 @@ interface SubmissionResult {
   submittedAt: Date;
   gradedAt: Date | null;
   updatedAt: Date;
+}
+
+/** A student's own submission, joined with the parent exam. Marks/feedback are
+ *  only populated once the exam's results are published. */
+interface MySubmissionItem {
+  id: string;
+  status: SubmissionStatus;
+  answers: Prisma.JsonValue | null;
+  writtenAnswers: Prisma.JsonValue | null;
+  answerPdfUrl: string | null;
+  marks: number | null;
+  feedback: string | null;
+  published: boolean;
+  examId: string;
+  exam: { id: string; title: string; type: ExamType; totalMarks: number; isPublished: boolean };
+  submittedAt: Date;
+  gradedAt: Date | null;
 }
 
 interface StartSubmissionResult {
@@ -71,6 +92,7 @@ const submissionDetailSelect = {
   status: true,
   answerPdfUrl: true,
   answers: true,
+  writtenAnswers: true,
   marks: true,
   feedback: true,
   examId: true,
@@ -84,6 +106,8 @@ const submissionListSelect = {
   id: true,
   status: true,
   answerPdfUrl: true,
+  answers: true,
+  writtenAnswers: true,
   marks: true,
   feedback: true,
   submittedAt: true,
@@ -127,7 +151,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
   select: {
     id: true; title: true; type: true; startTime: true; endTime: true;
     totalMarks: true; isPublished: true; deletedAt: true; mcqPayload: true;
-    courseId: true;
+    allowTypedAnswers: true; allowPdfUpload: true; courseId: true;
   };
 }>> => {
   const exam = await prisma.exam.findUnique({
@@ -135,7 +159,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
     select: {
       id: true, title: true, type: true, startTime: true, endTime: true,
       totalMarks: true, isPublished: true, deletedAt: true, mcqPayload: true,
-      courseId: true,
+      allowTypedAnswers: true, allowPdfUpload: true, courseId: true,
     },
   });
 
@@ -193,16 +217,45 @@ export const startSubmission = async (
     throw new AppError('ALREADY_SUBMITTED', 409, 'You have already submitted for this exam.');
   }
 
-  // Validate input based on exam type
+  // Validate input based on exam type + enabled answer channels.
   const requiresMcq = exam.type === ExamType.MCQ || exam.type === ExamType.HYBRID;
-  const requiresPdf = exam.type === ExamType.WRITTEN || exam.type === ExamType.HYBRID;
+  const requiresWritten = exam.type === ExamType.WRITTEN || exam.type === ExamType.HYBRID;
+
+  const hasTyped =
+    input.writtenAnswers !== undefined && Object.keys(input.writtenAnswers).length > 0;
+  const usingPdf = requiresWritten && !!input.fileName;
 
   if (requiresMcq && !input.answers) {
     throw new AppError('MCQ_ANSWERS_REQUIRED', 400, 'MCQ answers are required for this exam type.');
   }
 
-  if (requiresPdf && !input.fileName) {
-    throw new AppError('FILE_NAME_REQUIRED', 400, 'File name is required for written submissions.');
+  // Typed answers are only valid for WRITTEN/HYBRID when the channel is enabled.
+  if (hasTyped) {
+    if (!requiresWritten) {
+      throw new AppError('TYPED_NOT_ALLOWED', 400, 'Typed answers are not accepted for this exam type.');
+    }
+    if (!exam.allowTypedAnswers) {
+      throw new AppError('TYPED_NOT_ALLOWED', 400, 'Typed answers are disabled for this exam.');
+    }
+  }
+
+  // PDF uploads are only valid for WRITTEN/HYBRID when the channel is enabled.
+  if (input.fileName) {
+    if (!requiresWritten) {
+      throw new AppError('PDF_NOT_ALLOWED', 400, 'PDF uploads are not accepted for this exam type.');
+    }
+    if (!exam.allowPdfUpload) {
+      throw new AppError('PDF_NOT_ALLOWED', 400, 'PDF uploads are disabled for this exam.');
+    }
+  }
+
+  // WRITTEN/HYBRID needs the written portion via exactly one channel (typed OR PDF).
+  if (requiresWritten && !hasTyped && !usingPdf) {
+    throw new AppError(
+      'WRITTEN_ANSWER_REQUIRED',
+      400,
+      'Provide your written answers online or upload an answer PDF.',
+    );
   }
 
   // Validate MCQ answers against the exam's question set
@@ -218,9 +271,11 @@ export const startSubmission = async (
     mcqMarks = gradeSubmission(payload, input.answers);
   }
 
-  // For MCQ-only exams, submission completes immediately with auto-graded marks
+  // Auto-complete when there's nothing to upload: MCQ-only (auto-graded) or a
+  // typed-only written submission. A PDF submission stays UPLOADING until the
+  // browser finalizes it via PATCH /:id/complete.
   const isMcqOnly = exam.type === ExamType.MCQ;
-  const status = isMcqOnly ? SubmissionStatus.COMPLETED : SubmissionStatus.UPLOADING;
+  const status = usingPdf ? SubmissionStatus.UPLOADING : SubmissionStatus.COMPLETED;
 
   const submission = await prisma.submission.create({
     data: {
@@ -228,6 +283,10 @@ export const startSubmission = async (
       examId: input.examId,
       status,
       answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull,
+      writtenAnswers: hasTyped
+        ? (input.writtenAnswers as unknown as Prisma.InputJsonObject)
+        : Prisma.JsonNull,
+      // Only MCQ-only exams auto-grade; written work waits for a marker.
       marks: isMcqOnly ? mcqMarks : null,
       gradedAt: isMcqOnly ? new Date() : null,
     },
@@ -236,8 +295,8 @@ export const startSubmission = async (
 
   const result: StartSubmissionResult = { submission };
 
-  // Generate presigned upload URL for answer PDF
-  if (requiresPdf && input.fileName && input.contentType) {
+  // Generate presigned upload URL for the answer PDF (PDF channel only).
+  if (usingPdf && input.fileName && input.contentType) {
     const uploadKey = `${ANSWER_PDF_KEY_PREFIX}/${exam.id}/${userId}/${input.fileName}`;
 
     const uploadUrl = await createR2PresignedPutUrl(
@@ -364,6 +423,54 @@ export const listSubmissions = async (
   return results;
 };
 
+// ─── List My Submissions (Student) ────────────────────────
+// A student reads their own submissions. Marks + feedback stay hidden until the
+// exam's results are published (exam.isPublished) — the gate that "results when
+// published" depends on. Also surfaces an "already submitted" signal per exam.
+
+export const listMySubmissions = async (
+  userId: string,
+  examId?: string,
+): Promise<MySubmissionItem[]> => {
+  const submissions = await prisma.submission.findMany({
+    where: { userId, ...(examId ? { examId } : {}) },
+    select: {
+      ...submissionDetailSelect,
+      exam: { select: { id: true, title: true, type: true, totalMarks: true, isPublished: true } },
+    },
+    orderBy: { submittedAt: 'desc' },
+  });
+
+  const results: MySubmissionItem[] = [];
+  for (const sub of submissions) {
+    const published = sub.exam.isPublished;
+
+    // Let a student review their own uploaded PDF (short-lived, own file).
+    let answerPdfUrl: string | null = null;
+    if (sub.answerPdfUrl) {
+      answerPdfUrl = await createR2PresignedGetUrl(sub.answerPdfUrl, ANSWER_PDF_URL_TTL_SECONDS);
+    }
+
+    results.push({
+      id: sub.id,
+      status: sub.status,
+      answers: sub.answers,
+      writtenAnswers: sub.writtenAnswers,
+      answerPdfUrl,
+      // Marks/feedback are only visible once results are published.
+      marks: published ? sub.marks : null,
+      feedback: published ? sub.feedback : null,
+      published,
+      examId: sub.examId,
+      exam: sub.exam,
+      submittedAt: sub.submittedAt,
+      gradedAt: published ? sub.gradedAt : null,
+    });
+  }
+
+  return results;
+};
+
 // ─── Submit Marks ──────────────────────────────────────────
 // Markers grade a specific submission. Idempotency is handled at the route level.
 
@@ -437,11 +544,12 @@ export const publishResults = async (examId: string): Promise<PublishResult> => 
     );
   }
 
-  // Count submissions for the response summary
-  const [totalSubmissions, gradedSubmissions] = await Promise.all([
-    prisma.submission.count({ where: { examId } }),
+  // Count submissions for the response summary, and collect who to notify
+  const [submitters, gradedSubmissions] = await Promise.all([
+    prisma.submission.findMany({ where: { examId }, select: { userId: true } }),
     prisma.submission.count({ where: { examId, marks: { not: null } } }),
   ]);
+  const totalSubmissions = submitters.length;
 
   const publishedAt = new Date();
 
@@ -456,6 +564,18 @@ export const publishResults = async (examId: string): Promise<PublishResult> => 
     examTitle: exam.title,
     publishedAt: publishedAt.toISOString(),
   });
+
+  // Per-student in-app + SMS notification (settings-gated) — the broadcast
+  // above is a course-wide "refresh your view" signal, this is the durable,
+  // per-user "you have a new result" inbox entry.
+  for (const { userId } of submitters) {
+    void NotificationService.dispatch({
+      type: NotificationType.RESULTS_PUBLISHED,
+      userId,
+      link: `/exams/${examId}`,
+      params: { examTitle: exam.title },
+    });
+  }
 
   return {
     examId,

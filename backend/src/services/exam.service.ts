@@ -46,6 +46,8 @@ interface ExamListItem {
 	endTime: Date;
 	totalMarks: number;
 	isPublished: boolean;
+	allowTypedAnswers: boolean;
+	allowPdfUpload: boolean;
 	courseId: string;
 	deletedAt: Date | null;
 	createdAt: Date;
@@ -77,6 +79,8 @@ const examListSelect = {
 	endTime: true,
 	totalMarks: true,
 	isPublished: true,
+	allowTypedAnswers: true,
+	allowPdfUpload: true,
 	courseId: true,
 	deletedAt: true,
 	createdAt: true,

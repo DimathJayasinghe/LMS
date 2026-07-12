@@ -29,6 +29,12 @@ interface SafeUser {
   address: string | null;
   city: string | null;
   createdAt: Date;
+  /** Present on `/auth/me` — the caller's own account fields. */
+  barcode?: string | null;
+  setupCompleted?: boolean;
+  /** Presence-only flags — never the raw R2 key (see account-setup.endpoints.md). */
+  nicFrontUploaded?: boolean;
+  nicBackUploaded?: boolean;
 }
 
 // ─── Token Helpers (private) ─────────────────────────────────
@@ -53,12 +59,26 @@ const parseDurationToSeconds = (duration: string): number => {
 // in backend/src/services/auth.service.ts
 const signAccessToken = (payload: JwtPayload): string => {
   const expiresInSeconds = parseDurationToSeconds(env.JWT_ACCESS_EXPIRES_IN);
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: expiresInSeconds });
+  // jwtid: see signRefreshToken below — same fix, for the same reason
+  // (consistency; access tokens aren't persisted so they can't 500, but two
+  // byte-identical tokens for the same user is still worth avoiding).
+  return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
+    expiresIn: expiresInSeconds,
+    jwtid: crypto.randomUUID(),
+  });
 };
 
 const signRefreshToken = (payload: JwtPayload): string => {
   const expiresInSeconds = parseDurationToSeconds(env.JWT_REFRESH_EXPIRES_IN);
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: expiresInSeconds });
+  // jwtid makes every issuance unique even for the same user within the same
+  // second (iat has only second-granularity) — without it, two refresh tokens
+  // signed in the same second are byte-identical, so their SHA-256 hashes
+  // collide on RefreshToken.token's unique constraint and the second issuance
+  // 500s (e.g. register() immediately followed by login()).
+  return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+    expiresIn: expiresInSeconds,
+    jwtid: crypto.randomUUID(),
+  });
 };
 
 /**
@@ -68,6 +88,14 @@ const signRefreshToken = (payload: JwtPayload): string => {
 const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
+
+/**
+ * The LMS QR (`User.barcode`) is issued to every student automatically —
+ * derived from their already-unique `indexNumber`, so it's guaranteed
+ * collision-free without a generate-and-retry loop. Admins can still
+ * reassign it later via `PATCH /users/:id/barcode` (e.g. a lost card).
+ */
+const formatLmsBarcode = (indexNumber: number): string => `LMS-${String(indexNumber).padStart(6, '0')}`;
 
 /** Strips sensitive fields from user objects before returning to client */
 const toSafeUser = (user: {
@@ -126,7 +154,7 @@ export const register = async (
 
   const hashedPassword = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
 
-  const user = await prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       email: data.email,
       name: data.name,
@@ -138,6 +166,13 @@ export const register = async (
       // role defaults to STUDENT (schema default)
       // deletedAt defaults to null (active)
     },
+  });
+
+  // indexNumber is only known once autoincrement assigns it, so the LMS QR
+  // (derived from it) is a follow-up write, not part of the create() data.
+  const user = await prisma.user.update({
+    where: { id: created.id },
+    data: { barcode: formatLmsBarcode(created.indexNumber) },
   });
 
   const tokens = await generateAndStoreTokens(user.id, user.role);
@@ -289,6 +324,10 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
       address: true,
       city: true,
       createdAt: true,
+      barcode: true,
+      setupCompleted: true,
+      nicFrontUrl: true,
+      nicBackUrl: true,
     },
   });
 
@@ -296,7 +335,17 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
     throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
   }
 
-  return toSafeUser(user);
+  // `/auth/me` returns the caller their own barcode (entrance QR) + setup gate,
+  // which the shared `toSafeUser` shape omits. NIC upload state is a
+  // presence flag only — never the raw R2 key — so every SSR page's auth
+  // check doesn't pay for a signed-URL round trip it doesn't need.
+  return {
+    ...toSafeUser(user),
+    barcode: user.barcode,
+    setupCompleted: user.setupCompleted,
+    nicFrontUploaded: Boolean(user.nicFrontUrl),
+    nicBackUploaded: Boolean(user.nicBackUrl),
+  };
 };
 
 // ─── Private Helpers ─────────────────────────────────────────

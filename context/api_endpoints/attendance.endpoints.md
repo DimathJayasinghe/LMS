@@ -18,6 +18,42 @@ Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` =
 
 - `AttendanceSource` now includes **`QR`** (default) alongside `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`.
 - Institute-scoped scanning (`(instituteId, barcode) → student`, per-institute barcodes) is a follow-up.
+- **`TEACHER` can now read attendance for their own courses (2026-07-10)** — `GET /session/:sessionId`
+  and `GET /class/:classId` were `SUPER_ADMIN`+`ADMIN` only; added `TEACHER`, scoped via
+  `assertCourseAccess` (same ownership gate as session/exam/video mutations).
+
+## Attendance channels — current state vs. intent (clarified 2026-07-10)
+
+There are three intended ways attendance gets marked; here's exactly what's real today for each,
+since the schema anticipates more than the code currently does:
+
+1. **Entrance scan (`POST /scan`).** Today this is the **only** scan path, and it resolves purely
+   via `User.barcode` (the LMS QR — see `account-setup.endpoints.md`). It always writes
+   `source: BARCODE` regardless of whether the front-desk device read a QR code or a plain
+   barcode — **`AttendanceSource.QR` is defined in the schema but no code path currently produces
+   it.** It does **not** use `StudentBarcode`/`instituteId` at all — an institute's own barcode
+   reader scanning a student's institute-issued card has no way to resolve through our system
+   yet. Wiring `/scan` (or a new institute-scoped variant) to also check `(instituteId, barcode) →
+   student` via `StudentBarcode` is the real follow-up here, not just a docs note.
+   - **Frontend (2026-07-11):** the staff `/attendance` scanner is now built (`StaffScanner`) —
+     pick class → session, then check students in by **keyboard-wedge** (a focused field a scan-gun
+     types into + Enter) **or camera QR** (`@zxing/browser`), with a live deduped roster and a
+     **manual mark-by-name** fallback (`GET /users?search` → `POST /manual`). ⚠️ **Camera mode needs
+     a secure context** — `getUserMedia` only works over **HTTPS or `localhost`**; on a plain-HTTP
+     LAN IP the camera is hidden and staff use the wedge field. Both input paths still send the same
+     `barcode` string to `POST /scan`.
+2. **Live Zoom join (`POST /zoom-webhook`).** Fully automatic — Zoom's `meeting.participant_joined`
+   webhook fires on join, matched by `classSession.zoomMeetingId`. This is real and working
+   (subject to real Zoom credentials being configured — see `live-class.endpoints.md`).
+3. **Recorded video watch (`POST /video`).** **Wired (2026-07-12).** `VideoPlayer.tsx` now attaches
+   to Bunny's iframe via **Player.js** and fires `POST /attendance/video { classSessionId }` **once**
+   the student has actually watched **≥ 30s** (accumulated forward playback only — seeks/scrubs don't
+   count; `lib/watch.ts` `accumulateWatch`), or on `ended` for shorter clips. Best-effort (never
+   blocks/erroring over the player). The endpoint upserts (`source: ZOOM_WEBHOOK`, unchanged) and is
+   now **enrollment-gated**: `markVideoAttendance` runs `assertStudentContentAccess(actor, courseId,
+   { requirePaid: false })`, so a student can only mark attendance for a course they're enrolled in
+   (previously any student could POST for any session). Payment is already enforced when the stream
+   token is issued, so enrollment is the gate here.
 
 ## Attendance Record Shape
 
@@ -58,8 +94,8 @@ Returned in most endpoints:
 | POST | `/zoom-webhook` | None | Webhook from Zoom for `participant.joined`. |
 | POST | `/manual` | `ADMIN`, `STAFF` | Manually mark attendance (reconciliation). |
 | POST | `/video` | `STUDENT` | Log attendance on video playback. |
-| GET | `/session/:sessionId` | `ADMIN`, `STAFF` | Get all attendance for a specific session. |
-| GET | `/class/:classId` | `ADMIN`, `STAFF` | Get paginated attendance for a course. |
+| GET | `/session/:sessionId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get all attendance for a specific session. |
+| GET | `/class/:classId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get paginated attendance for a course. |
 | GET | `/student/:userId` | Any | Get student's attendance history (role-scoped). |
 
 ## Endpoint Details
@@ -193,7 +229,11 @@ Student logs attendance for watching a recorded video.
 
 ### GET `/session/:sessionId`
 
-Get a list of all attendance records for a specific class session. 
+Get a list of all attendance records for a specific class session.
+
+> **`TEACHER`-scoped (2026-07-10):** a `TEACHER` may only view sessions belonging to a course they
+> own (`assertCourseAccess`, the same ownership gate used by session/exam/video mutations —
+> `context/documents/06-progress-tracker.md` Phase S). `SUPER_ADMIN`/`ADMIN` are unrestricted.
 
 **Success (200)**
 
@@ -209,12 +249,16 @@ Get a list of all attendance records for a specific class session.
 
 **Errors**
 
-- 401 unauthorized (requires ADMIN or STAFF role)
+- 401 unauthorized (requires SUPER_ADMIN, ADMIN, or TEACHER)
+- 403 `FORBIDDEN_COURSE` — TEACHER does not own the session's course
 - 404 `CLASS_SESSION_NOT_FOUND`
 
 ### GET `/class/:classId`
 
 Get paginated attendance history across all sessions in a specific course.
+
+> **`TEACHER`-scoped (2026-07-10):** same `assertCourseAccess` gate as `/session/:sessionId` above
+> — a TEACHER only sees courses they own.
 
 **Query Parameters**
 
@@ -237,7 +281,8 @@ Get paginated attendance history across all sessions in a specific course.
 
 **Errors**
 
-- 401 unauthorized (requires ADMIN or STAFF role)
+- 401 unauthorized (requires SUPER_ADMIN, ADMIN, or TEACHER)
+- 403 `FORBIDDEN_COURSE` — TEACHER does not own the course
 - 404 `CLASS_NOT_FOUND`
 
 ### GET `/student/:userId`

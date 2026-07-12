@@ -33,6 +33,10 @@ Thumbs.db
 prisma/*.db
 prisma/migrations/**/migration_lock.toml
 
+# database backups (dumps live on the host; never commit them)
+/backups/
+backups/
+
 # misc
 *.tsbuildinfo
 next-env.d.ts

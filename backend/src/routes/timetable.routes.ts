@@ -8,11 +8,22 @@ import {
   createTimetableSlotSchema,
   generateSessionsSchema,
   listTimetableQuerySchema,
+  publicUpcomingQuerySchema,
   timetableSlotIdParamSchema,
   updateTimetableSlotSchema,
 } from '@/schemas/timetable.schema';
 
 export const timetableRoutes = Router();
+
+// ─── Public (unauthenticated) — marketing landing page ──────
+// No verifyToken: the select list in the service is deliberately narrow
+// (no zoomLink/zoomMeetingId/zoomPassword) so this never leaks live-class
+// join credentials to an anonymous visitor.
+timetableRoutes.get(
+  '/public/upcoming',
+  validateQuery(publicUpcomingQuerySchema),
+  TimetableController.listPublicUpcoming,
+);
 
 // ─── Slots (recurring weekly template) ──────────────────────
 // Managed by Super Admin, the course's Teacher, or a front-desk Admin.

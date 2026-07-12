@@ -1,14 +1,11 @@
 import { Request, Response } from 'express';
-import { PaymentStatus } from '@prisma/client';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as PaymentService from '@/services/payment.service';
 import * as AuditService from '@/services/audit.service';
-import * as SmsNotificationService from '@/services/sms-notification.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
-import { prisma } from '@/config/database';
 import {
 	initiatePaymentSchema,
 	listMyPaymentsQuerySchema,
@@ -16,6 +13,7 @@ import {
 	overridePaymentSchema,
 	payhereNotifySchema,
 	paymentIdParamSchema,
+	paymentsSummaryQuerySchema,
 } from '@/schemas/payment.schema';
 
 type RequestWithFile = Request & { file?: Express.Multer.File };
@@ -36,12 +34,9 @@ export const initiatePayherePayment = asyncHandler(
 export const handlePayhereNotify = asyncHandler(
 	async (req: Request, res: Response): Promise<void> => {
 		const input = payhereNotifySchema.parse(req.body);
+		// Notification (in-app + settings-gated SMS) on confirmation is dispatched
+		// from PaymentService.handlePayhereNotify itself — see NotificationService.
 		const payment = await PaymentService.handlePayhereNotify(input);
-
-		// SMS on successful payment confirmation
-		if (payment.status === PaymentStatus.SUCCESS) {
-			void sendPaymentConfirmationSms(payment.id);
-		}
 
 		res.status(200).json({
 			status: 'success',
@@ -59,6 +54,16 @@ export const listPayments = asyncHandler(async (req: Request, res: Response): Pr
 		status: 'success',
 		data,
 		count,
+	});
+});
+
+export const getPaymentsSummary = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { month } = paymentsSummaryQuerySchema.parse(req.query);
+	const data = await PaymentService.getPaymentsSummary(month);
+
+	res.status(200).json({
+		status: 'success',
+		data,
 	});
 });
 
@@ -123,8 +128,8 @@ export const overridePayment = asyncHandler(
 			context: extractAuditContext(req),
 		});
 
-		// SMS to the student about payment status change
-		void sendPaymentOverrideSms(payment.id, input.status);
+		// Notification (in-app + settings-gated SMS) is dispatched from
+		// PaymentService.overridePayment itself — see NotificationService.
 
 		res.status(200).json({
 			status: 'success',
@@ -174,75 +179,11 @@ export const bulkUploadPayments = asyncHandler(
 );
 
 // ─── SMS Helpers ──────────────────────────────────────────
-
-/**
- * Send payment confirmation SMS after PayHere webhook confirms success.
- */
-const sendPaymentConfirmationSms = async (paymentId: string): Promise<void> => {
-	try {
-		const payment = await prisma.payment.findUnique({
-			where: { id: paymentId },
-			select: {
-				paymentMonth: true,
-				enrollment: {
-					select: {
-						user: { select: { id: true, phone: true } },
-						course: { select: { name: true } },
-					},
-				},
-			},
-		});
-
-		if (!payment?.enrollment.user.phone) return;
-
-		await SmsNotificationService.sendSms({
-			phoneNumber: payment.enrollment.user.phone,
-			templateKey: 'PAYMENT_CONFIRMED',
-			variables: {
-				courseName: payment.enrollment.course.name,
-				paymentMonth: payment.paymentMonth,
-			},
-			userId: payment.enrollment.user.id,
-		});
-	} catch (err) {
-		logger.error({ err, paymentId }, 'Failed to send payment confirmation SMS — non-blocking');
-	}
-};
-
-/**
- * Send SMS when an admin overrides a payment status.
- */
-const sendPaymentOverrideSms = async (paymentId: string, status: string): Promise<void> => {
-	try {
-		const payment = await prisma.payment.findUnique({
-			where: { id: paymentId },
-			select: {
-				paymentMonth: true,
-				enrollment: {
-					select: {
-						user: { select: { id: true, phone: true } },
-						course: { select: { name: true } },
-					},
-				},
-			},
-		});
-
-		if (!payment?.enrollment.user.phone) return;
-
-		await SmsNotificationService.sendSms({
-			phoneNumber: payment.enrollment.user.phone,
-			templateKey: 'PAYMENT_OVERRIDE',
-			variables: {
-				courseName: payment.enrollment.course.name,
-				paymentMonth: payment.paymentMonth,
-				status,
-			},
-			userId: payment.enrollment.user.id,
-		});
-	} catch (err) {
-		logger.error({ err, paymentId }, 'Failed to send payment override SMS — non-blocking');
-	}
-};
+// Payment-confirmed and payment-overridden notifications (in-app + SMS) are
+// now dispatched from PaymentService itself via NotificationService.dispatch
+// — see handlePayhereNotify/overridePayment in payment.service.ts. That
+// consolidation also means they now respect the super-admin's
+// NotificationSetting toggle, which these old per-controller calls didn't.
 
 /**
  * Placeholder for bulk payment SMS.

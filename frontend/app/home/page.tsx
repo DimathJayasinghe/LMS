@@ -1,78 +1,71 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import Nav from "@/components/custom/Nav";
-import Grid from "./_components/Grid";
-import StudentReviews from "./_components/StudentRevies";
-import Header from "./_components/Header";
-import CourseCard from "./_components/CourseCard";
 import Footer from "@/components/custom/Footer";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowAltCircleRight, faArrowRight, faStar } from "@fortawesome/free-solid-svg-icons";
-import styled from "styled-components";
+import Grid from "./_components/Grid";
+import StudentReviews from "./_components/StudentReviews";
+import Header from "./_components/Header";
+import FadeIn from "./_components/FadeIn";
+import Features from "./_components/Features";
+import SubjectShowcase from "./_components/SubjectShowcase";
+import HowItWorks from "./_components/HowItWorks";
+import Magnetic from "./_components/Magnetic";
+import ScrollReveal from "./_components/ScrollReveal";
+import { Separator } from "@/components/ui/separator";
 
-type BoxProps = {
-    top: number;
-    left: number;
-};
+export default function Home() {
+  return (
+    <>
+      {/* `relative` gives Grid's `absolute` backdrop a defined containing
+          block, instead of falling back to the nearest positioned ancestor
+          up the tree (fragile — see Grid.tsx for the stacking-context note). */}
+      <main className="relative overflow-hidden">
+        <Grid />
+        <Nav />
+        <FadeIn>
+          <StudentReviews />
+        </FadeIn>
+        <FadeIn delay={0.1}>
+          <Header />
+        </FadeIn>
+      </main>
 
-const Box = styled.div<BoxProps>`
-    width: 3rem;
-    height : 3rem;
-    position: absolute;
-    animation : pop 1s ease infinite;
-    top : ${props=>props.top}px;
-    left : ${props=>props.left}px;
+      {/* Breathing room + a visual break between the hero and the rest of
+          the page — otherwise Features' own top padding was the only thing
+          separating it from the hero, which read as cramped. */}
+      <div className="relative z-40 mx-auto flex max-w-4xl items-center px-6 py-16 sm:py-24">
+        <Separator className="flex-1" />
+        <span aria-hidden className="mx-4 shrink-0 text-border">
+          ✦
+        </span>
+        <Separator className="flex-1" />
+      </div>
 
-    @keyframes pop{
-        0%{
-            opacity : 0;
-        }
+      <Features />
+      <SubjectShowcase />
+      <HowItWorks />
 
-        50%{
-            opacity : 1;
-        }
-
-        100%{
-            opacity : 0;
-        }
-    }
-`
-
-
-
-export default function home() {
-    return <>
-        <main>
-            <Grid />
-            <Nav />
-            <StudentReviews />
-            <Header />
-        </main>
-
-        <section className="bg-gray-50 border-t border-gray-50 mt-60 min-h-400 z-40 p-10 pt-40">
-            <h1 className="text-gray-700 text-center text-5xl font-medium">Discover Classes</h1>
-            <p className="text-center max-w-200 leading-7 m-auto mt-4 italic">Find the best classes you want to join based on your interests, career goals, and skills you want to improve. Choose classes that are useful, engaging, and helpful for your future development.</p>
-
-            <div
-                data-name="cards-container"
-                className=" w-full flex flex-wrap gap-10 justify-center max-w-300 m-auto mt-10 "
+      <section className="z-40 border-t border-border bg-muted/40 px-6 py-24 text-center sm:py-32">
+        <ScrollReveal className="mx-auto flex max-w-2xl flex-col items-center">
+          <h2 className="text-2xl font-medium text-foreground sm:text-3xl">
+            Ready to get started?
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            Browse our current classes and find the one that fits your goals.
+          </p>
+          <Magnetic>
+            <Link
+              href="/courses"
+              className="mt-10 inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-primary-foreground transition hover:opacity-90"
             >
-                
-                {Array.from(new Array(9)).map((_ ,i)=><CourseCard key={i} />)}
+              Browse classes
+              <ArrowRight className="size-5" aria-hidden />
+            </Link>
+          </Magnetic>
+        </ScrollReveal>
+      </section>
 
-            </div>
-
-            <a
-                href="#"
-                data-name="button-discover-more-classes"
-                className="bg-black flex m-auto mt-10 mb-10 text-white items-center gap-3 p-5 pl-10 pr-10 rounded-full w-fit text-lg relative hover:scale-110 ease-initial duration-300"
-            >
-                All classes
-                <FontAwesomeIcon icon={faArrowRight} className="text-white w-5" />
-            </a>
-
-
-        </section>
-
-        <Footer />
-
+      <Footer />
     </>
+  );
 }

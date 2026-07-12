@@ -68,4 +68,7 @@ Body: any subset of `{ name, code, city, isActive }`. `200` → updated Institut
 
 > **Note — student institute barcodes**: registering a student's per-institute
 > barcode (`StudentBarcode`, unique per `(instituteId, barcode)`) is part of the
-> **account-setup flow**, which is not yet exposed (see Progress Tracker).
+> **account-setup flow** — see `account-setup.endpoints.md` (implemented 2026-07-10:
+> `GET/POST /api/users/me/institute-barcodes`, `DELETE .../:barcodeId`). It is optional, not
+> required for `setupCompleted`. Not yet wired: an institute-scoped *entrance scan* that resolves
+> `(instituteId, barcode) → student` — see `attendance.endpoints.md`'s channel-by-channel note.

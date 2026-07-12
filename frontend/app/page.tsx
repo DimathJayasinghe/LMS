@@ -1,7 +1,7 @@
+import { redirect } from "next/navigation";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col items-center justify-center h-full">
-    </div>
-  );
+// The landing page lives at /home. Send the root there until a dedicated
+// root experience exists (see context/frontend/06-frontend-roadmap.md).
+export default function RootPage() {
+  redirect("/home");
 }

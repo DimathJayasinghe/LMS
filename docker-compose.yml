@@ -1,10 +1,33 @@
 # Production stack for a SINGLE VPS.
-# nginx (reverse proxy) + backend (API) + worker (BullMQ) + redis.
-# Postgres is NOT here — it is managed by Neon (see backend/.env DATABASE_URL).
+# postgres (data) + nginx (TLS/proxy) + backend (API) + worker (BullMQ) + redis + backup.
+#
+# Postgres is SELF-HOSTED here on a persistent named volume (`pgdata`). The `backup`
+# service takes scheduled, verified, optionally-encrypted + off-site dumps to ./backups.
+# Nothing but the app touches the DB — postgres is NOT published to the host/internet.
+#
 # Deploy:  git pull && docker compose up -d --build
-# See context/documents/09-cost-and-hosting.md for the full runbook.
+# Runbooks: context/documents/09-cost-and-hosting.md, 12-data-backup-and-recovery.md
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB come from backend/.env.
+    env_file:
+      - ./backend/.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Deliberately NO `ports:` — the DB is reachable only inside the `lms` network.
+    healthcheck:
+      # $$ escapes Compose interpolation so the container shell expands the vars.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lms
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     ports:
@@ -32,8 +55,10 @@ services:
       PORT: "5000"
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     expose:
@@ -61,6 +86,8 @@ services:
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -82,9 +109,84 @@ services:
       - lms
     restart: unless-stopped
 
+  backup:
+    # Scheduled logical backups: pg_dump (custom format) → verify → (encrypt) →
+    # rotate (daily/weekly/monthly) → (off-site). See 12-data-backup-and-recovery.md.
+    build:
+      context: ./docker/backup
+    image: lms-backup
+    env_file:
+      - ./backend/.env
+    environment:
+      PGHOST: postgres
+    volumes:
+      # Bind mount so dumps live on the host FS — easy to copy off, and they survive
+      # `docker compose down -v`. Keep ./backups on a disk you also snapshot / ship off-site.
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - lms
+    restart: unless-stopped
+
+  # ── DEV-ONLY: frontend in the stack ─────────────────────────────────────────
+  # In production the frontend ships to Vercel and this service does NOT exist —
+  # nginx only proxies /api (see nginx.conf). For local/ngrok development we run
+  # Next here so the WHOLE app is reachable on one origin (and one ngrok URL).
+  # Browser calls the API same-origin (`/api`, baked at build); SSR hits the
+  # backend directly (INTERNAL_API_URL). ⚠️ Remove this service for prod.
+  frontend:
+    image: lms-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://backend:5000/api
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lms
+    restart: unless-stopped
+
+  # ── DEV-ONLY public tunnel ──────────────────────────────────────────────────
+  # Exposes the local stack (via nginx:80) on a public HTTPS URL so external
+  # webhooks — Bunny (video), Zoom (live-class attendance), PayHere (payments) —
+  # can reach it during local development. Reads NGROK_AUTHTOKEN (required) and
+  # an optional reserved NGROK_DOMAIN (for a URL that survives restarts) from
+  # backend/.env. ⚠️ REMOVE this whole service before hosting on a real domain.
+  ngrok:
+    image: ngrok/ngrok:latest
+    env_file:
+      - ./backend/.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$NGROK_AUTHTOKEN" ]; then
+          echo "ngrok: set NGROK_AUTHTOKEN in backend/.env (https://dashboard.ngrok.com/get-started/your-authtoken)"; sleep 86400
+        elif [ -n "$$NGROK_DOMAIN" ]; then
+          exec ngrok http http://nginx:80 --url="$$NGROK_DOMAIN" --log=stdout
+        else
+          exec ngrok http http://nginx:80 --log=stdout
+        fi
+    ports:
+      - "4040:4040" # ngrok web inspector + local API (see the live public URL here)
+    depends_on:
+      - nginx
+    networks:
+      - lms
+    restart: unless-stopped
+
 networks:
   lms:
     driver: bridge
 
 volumes:
   redis-data:
+  pgdata:

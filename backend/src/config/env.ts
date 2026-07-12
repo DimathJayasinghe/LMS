@@ -44,15 +44,29 @@ const envSchema = z.object({
   // Server starts without these; a clear AppError is thrown if they are missing
   // when a student tries to get a stream URL.
   BUNNY_API_KEY: z.string().default(''),
+  // Read-Only API key — the HMAC secret Bunny signs Stream webhooks with
+  // (https://docs.bunny.net/stream/webhooks).
+  BUNNY_READ_ONLY_API_KEY: z.string().default(''),
   BUNNY_LIBRARY_ID: z.string().default(''),
   // The pull-zone CDN base URL, e.g. https://vz-xxxxxxxx.b-cdn.net
   BUNNY_CDN_HOSTNAME: z.string().default(''),
+  // The library "Token Authentication Key" (Stream > library > Security), used to
+  // sign the embed player token: SHA256(tokenKey + videoId + expires).
+  BUNNY_TOKEN_KEY: z.string().default(''),
+  // Legacy shared secret (query param). Superseded by the HMAC signature above;
+  // kept for backward compatibility / optional defense-in-depth.
+  BUNNY_WEBHOOK_SECRET: z.string().default(''),
 
-  // Zoom (Webhooks)
+  // Zoom — Server-to-Server OAuth app (Webhooks + REST API: create meetings, fetch ZAK).
   ZOOM_WEBHOOK_SECRET: z.string().default(''),
   ZOOM_ACCOUNT_ID: z.string().default(''),
   ZOOM_CLIENT_ID: z.string().default(''),
   ZOOM_CLIENT_SECRET: z.string().default(''),
+  // Zoom — Meeting SDK app (separate app in the Zoom Marketplace; signs the
+  // browser's join/start JWT — see live-class.endpoints.md). NOT the same
+  // credentials as the Server-to-Server OAuth app above.
+  ZOOM_SDK_KEY: z.string().default(''),
+  ZOOM_SDK_SECRET: z.string().default(''),
 
   // PayHere (Payments)
   // Optional at boot — validated at runtime when checkout is requested.
@@ -103,8 +117,14 @@ if (env.NODE_ENV === 'production') {
   if (!env.BUNNY_API_KEY) missing.push('BUNNY_API_KEY');
   if (!env.BUNNY_LIBRARY_ID) missing.push('BUNNY_LIBRARY_ID');
   if (!env.BUNNY_CDN_HOSTNAME) missing.push('BUNNY_CDN_HOSTNAME');
+  if (!env.BUNNY_WEBHOOK_SECRET) missing.push('BUNNY_WEBHOOK_SECRET');
 
   if (!env.ZOOM_WEBHOOK_SECRET) missing.push('ZOOM_WEBHOOK_SECRET');
+  if (!env.ZOOM_ACCOUNT_ID) missing.push('ZOOM_ACCOUNT_ID');
+  if (!env.ZOOM_CLIENT_ID) missing.push('ZOOM_CLIENT_ID');
+  if (!env.ZOOM_CLIENT_SECRET) missing.push('ZOOM_CLIENT_SECRET');
+  if (!env.ZOOM_SDK_KEY) missing.push('ZOOM_SDK_KEY');
+  if (!env.ZOOM_SDK_SECRET) missing.push('ZOOM_SDK_SECRET');
 
   if (!env.PAYHERE_MERCHANT_ID) missing.push('PAYHERE_MERCHANT_ID');
   if (!env.PAYHERE_MERCHANT_SECRET) missing.push('PAYHERE_MERCHANT_SECRET');

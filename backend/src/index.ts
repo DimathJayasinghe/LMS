@@ -17,6 +17,7 @@ import { subjectRoutes } from './routes/subject.routes';
 import { instituteRoutes } from './routes/institute.routes';
 import { timetableRoutes } from './routes/timetable.routes';
 import { classRoutes } from './routes/class.routes';
+import { enrollmentRoutes } from './routes/enrollment.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
@@ -24,6 +25,8 @@ import { submissionRoutes } from './routes/submission.routes';
 import { paymentRoutes } from './routes/payment.routes';
 import { streamRoutes } from './routes/stream.routes';
 import { auditRoutes } from './routes/audit.routes';
+import { notificationRoutes } from './routes/notification.routes';
+import { notificationSettingRoutes } from './routes/notification-setting.routes';
 
 initSentry();
 
@@ -77,6 +80,7 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/institutes', instituteRoutes);
   app.use('/api/timetable', timetableRoutes);
   app.use('/api/classes', classRoutes);
+  app.use('/api/enrollments', enrollmentRoutes);
   app.use('/api/attendance', attendanceRoutes);
   // Extra throttle on the stream-token endpoint (on top of the global limiter).
   app.use('/api/videos/:id/stream', streamLimiter);
@@ -86,6 +90,8 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/payments', paymentRoutes);
   app.use('/api/stream', streamRoutes);
   app.use('/api/audit-logs', auditRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/notification-settings', notificationSettingRoutes);
 
   // ─── Global Error Handler (must be last) ─────────────────────
   app.use(errorHandler);

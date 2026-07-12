@@ -126,7 +126,7 @@ export const markVideoAttendance = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = videoAttendanceSchema.parse(req.body);
     const attendance = await AttendanceService.markVideoAttendance(
-      req.user!.userId,
+      req.user!,
       input.classSessionId,
     );
 
@@ -143,7 +143,7 @@ export const markVideoAttendance = asyncHandler(
 export const getAttendanceBySession = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { sessionId } = attendanceSessionParamsSchema.parse(req.params);
-    const records = await AttendanceService.getAttendanceBySession(sessionId);
+    const records = await AttendanceService.getAttendanceBySession(sessionId, req.user!);
 
     res.status(200).json({
       status: 'success',
@@ -159,7 +159,7 @@ export const getAttendanceByCourse = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId } = attendanceClassParamsSchema.parse(req.params);
     const query = attendanceQuerySchema.parse(req.query);
-    const { records, total } = await AttendanceService.getAttendanceByCourse(classId, query);
+    const { records, total } = await AttendanceService.getAttendanceByCourse(classId, query, req.user!);
 
     res.status(200).json({
       status: 'success',

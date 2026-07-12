@@ -12,6 +12,9 @@ Generates the payload required to redirect a student to PayHere checkout.
 - **URL:** `/initiate` or `/payhere/checkout`
 - **Method:** `POST`
 - **Auth:** Required (Role: `STUDENT`)
+- **Headers:** `Idempotency-Key: <uuid>` **required** (high-stakes POST invariant; `checkIdempotency`
+  middleware rejects a missing/non-UUID key with 400). The frontend mints one per attempt in
+  `lib/payhere.ts`'s `initiatePayherePayment`.
 - **Body:**
   ```json
   {
@@ -19,6 +22,8 @@ Generates the payload required to redirect a student to PayHere checkout.
     "paymentMonth": "YYYY-MM"
   }
   ```
+  > `enrollmentId` comes from the student's **active** enrollments — see
+  > `enrollments.endpoints.md` (`GET /api/enrollments/my`).
 - **Success Response (200 OK):**
   ```json
   {
@@ -111,6 +116,29 @@ Specific endpoint to check the status of a PayHere transaction.
   }
   ```
 
+### 4b. Month Summary (Admin)
+Aggregate one month's payments for the admin dashboard.
+
+- **URL:** `/summary`
+- **Method:** `GET`
+- **Auth:** Required (Role: `SUPER_ADMIN`, `ADMIN`)
+- **Query Params:** `month` (required, `YYYY-MM`)
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "month": "2026-07",
+      "collectedTotal": "22000.00",
+      "paidCount": 7,
+      "pendingCount": 1,
+      "failedCount": 0
+    }
+  }
+  ```
+  > `collectedTotal` sums `amount` over `status = SUCCESS` for the month. Route is registered
+  > **before** `GET /:id` so `summary` isn't parsed as a payment id.
+
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.
 
@@ -156,3 +184,70 @@ Upload an Excel file to process multiple payments at once.
 - **Method:** `POST`
 - **Auth:** Required (Role: `ADMIN`, `STAFF`)
 - **Body:** `multipart/form-data` with `file` field.
+
+---
+
+## Sandbox testing (PayHere)
+
+`PAYHERE_BASE_URL=https://sandbox.payhere.lk` in `backend/.env`. Use PayHere's published
+**sandbox test cards** on the checkout page — these are dummy numbers that only work against the
+sandbox merchant, never a real charge:
+
+Source: <https://support.payhere.lk/sandbox-and-testing>. For **Name on Card / CVV / Expiry** enter
+any valid-looking data (future expiry). **Any card other than the ones below results in a failed
+payment.**
+
+**Successful payment:**
+
+| Card | Number |
+|---|---|
+| Visa | `4916217501611292` |
+| MasterCard | `5307732125531191` |
+| Amex | `346781005510225` |
+
+**Decline scenarios** (to exercise our failure handling):
+
+| Scenario | Visa | MasterCard | Amex |
+|---|---|---|---|
+| Insufficient Funds | `4024007194349121` | `5459051433777487` | `370787711978928` |
+| Limit Exceeded | `4929119799365646` | `5491182243178283` | `340701811823469` |
+| Do Not Honor | `4929768900837248` | `5388172137367973` | `374664175202812` |
+| Network Error | `4024007120869333` | `5237980565185003` | `373433500205887` |
+
+Sandbox never processes a real charge — outcomes are simulated. Sandbox is a **separate** deployment
+from Live; sandbox credentials/details can't be reused for a Live account.
+
+### In-app (onsite) checkout
+Paying uses PayHere's **onsite JS checkout** (`payhere.startPayment`, loaded via
+`components/custom/PayhereScript.tsx` → `lib/payhere.ts` `startPayherePayment`): the checkout opens
+in a **modal on our own page** (card fields inside PayHere's secure iframe — we never touch card
+data, no PCI scope), falling back to the classic full-page redirect only if `payhere.js` is blocked.
+`sandbox` is derived from the checkout host. `onCompleted` is **not** authoritative — SUCCESS/FAILED
+is confirmed by the notify webhook (below); the UI shows "submitted, confirming" until then.
+
+### Callback URLs — required for an end-to-end status flip
+A PayHere charge only becomes `SUCCESS` in our DB when PayHere calls **`notify_url`**
+(`/api/payments/payhere/notify`, the signed webhook) — **not** when the browser returns. Therefore:
+
+- **`PAYHERE_NOTIFY_URL` must be publicly reachable by PayHere's servers.** On a laptop/VPS behind
+  NAT this means a tunnel (e.g. `ngrok http 80` → set `PAYHERE_NOTIFY_URL` to
+  `https://<tunnel>/api/payments/payhere/notify`). With a non-reachable notify URL, the student can
+  complete checkout but the payment **stays `PENDING`** (and the admin summary's *Collected* won't
+  move) — this is expected, not a bug.
+- **`PAYHERE_RETURN_URL` / `PAYHERE_CANCEL_URL`** should point back into the app
+  (e.g. `http://localhost:3000/payments`). ⚠️ As of 2026-07-11 all three are the placeholder
+  `localhost.com` in `backend/.env`; set them before real sandbox testing or the post-payment
+  redirect leaves the app.
+
+## Idempotency & duplicate-charge safety (verified 2026-07-11)
+
+`POST /initiate` requires a UUID `Idempotency-Key` (§1). Behaviour, confirmed against the live stack:
+
+- **Same key replayed** (e.g. the API client's 401→refresh→retry) → the first response is cached and
+  replayed; the handler does **not** run twice.
+- **Different key, same `(enrollmentId, paymentMonth)`** (e.g. a user clicking Pay twice) → the
+  service `upsert`s the **same** `Payment` row (unique `@@unique([enrollmentId, paymentMonth])`), so
+  there is never a second row and never a second charge — the final charge is settled by PayHere
+  against that one `order_id = payment.id`.
+- The frontend also disables the Pay button while a request is in flight (`StudentPayments`,
+  `EnrollPanel`), so an in-flight double-click can't fire two requests.

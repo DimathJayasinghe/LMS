@@ -5,7 +5,8 @@ export type SseEventType =
   | 'CONNECTED'
   | 'RESULTS_PUBLISHED'
   | 'TIMETABLE_UPDATED'
-  | 'EXAM_CONTROL';
+  | 'EXAM_CONTROL'
+  | 'NOTIFICATION_CREATED';
 
 /** Optional filters — omitted means all connected clients */
 export interface SseAudience {

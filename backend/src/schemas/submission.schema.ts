@@ -14,6 +14,16 @@ export const mcqAnswersSchema = z.record(
 
 export type McqAnswersInput = z.infer<typeof mcqAnswersSchema>;
 
+// ─── Written Answers (typed online) ───────────────────────
+// Key = question / part ID, Value = the typed essay/structured answer text.
+
+export const writtenAnswersSchema = z.record(
+  z.string().min(1),
+  z.string().trim().min(1).max(20000),
+);
+
+export type WrittenAnswersInput = z.infer<typeof writtenAnswersSchema>;
+
 // ─── Start Submission ──────────────────────────────────────
 
 export const startSubmissionSchema = z.object({
@@ -35,9 +45,19 @@ export const startSubmissionSchema = z.object({
     .optional(),
   // For MCQ/HYBRID — student sends their answers inline
   answers: mcqAnswersSchema.optional(),
+  // For WRITTEN/HYBRID — student types essay/structured answers online (no PDF)
+  writtenAnswers: writtenAnswersSchema.optional(),
 });
 
 export type StartSubmissionInput = z.infer<typeof startSubmissionSchema>;
+
+// ─── List My Submissions (Student) ─────────────────────────
+
+export const listMySubmissionsQuerySchema = z.object({
+  examId: z.string().uuid().optional(),
+});
+
+export type ListMySubmissionsQuery = z.infer<typeof listMySubmissionsQuerySchema>;
 
 // ─── Complete Upload ────────────────────────────────────────
 

@@ -1,12 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from 'next/font/google';
 import "./globals.css";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-
-// Tell Font Awesome to skip adding the CSS automatically
-
-
-
+import { AuthProvider } from "@/lib/hooks/useAuth";
 
 
 // app/layout.tsx
@@ -31,7 +26,9 @@ export default function RootLayout({
       lang="en"
       className={`${poppins.variable} h-full antialiased`}
     >
-      <body className={`min-h-full flex flex-col ${poppins.className}`}>{children}</body>
+      <body className={`min-h-full flex flex-col ${poppins.className}`}>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

@@ -1,12 +1,20 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, Role, VideoStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
-import { generateBunnyStreamUrl, getBunnyEmbedUrl } from '@/utils/bunny';
+import {
+  createBunnyVideo,
+  generateBunnyTusUpload,
+  getSignedBunnyEmbedUrl,
+  resolveBunnyWebhookStatus,
+  type BunnyTusUpload,
+} from '@/utils/bunny';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import { assertCourseAccess } from '@/services/class.service';
 import { assertStudentContentAccess } from '@/services/access.service';
 import type {
+  BunnyWebhookInput,
   CreateVideoInput,
+  InitiateVideoUploadInput,
   UpdateVideoInput,
   VideoListQuery,
 } from '@/schemas/video.schema';
@@ -18,6 +26,7 @@ const videoSelect = {
   title: true,
   bunnyVideoId: true,
   durationSeconds: true,
+  status: true,
   classSessionId: true,
   createdAt: true,
   updatedAt: true,
@@ -42,6 +51,7 @@ export interface VideoRecord {
   title: string;
   bunnyVideoId: string;
   durationSeconds: number | null;
+  status: VideoStatus;
   classSessionId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -81,8 +91,11 @@ const ensureSessionExists = async (
   return session;
 };
 
-// ─── Create Recording ────────────────────────────────────────
-// Super Admin attaches a Bunny Stream video to a class session.
+// ─── Create Recording (legacy manual attach) ──────────────────
+// Attaches an already-on-Bunny video (uploaded via the Bunny dashboard, or
+// migrated from elsewhere) to a class session. Since the asset is assumed to
+// already be processed, this goes straight to READY — unlike the direct
+// upload flow below, which starts UPLOADING until Bunny's webhook confirms.
 
 export const createVideoRecording = async (
   input: CreateVideoInput,
@@ -97,9 +110,43 @@ export const createVideoRecording = async (
       bunnyVideoId: input.bunnyVideoId,
       durationSeconds: input.durationSeconds ?? null,
       classSessionId: input.classSessionId,
+      status: VideoStatus.READY,
     },
     select: videoWithSessionSelect,
   });
+};
+
+// ─── Initiate Direct Upload ────────────────────────────────────
+// Teacher/Super Admin starts a direct-to-Bunny upload: we create the Bunny
+// video entry + a DB row (status UPLOADING), then hand the browser a signed
+// TUS upload target. The file bytes go straight from the browser to Bunny —
+// they never pass through our server (architecture §5.6). Bunny's webhook
+// (see handleBunnyWebhook) flips the row to READY once processing finishes,
+// so the upload survives the teacher going offline right after the transfer
+// completes — completion is confirmed by Bunny, not by the client.
+
+export const initiateVideoUpload = async (
+  input: InitiateVideoUploadInput,
+  actor: AuthenticatedUser,
+): Promise<{ video: VideoRecordWithSession; upload: BunnyTusUpload }> => {
+  const session = await ensureSessionExists(input.classSessionId);
+  await assertCourseAccess(session.courseId, actor);
+
+  const { bunnyVideoId } = await createBunnyVideo(input.title);
+
+  const video = await prisma.videoRecording.create({
+    data: {
+      title: input.title,
+      bunnyVideoId,
+      classSessionId: input.classSessionId,
+      status: VideoStatus.UPLOADING,
+    },
+    select: videoWithSessionSelect,
+  });
+
+  const upload = generateBunnyTusUpload(bunnyVideoId);
+
+  return { video, upload };
 };
 
 // ─── Update Recording ─────────────────────────────────────────
@@ -179,6 +226,9 @@ export const listVideosByClass = async (
       courseId,
       deletedAt: null, // Never return videos for deleted sessions
     },
+    // Students only ever see finished recordings; staff (who need to monitor
+    // upload/processing progress) see UPLOADING and FAILED rows too.
+    ...(actor.role === Role.STUDENT ? { status: VideoStatus.READY } : {}),
   };
 
   const [records, total] = await Promise.all([
@@ -222,22 +272,56 @@ export const getVideoById = async (videoId: string): Promise<VideoRecordWithSess
 
 export const generateStreamUrl = async (
   videoId: string,
-  clientIp: string,
   actor: AuthenticatedUser,
 ): Promise<{
   video: VideoRecordWithSession;
-  streamUrl: string;
   embedUrl: string;
+  watermark: string;
   expiresAt: number;
 }> => {
   const video = await getVideoById(videoId);
 
   // Gate: a student must be enrolled AND have paid the current month before we
-  // ever mint an IP-bound Bunny token (architecture §7.1 — content protection).
+  // ever mint a signed Bunny embed token (architecture §7.1 — content protection).
   await assertStudentContentAccess(actor, video.classSession.courseId, { requirePaid: true });
 
-  const { streamUrl, expiresAt } = generateBunnyStreamUrl(video.bunnyVideoId, clientIp);
-  const embedUrl = getBunnyEmbedUrl(video.bunnyVideoId);
+  if (video.status !== VideoStatus.READY) {
+    throw new AppError(
+      'VIDEO_NOT_READY',
+      409,
+      video.status === VideoStatus.FAILED
+        ? 'This recording failed to process. Please contact your teacher.'
+        : 'This recording is still processing. Please check back shortly.',
+    );
+  }
 
-  return { video, streamUrl, embedUrl, expiresAt };
+  // Token-authenticated Bunny iframe (DRM enforced by Bunny's player) + a
+  // per-viewer watermark string the client overlays to deter screen capture.
+  const { embedUrl, expiresAt } = getSignedBunnyEmbedUrl(video.bunnyVideoId);
+
+  const viewer = await prisma.user.findUnique({
+    where: { id: actor.userId },
+    select: { name: true, indexNumber: true },
+  });
+  const watermark = viewer ? `${viewer.name} · #${viewer.indexNumber}` : `#${actor.userId.slice(0, 8)}`;
+
+  return { video, embedUrl, watermark, expiresAt };
+};
+
+// ─── Bunny Webhook (Upload/Processing Status) ─────────────────
+// Bunny calls this the moment a video finishes processing (or fails) —
+// independent of whether the teacher's browser is still connected. This is
+// the ONLY thing that ever flips a video to READY; the client's TUS upload
+// reaching 100% only means the bytes arrived, not that Bunny has finished
+// transcoding. Idempotent by design: `updateMany` on `bunnyVideoId` is a
+// no-op if the video is unknown or already in that status (architecture §5.8).
+
+export const handleBunnyWebhook = async (input: BunnyWebhookInput): Promise<void> => {
+  const nextStatus = resolveBunnyWebhookStatus(input.Status);
+  if (!nextStatus) return; // mid-flight status (created/uploaded/processing) — nothing to do yet
+
+  await prisma.videoRecording.updateMany({
+    where: { bunnyVideoId: input.VideoGuid },
+    data: { status: nextStatus },
+  });
 };

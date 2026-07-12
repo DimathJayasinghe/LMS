@@ -10,6 +10,7 @@ import {
   completeSubmissionSchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
+  listMySubmissionsQuerySchema,
   submissionIdParamSchema,
   submitMarksSchema,
   publishResultsParamsSchema,
@@ -37,6 +38,16 @@ submissionRoutes.patch(
   requireRole(Role.STUDENT),
   validateParams(completeSubmissionSchema),
   SubmissionController.completeSubmission,
+);
+
+// ─── List My Submissions (Student) ──────────────────────────
+// A student reads their own submissions; marks/feedback appear once published.
+submissionRoutes.get(
+  '/mine',
+  verifyToken,
+  requireRole(Role.STUDENT),
+  validateQuery(listMySubmissionsQuerySchema),
+  SubmissionController.listMySubmissions,
 );
 
 // ─── List Submissions by Exam (Admin / Assigned Marker) ─────

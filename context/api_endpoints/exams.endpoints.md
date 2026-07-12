@@ -84,6 +84,8 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
   "endTime": "2026-05-19T10:00:00.000Z",
   "totalMarks": 100,
   "isPublished": false,
+  "allowTypedAnswers": true,
+  "allowPdfUpload": true,
   "courseId": "uuid",
   "deletedAt": null,
   "createdAt": "2026-05-19T08:00:00.000Z",
@@ -93,6 +95,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 ### Notes
 
+- `allowTypedAnswers` / `allowPdfUpload` are returned on both list and detail reads (2026-07-10) so the client knows which written-answer channels the exam accepts.
 - `paperPdfUrl` is returned as a presigned URL for students only within the exam time window.
 - `mcqPayload` for students excludes `isCorrect` and is returned only inside the exam window.
 - Admins always receive full MCQ payloads and can access paper URLs at any time.

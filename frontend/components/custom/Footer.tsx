@@ -1,49 +1,47 @@
-import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { GraduationCap, Mail, MapPin, Phone, ShieldCheck, Heart } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faHeart } from "@fortawesome/free-solid-svg-icons";
 
-const resources = [
-  "Shadcn studio PRO",
-  "Shadcn studio Figma",
-  "Shadcn studio Blocks",
-  "Shadcn studio Templates",
-  "Shadcn studio Builder",
+const explore = [
+  { label: "Home", href: "/home" },
+  { label: "Courses", href: "/courses" },
+  { label: "Teachers", href: "/teachers" },
+  { label: "About us", href: "/about" },
 ];
 
-const helpAndSupport = [
-  "Support",
-  "Affiliation Program",
-  "FAQs",
-  "Discord Community",
-  "Blog",
-  "About Us",
-  "Contact Us",
-  "Hire Us",
+const support = [
+  { label: "Contact us", href: "/contact" },
+  { label: "FAQs", href: "/faq" },
+  { label: "Help center", href: "/help" },
+  { label: "Log in", href: "/auth/login" },
 ];
 
 const legal = [
-  "License",
-  "Privacy policy",
-  "Terms & Condition",
-  "Brand Guideline",
+  { label: "Privacy policy", href: "/privacy" },
+  { label: "Terms & conditions", href: "/terms" },
 ];
 
-function FooterColumn({ title , links } : {title : string , links : string[]}) {
+function FooterColumn({
+  title,
+  links,
+}: {
+  title: string;
+  links: { label: string; href: string }[];
+}) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm font-semibold text-foreground">{title}</p>
       <ul className="flex flex-col gap-3">
-        {links.map((link : string) => (
-          <li key={link}>
-            <a
-              href="#"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
+        {links.map((link) => (
+          <li key={link.label}>
+            <Link
+              href={link.href}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              {link}
-            </a>
+              {link.label}
+            </Link>
           </li>
         ))}
       </ul>
@@ -51,148 +49,101 @@ function FooterColumn({ title , links } : {title : string , links : string[]}) {
   );
 }
 
-type SocialIconProps = {
-  children: ReactNode;
-  href?: string;
-};
-
-function SocialIcon({ children, href = "#" }: SocialIconProps) {
+function ContactRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <a
-      href={href}
-      className="text-muted-foreground hover:text-foreground transition-colors duration-200"
-    >
+    <li className="flex items-center gap-2 text-sm text-muted-foreground">
+      <span className="text-foreground/70">{icon}</span>
       {children}
-    </a>
-  );
-}
-
-type ProductLogoProps = {
-  name: string;
-  color?: string;
-  children?: ReactNode;
-};
-
-function ProductLogo({ name, color, children }: ProductLogoProps) {
-  return (
-    <span
-      className="text-sm font-bold tracking-tight"
-      style={{ color }}
-    >
-      {children || name}
-    </span>
+    </li>
   );
 }
 
 export default function Footer() {
   return (
-    <footer className="bg-background border-t border-border w-full">
-      {/* Main footer content */}
-      <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-          {/* Brand Column */}
+    <footer className="w-full border-t border-border bg-background">
+      <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
+          {/* Brand */}
           <div className="flex flex-col gap-6">
-            {/* Logo */}
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-foreground flex items-center justify-center flex-shrink-0">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="w-4 h-4 text-background"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </div>
-              <span className="font-semibold text-base text-foreground">
-                shadcn/studio
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+                <GraduationCap className="size-4" aria-hidden />
               </span>
+              <span className="text-base font-semibold text-foreground">LMS</span>
             </div>
-
-            {/* Description */}
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-              An open-source collection of copy-and-paste shadcn/ui components,
-              blocks, and templates - paired with a powerful Shadcn theme
-              generator to craft, customize, and ship faster.
+            <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+              Live and recorded classes, exams, and results for our students —
+              all in one place, from anywhere.
             </p>
-
-            {/* Social Icons */}
-            <div className="flex items-center gap-4">
-              {/* <SocialIcon>
-                <Github className="w-5 h-5" />
-              </SocialIcon>
-              <SocialIcon>
-                <Instagram className="w-5 h-5" />
-              </SocialIcon>
-              <SocialIcon>
-                <Twitter className="w-5 h-5" />
-              </SocialIcon>
-              <SocialIcon>
-                <Youtube className="w-5 h-5" />
-              </SocialIcon> */}
-            </div>
-
             <Separator />
-
-            {/* Extra links */}
-            <div className="flex flex-col gap-3">
-              <a
-                href="#"
-                className="text-sm text-foreground hover:text-muted-foreground transition-colors duration-200 font-medium"
-              >
-                Roadmap
-              </a>
-              <a
-                href="#"
-                className="text-sm text-foreground hover:text-muted-foreground transition-colors duration-200 font-medium"
-              >
-                Changelog
-              </a>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              © {new Date().getFullYear()} LMS. All rights reserved.
+            </p>
           </div>
 
-          {/* Resources */}
-          <FooterColumn title="Resources" links={resources} />
+          <FooterColumn title="Explore" links={explore} />
+          <FooterColumn title="Support" links={support} />
 
-          {/* Help and Support */}
-          <FooterColumn title="Help and Support" links={helpAndSupport} />
-
-          {/* Legal */}
-          <FooterColumn title="Legal" links={legal} />
+          {/* Contact */}
+          <div className="flex flex-col gap-4">
+            <p className="text-sm font-semibold text-foreground">Contact</p>
+            <ul className="flex flex-col gap-3">
+              <ContactRow icon={<Mail className="size-4" aria-hidden />}>
+                <a
+                  href="mailto:hello@lms.lk"
+                  className="transition-colors hover:text-foreground"
+                >
+                  hello@lms.lk
+                </a>
+              </ContactRow>
+              <ContactRow icon={<Phone className="size-4" aria-hidden />}>
+                <a
+                  href="tel:+94112345678"
+                  className="transition-colors hover:text-foreground"
+                >
+                  +94 11 234 5678
+                </a>
+              </ContactRow>
+              <ContactRow icon={<MapPin className="size-4" aria-hidden />}>
+                Colombo, Sri Lanka
+              </ContactRow>
+            </ul>
+          </div>
         </div>
       </div>
 
-
-      {/* Bottom Bar */}
+      {/* Bottom bar */}
       <div className="border-t border-border bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground flex items-center">
-            ©2026 D2C. Made with &nbsp;  <FontAwesomeIcon icon={faHeart} className="w-4 text-muted-foreground" /> &nbsp;
-            for better web.
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-4 sm:flex-row">
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            Made with <Heart className="size-4 fill-current" aria-hidden /> in Sri Lanka.
           </p>
-          <div className="flex items-center gap-4 flex-wrap justify-center">
-            {/* Secure Payment */}
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <ShieldCheck className="w-4 h-4 text-green-500" />
-              <span>Secure Payment</span>
+
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <ShieldCheck className="size-4" aria-hidden />
+              <span>Secure payments</span>
             </div>
-           
-            {/* Payment logos */}
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-blue-700 font-extrabold px-2 py-0.5 text-xs border-blue-200">
+              {legal.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <Badge variant="outline" className="px-2 py-0.5 text-xs font-bold">
                 VISA
               </Badge>
-
-              <div className="flex">
-                <div className="w-5 h-5 rounded-full bg-red-500 opacity-90" />
-                <div className="w-5 h-5 rounded-full bg-orange-400 opacity-90 -ml-2" />
-              </div>
+              <Badge variant="outline" className="px-2 py-0.5 text-xs font-bold">
+                MASTERCARD
+              </Badge>
             </div>
           </div>
         </div>
       </div>
-
     </footer>
   );
 }

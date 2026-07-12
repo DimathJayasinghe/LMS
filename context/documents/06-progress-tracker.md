@@ -8,11 +8,19 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (paused for schema realignment) |
-| **Last Updated** | 2026-07-09 |
-| **Last Completed Task** | Docs revision — cost/complexity refactor + institution model (subjects, teachers) |
-| **Next Task** | **Phase S — Schema Realignment** (see below) before resuming frontend/hardening |
-| **Blockers** | Schema in code predates the revised design (roles, Subject, teacher ownership) |
+| **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
+| **Last Updated** | 2026-07-10 |
+| **Last Completed Task** | Student account-setup (NIC upload + institute barcodes + auto LMS-QR) + privileged-account authorization fix (front-desk could deactivate a super-admin — see Decisions Log) |
+| **Next Task** | See "Remaining follow-ups" below — no single blocker, pick by priority |
+| **Blockers** | None |
+
+> **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
+> code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was
+> already built (exam-taking, marking, payments, attendance, timetable, live classes, video
+> player) but never checked off here. Verified against `frontend/app/` directly and re-marked
+> below. Two genuinely missing frontend pieces found: an **audit log viewer** and a **notification
+> bell** (backend SSE/audit endpoints exist; no frontend consumer). See `CLAUDE.md` for the
+> standing note that `context/` docs drift from code — this file is no exception.
 
 > **2026-07-09 docs revision.** All `documents/` were revised for **lowest cost / lowest complexity**: backend runs on **one VPS via Docker Compose** (nginx + API + worker + Redis), Postgres on **Neon free tier**, frontend on **Vercel free tier**. Kubernetes (`k8s/`), Sanity CMS, Upstash, and the abandoned `admin_frontend/` + `admin_panel/` folders were **removed**. The institution model was expanded: **multiple teachers** (new `TEACHER` role), **subjects** (new top-level `Subject`), **QR attendance**, **pay-at-entrance**, and **typed online answers**. See the Decisions Log and [09-cost-and-hosting.md](./09-cost-and-hosting.md).
 
@@ -39,15 +47,20 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Stale "Render/instances" comment in `rate-limiter.ts` updated to single-VPS wording.
 
 **Remaining follow-ups (columns/enums exist; endpoints not yet wired):**
-- [ ] Apply the schema to Neon: `npx prisma migrate dev --name align_to_design_doc` (needs DB access) — entrypoint currently uses `prisma db push`
-- [ ] Submission flow: accept & store `writtenAnswers` (typed essay/structured answers) + autosave contract
-- [ ] Payment flow: pay-at-entrance endpoint setting `method=ENTRANCE` + `collectedById`
-- [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint
-- [ ] Live classes: server-signed Zoom SDK join endpoint (same content gate) + per-student video **watermark** overlay (frontend)
-- [ ] Enrollment CRUD endpoints (the `Enrollment` model has no API yet — needed for the gate to have data)
-- [ ] Teacher-scoped **reads** for attendance (currently `SUPER_ADMIN`+`ADMIN`)
-- [ ] **Student account-setup flow**: NIC front/back R2 upload endpoints, register/list/delete `StudentBarcode` per institute, flip `setupCompleted`; block content until setup done + account active
+- [ ] Apply the schema to the self-hosted Postgres in-container: `docker compose exec backend npx prisma migrate deploy` (dev DB is on `localhost:5433` for host tooling) — entrypoint currently uses `prisma db push`
+- [x] Submission flow: `writtenAnswers` accepted/stored server-side (`submission.service.ts`) + frontend `WrittenAnswerPanel`/`ExamSit` wired
+- [ ] Payment flow: pay-at-entrance endpoint setting `method=ENTRANCE` + `collectedById` — **genuinely not wired**, no route/service code found
+- [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint (still always writes `BARCODE` — see `attendance.endpoints.md`)
+- [x] Live classes: server-signed Zoom SDK join endpoint (2026-07-10, same content gate) + per-student watermark overlay (frontend) — see `02-architecture.md §7.1`
+- [x] **Enrollment endpoints** (2026-07-10) — `POST /api/enrollments` (STUDENT self-enroll; ADMIN/SUPER_ADMIN enroll a `userId`; re-enroll reactivates a cancelled row), `GET /my`, `GET /` (admin, paginated), `GET /:id`, `DELETE /:id` (soft-cancel). Feeds the content-access gate and unblocks `POST /payments/initiate`. Files: `schemas/enrollment.schema.ts`, `services/enrollment.service.ts`, `controllers/enrollment.controller.ts`, `routes/enrollment.routes.ts`; `AUDIT_ACTION.ENROLLMENT_{CREATED,CANCELLED}`; `context/api_endpoints/enrollments.endpoints.md`. No migration (existing `Enrollment` table).
+- [x] Teacher-scoped **reads** for attendance (2026-07-10) — `GET /session/:sessionId` and `GET /class/:classId` now allow `TEACHER`, scoped via the existing `assertCourseAccess` ownership gate (reused from `class.service.ts`, not duplicated). See `attendance.endpoints.md`.
+- [x] **Student account-setup flow** (2026-07-10) — NIC front/back R2 upload, register/list/delete `StudentBarcode` per institute, `setupCompleted` auto-flip (no approval gate, explicit product decision), LMS-QR auto-generated at registration. `/auth/account-setup` page + `(app)` layout redirect gate. See `account-setup.endpoints.md`.
 - [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`)
+- [ ] Recorded-video attendance: `POST /attendance/video` exists server-side but `VideoPlayer.tsx` never calls it — watching a recording currently marks no attendance in practice
+- [x] **Audit log viewer** (2026-07-10) — `/admin/audit` (SUPER_ADMIN-gated), action + date-range filters, expandable rows for IP/user-agent/metadata. Also fixed a real bug found while building it: the route was gated to `Role.ADMIN` (front-desk) instead of `Role.SUPER_ADMIN` — a leftover from before the 2026-07-09 role-enum remap that locked the actual super-admin out and let front-desk read the full trail. See `audit.endpoints.md`.
+- [x] **Notification bell + settings** (2026-07-10) — new `Notification`/`NotificationSetting` models, `NotificationService.dispatch()` single entry point (in-app + settings-gated SMS, fires SSE `NOTIFICATION_CREATED`), wired into results-published and payment confirmed/overridden. `/admin/notification-settings` (SUPER_ADMIN) toggles per (scenario, channel); the bell in `TopBar` is the **first frontend SSE consumer** in the codebase — `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` still have no frontend listener, a separate pre-existing gap. See `notifications.endpoints.md`.
+- [ ] Actor-vs-target privilege guard audit: `assertCanManagePrivilegedTarget` now covers `PATCH /:id/status` and `PATCH /:id/barcode` (2026-07-10 fix, see Decisions Log) — `PATCH /:id/role` is separately SUPER_ADMIN-only at the route level so needs no change, but re-check any *new* admin-on-user mutation for the same actor/target gap before shipping it
+- [x] **Refresh-token collision on rapid re-auth** (found 2026-07-10, fixed 2026-07-11): `signRefreshToken`/`signAccessToken` in `auth.service.ts` called `jwt.sign(payload, secret, { expiresIn })` with no `jti` (nonce) claim, so two token issuances for the same `(userId, role)` within the same second produced a byte-identical JWT — and since the DB stores `RefreshToken.token` as a hash of the raw token with a unique constraint, the second insert threw `P2002` and the request 500'd. Fixed by adding `jwtid: crypto.randomUUID()` to both `jwt.sign` calls. Regression test in `auth.service.test.ts` freezes system time with `vi.useFakeTimers()` so two `login()` calls share the same `iat`, then asserts the two refresh tokens (and their stored hashes) differ; confirmed the test fails without the fix and passes with it. Live-verified: registered a throwaway user then fired 5 concurrent logins against the running stack — 5 distinct `RefreshToken` rows, zero 500s.
 
 ---
 
@@ -60,10 +73,10 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
-| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; UI pending |
-| 6 | Notifications & Real-Time | 🟡 In Progress | Backend done; notification UI pending |
-| 7 | Admin Dashboard | ⬜ Not Started | Audit logs, user management UI, financial reports, support tools |
-| 8 | Student Dashboard | ⬜ Not Started | Home view, class schedule, results, payments, video player |
+| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; role-aware `/payments` UI ✅ (2026-07-11) — student overview/history + admin summary/records/bulk-upload; new `GET /payments/summary` aggregate. PayHere live charge now works end-to-end (fixed a missing `Idempotency-Key` on initiate). Refunds/receipts still absent |
+| 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener |
+| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — verified: 18 Vitest+RTL unit tests, `tsc`+`build` green, and a headless-Chromium UI smoke on the live Docker stack: create/edit/deactivate/filter/duplicate-409 for both + ADMIN bounced by the SSR gate); audit log viewer ✅ (2026-07-10); financial reports still missing |
+| 8 | Student Dashboard | 🟡 In Progress | Home/dashboard, classes, timetable, exams (incl. taking), submissions, payments, attendance, video player, live classes — all built |
 | 9 | Polish & Hardening | 🟡 In Progress | Backend hardening in progress; frontend polish pending |
 | 10 | Deployment | ⬜ Not Started | Vercel + EC2 + Upstash setup, DNS, staging/prod pipeline, monitoring |
 
@@ -159,9 +172,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement Zoom webhook handler (upsert attendance)
 - [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
 - [x] Implement Bunny.net video token generation (IP-bound)
-- [ ] Build class schedule page (student view)
-- [ ] Build attendance scanner page (admin view)
-- [ ] Build video player component with DRM black-screen detection
+- [x] Build class schedule page (student view) — `(app)/timetable/page.tsx`
+- [x] Build attendance scanner page (admin/front-desk view) — `(app)/attendance/page.tsx` staff branch (SUPER_ADMIN/ADMIN) is a working entrance scanner (2026-07-11): class→session picker, keyboard-wedge + camera-QR (`@zxing/browser`) scanning → `POST /attendance/scan`, live deduped roster (`GET /attendance/session/:id`), and manual mark-by-name (`GET /users?search` → `POST /attendance/manual`). TEACHER/MARKER still `ComingSoon`
+- [ ] Build video player component with DRM black-screen detection — `components/features/VideoPlayer.tsx` (187 lines) plays video but has **no watermark overlay and no black-screen detection**; `02-architecture.md §7.1` describes these as if built for VOD — that description is aspirational/stale for the watermark specifically, don't trust it without checking the component
 
 ---
 
@@ -173,12 +186,12 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement exam CRUD with R2 presigned URL generation
 - [x] Implement MCQ question model and answer engine
 - [x] Create `submission.routes.ts`, `submission.controller.ts`, `submission.service.ts`
-- [ ] Implement multipart PDF upload with token refresh
+- [x] Implement multipart PDF upload with token refresh (direct-to-R2 presigned PUT, `ExamSit`/`WrittenAnswerPanel`)
 - [x] Implement server-authoritative exam timer validation
-- [ ] Build exam list page (student view)
-- [ ] Build exam taking page with countdown timer
-- [ ] Build MCQ exam component with localStorage auto-save
-- [ ] Build exam creation page (super admin view)
+- [x] Build exam list page (student view) — `(app)/exams/page.tsx`
+- [x] Build exam taking page with countdown timer — `[examId]/_components/ExamSit.tsx` + `CountdownTimer.tsx`
+- [x] Build MCQ exam component — `McqQuestionList.tsx` (verify localStorage auto-save specifically if picking this up again)
+- [x] Build exam creation page (super admin view) — `exams/new/page.tsx` + `ExamForm.tsx`/`McqBuilder.tsx`
 
 ---
 
@@ -189,8 +202,8 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement marker assignment (Super Admin → Marker × Exam)
 - [x] Implement mark submission (idempotent)
 - [x] Implement result publishing (batch)
-- [ ] Build marking interface (marker view — PDF viewer + mark input)
-- [ ] Build results page (student view)
+- [x] Build marking interface (marker view) — `submissions/[examId]/_components/GradeSubmissionRow.tsx` + `PublishResultsButton.tsx` (verify inline PDF viewing specifically if revisiting)
+- [x] Build results page (student view) — `ExamResult.tsx`
 - [x] Implement SSE broadcast for result publication
 
 ---
@@ -203,9 +216,10 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement PayHere payment initiation + webhook handler
 - [x] Implement idempotency middleware for payment routes
 - [x] Implement Excel bulk payment upload (Admin)
-- [ ] Build payment page (student view)
-- [ ] Build payment dashboard (admin view)
-- [ ] Build payment override UI (super admin)
+- [x] Build payment page (student view) — `(app)/payments/page.tsx` role-aware: STUDENT sees per-course this-month Pay/Paid cards (reuses the initiate→PayHere flow) + filterable history (2026-07-11)
+- [x] Build payment dashboard (admin view) — SUPER_ADMIN/ADMIN: month summary (`GET /payments/summary`), status/month-filtered records table, and Excel bulk upload with per-row results (2026-07-11)
+- [ ] Build payment override UI (super admin) — backend `PAYMENT_OVERRIDDEN` audit action exists; frontend not built
+- [ ] Pay-at-entrance is not wired at all yet (backend), see Phase S follow-ups above — a UI here would need that first
 
 ---
 
@@ -218,7 +232,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Create BullMQ worker entry point (`worker.ts`)
 - [x] Implement SMS job (Notify.lk integration)
 - [x] Implement email notification job (optional)
-- [ ] Build notification bell component (frontend)
+- [x] Build notification bell component (frontend) — 2026-07-10, see Phase S follow-ups above
 
 ---
 
@@ -226,11 +240,11 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 
 ### Tasks
 
-- [ ] Build user management table (search, filter, role change)
-- [ ] Build audit log viewer
-- [ ] Build financial reports page
-- [ ] Build support tools (password reset, account unlock)
-- [ ] Implement "Sync Attendance" reconciliation button
+- [x] Build user management table (search, filter, role change) — `admin/users/page.tsx` + `UsersTable.tsx`/`UserFilters.tsx`, includes status (active/inactive/all) filter and the activate/deactivate toggle
+- [x] Build audit log viewer — `/admin/audit` (2026-07-10), see Phase S follow-ups above for the role-guard bug fixed alongside it
+- [ ] Build financial reports page (genuine gap)
+- [ ] Build support tools (password reset, account unlock) — "account unlock" is effectively the existing activate/deactivate toggle; password reset flow not confirmed built
+- [ ] Implement "Sync Attendance" reconciliation button (genuine gap)
 
 ---
 
@@ -274,8 +288,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Configure Vercel project + custom domain (frontend, free tier)
 - [ ] Provision one VPS (Hetzner/DigitalOcean, ~$5–12/mo); install Docker + Compose
 - [ ] Point `api.` DNS (Cloudflare) at the VPS; nginx TLS via Let's Encrypt
-- [ ] Configure Neon PostgreSQL (pooled connection URL) + confirm automated backups
-- [ ] Run `docker compose up -d --build` (nginx + API + worker + self-hosted Redis)
+- [ ] Set a strong `POSTGRES_PASSWORD` + `BACKUP_ENCRYPTION_PASSPHRASE` in `backend/.env`; configure `BACKUP_RCLONE_REMOTE` (off-site) + `BACKUP_HEALTHCHECK_URL`
+- [ ] Run `docker compose up -d --build` (postgres + nginx + API + worker + Redis + backup); then `prisma migrate deploy` in-container
+- [ ] Run one restore drill ([12 §8](./12-data-backup-and-recovery.md)) before cutover
 - [ ] Set up Sentry projects (frontend + backend, free tier)
 - [ ] GitHub Actions: build/test on PR; on merge to `main`, SSH deploy (`git pull && docker compose up -d --build`)
 - [ ] Smoke test full system
@@ -306,7 +321,8 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2026-05-29 | Move backend hosting to EC2 + PM2 | Single-instance deploy with Upstash Redis; frontend stays on Vercel |
 | 2026-07-09 | **Single VPS + Docker Compose** (supersedes EC2+PM2) | Lowest cost/complexity: nginx + API + worker + Redis in one Compose file on a ~$5–12/mo VPS. `git pull && docker compose up -d --build` is the whole deploy. |
 | 2026-07-09 | **Delete Kubernetes** (`k8s/` + HPA) | Auto-scaling is unjustified at ~1,200 users; Redis caching absorbs the result-release spike on one box. Removed the biggest cost/complexity sink. |
-| 2026-07-09 | **Postgres = Neon (managed), Redis = self-hosted** | Neon free tier gives automated backups + PITR (the one thing you can't lose); Redis in Compose is free and has no cross-instance state to sync on a single instance. Dropped Upstash. |
+| 2026-07-09 | ~~Postgres = Neon (managed)~~ **superseded → self-hosted Postgres** | Redis in Compose is free and has no cross-instance state to sync on a single instance. Dropped Upstash. (Neon choice reversed below.) |
+| 2026-07-09 | **Postgres = self-hosted in Compose** (supersedes Neon) | Neon free-tier compute auto-suspends → first-query `ETIMEDOUT` broke auth. Self-hosting on a `pgdata` volume is always warm, zero DB bill, full control. We now own durability via the **`backup` service**: scheduled `pg_dump`, verified, AES-256 encrypted, GFS-rotated, off-site (rclone), monthly restore drills. Runbook: [12-data-backup-and-recovery.md](./12-data-backup-and-recovery.md). |
 | 2026-07-09 | **Drop Sanity CMS** | Marketing pages are static in Next.js. Removes a paid dependency *and* the on-demand-revalidation complexity. |
 | 2026-07-09 | **Email out of scope for v1** | SMS via Notify.lk is the notification channel; `resend` dependency to be removed. Email can return later as a BullMQ job. |
 | 2026-07-09 | **One Next.js frontend** | Deleted abandoned `admin_frontend/` + `admin_panel/`; all roles served from `frontend/` via App Router route groups. |
@@ -316,6 +332,13 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2026-07-09 | **One mixed paper, multi-channel answers** | Exam is course-wide (both cohorts). `Submission.writtenAnswers` (typed) + `answerPdfUrl` (scanned) + `answers` (MCQ); exam-level `allowTypedAnswers`/`allowPdfUpload` flags. |
 | 2026-07-09 | **Physical institutes + per-institute barcodes + NIC onboarding** | New `Institute` allowlist (Super-Admin, pre-configured centers) and `StudentBarcode` (`@@unique([instituteId,barcode])` — per-institute, one per student per institute). `User.barcode` kept as the global LMS QR. `User.setupCompleted`/`nicFrontUrl`/`nicBackUrl` for mandatory onboarding. Institute CRUD module added at `/api/institutes`. |
 | 2026-07-09 | **Recurring timetable (template + generated sessions) + course banners** | New `TimetableSlot` weekly template + `ClassSession.timetableSlotId` (`@@unique([timetableSlotId,date])` for idempotent generation). Timetable CRUD + manual `POST /api/timetable/generate` + **weekly BullMQ job** (Sun 20:00 UTC, 14-day window). Front-desk `ADMIN` added to session/timetable editing. `Course.bannerUrl`/`backdropUrl` display assets. |
+| 2026-07-10 | **Student account-setup**: LMS-QR auto-generated at registration; NIC upload + institute barcodes are self-service, no admin-approval gate | Reduces admin workload; fraud/abnormal-account detection deferred as a documented follow-up until there's real usage data to design against |
+| 2026-07-10 | **Actor-vs-target privilege guard required for admin-on-user mutations** | Incident: a front-desk `ADMIN` deactivated a `SUPER_ADMIN` account twice (`PATCH /:id/status` was gated only by the caller's own role, not the target's). Fixed via `assertCanManagePrivilegedTarget` in `user.service.ts`, applied to `/:id/status` and `/:id/barcode`. Any new endpoint where one role acts on another user's account must be checked for the same gap — see `CLAUDE.md` |
+| 2026-07-10 | **Vitest introduced; unit tests + edge-case brainstorming required for every implementation going forward** | Same incident above — the missing test coverage let the gap ship unnoticed. `backend/vitest.config.ts` + `npm run test`; see `04-ai-workflow-rules.md §3.4` for the actor×target-matrix + check-ordering testing pattern |
+| 2026-07-10 | **Notification bell: full persisted inbox, not an ephemeral toast** | User explicitly chose the bigger option over the lighter SSE-only recommendation — wanted unread counts, mark-as-read, and history, not just live pop-ups |
+| 2026-07-10 | **Notification channels: IN_APP + SMS only, no EMAIL toggle** | Matches the existing "email out of scope for v1" decision — a toggle with no sender behind it would be a dead control. `NotificationChannel` enum is structured to extend cleanly when email infra exists |
+| 2026-07-10 | **Notification settings are SUPER_ADMIN-only, not ADMIN** | Consistent with the audit-log-access decision the same session — front-desk doesn't get to decide whether students get contacted, only the owner does |
+| 2026-07-10 | **Consolidated payment SMS into NotificationService.dispatch(), removed the old per-controller helpers** | `payment.controller.ts` already had `sendPaymentConfirmationSms`/`sendPaymentOverrideSms` calling `SmsNotificationService.sendSms` directly, with no settings gate and at risk of double-sending once the new dispatch-based calls were added in the service layer. Removed the controller-level versions; `NotificationService.dispatch` is now the only path, and it respects the super-admin toggle. `sendBulkPaymentSms` (bulk upload) was left as the pre-existing no-op — it never sent anything before this change either, wiring it up needs `bulkUploadPayments` to expose per-row recipients first |
 
 ---
 
@@ -330,7 +353,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Video piracy (leaked stream link) | IP-bound Bunny tokens + enrolled/paid gating + student watermark overlay | ⬜ To implement |
 | Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ⬜ To implement |
 | DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ To implement |
-| Single VPS is a single point of failure | Neon managed backups (PITR) + nightly Redis snapshot; documented rebuild runbook | ⬜ To implement |
+| Single VPS is a single point of failure | Self-hosted Postgres on a persistent volume + the `backup` service (verified, encrypted, **off-site** dumps) + nightly Redis snapshot; scripted rebuild + restore runbook ([12](./12-data-backup-and-recovery.md)) | 🟡 Backup engine built & validated; configure off-site + drill before cutover |
 | Webhook spam from flaky student connections | Upsert-based webhook handlers | ✅ Done |
 | Database cascade delete | Soft deletes + `onDelete: Restrict` | ✅ Done |
 | Multi-worker cron job collision | BullMQ distributed queue | ✅ Done |

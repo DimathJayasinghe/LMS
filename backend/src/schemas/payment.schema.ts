@@ -53,6 +53,13 @@ export const listMyPaymentsQuerySchema = z.object({
 
 export type ListMyPaymentsQuery = z.infer<typeof listMyPaymentsQuerySchema>;
 
+// ─── Month Summary (Admin) ────────────────────────────────
+export const paymentsSummaryQuerySchema = z.object({
+	month: paymentMonthSchema,
+});
+
+export type PaymentsSummaryQuery = z.infer<typeof paymentsSummaryQuerySchema>;
+
 // ─── Params ───────────────────────────────────────────────
 export const paymentIdParamSchema = z.object({
 	id: z.string().uuid(),

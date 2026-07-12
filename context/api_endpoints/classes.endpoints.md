@@ -11,7 +11,11 @@ http://localhost:5000/api/classes
 
 ## Auth
 
-All classes endpoints require the `access_token` cookie.
+All classes endpoints require the `access_token` cookie **except**
+`GET /public`, which is deliberately unauthenticated (marketing `/courses`
+page, before login). Its select list is public-safe only — no email, phone,
+NIC, enrollment counts, or anything else beyond what a prospective student
+needs to decide whether to sign up.
 
 ## Roles
 
@@ -29,7 +33,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 - **Course create/update** now requires `subjectId` and (for SUPER_ADMIN) `teacherId`; a TEACHER creating a course owns it automatically.
 - Course gained `bannerUrl` / `backdropUrl` (image URLs).
-- **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise).
+- **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise). Enrollments are created/listed via `enrollments.endpoints.md`.
 - Sessions may be **generated from the timetable** (see `timetable.endpoints.md`); `timetableSlotId` links them.
 
 ## Response Shapes (Current Implementation)
@@ -120,6 +124,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 | Method | Path | Roles | Description |
 | --- | --- | --- | --- |
+| GET | `/public` | None (public) | List active courses, marketing-safe fields only. |
 | POST | `/` | ADMIN, STAFF | Create a class (course). |
 | GET | `/` | Any authenticated | List classes. |
 | GET | `/:classId` | Any authenticated | Get class detail. |
@@ -131,6 +136,34 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | DELETE | `/:classId/sessions/:sessionId` | ADMIN, STAFF | Soft delete class session. |
 
 ## Endpoint Details
+
+### GET `/public`
+
+No auth. Query (all optional): `search`, `year`. Always filtered to
+`isActive: true` regardless of caller — there is no "see inactive" escape
+hatch here, unlike `GET /` for `SUPER_ADMIN`.
+
+**Success (200)**
+
+```json
+{
+	"status": "success",
+	"data": [
+		{
+			"id": "uuid",
+			"name": "2027 A/L Theory",
+			"year": 2027,
+			"description": "...",
+			"monthlyFee": "2500.00",
+			"bannerUrl": "https://.../banner.png",
+			"backdropUrl": "https://.../backdrop.png",
+			"subject": { "name": "Physics" },
+			"teacher": { "name": "Ms. Perera" }
+		}
+	],
+	"count": 1
+}
+```
 
 ### POST `/`
 

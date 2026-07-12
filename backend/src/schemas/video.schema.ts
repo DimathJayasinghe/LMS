@@ -11,6 +11,28 @@ export const createVideoSchema = z.object({
 
 export type CreateVideoInput = z.infer<typeof createVideoSchema>;
 
+// ─── Direct-to-Bunny Upload (Teacher/Super Admin) ─────────────
+// Initiates a video record + a signed TUS upload target. The browser then
+// uploads the file straight to Bunny — our server never receives the bytes.
+export const initiateVideoUploadSchema = z.object({
+  title: z.string().trim().min(2, 'Title must be at least 2 characters.').max(200),
+  classSessionId: z.string().uuid('Invalid class session ID.'),
+});
+
+export type InitiateVideoUploadInput = z.infer<typeof initiateVideoUploadSchema>;
+
+// ─── Bunny Webhook ─────────────────────────────────────────────
+// Bunny's Video Library webhook payload (Library > Webhooks). No per-request
+// signature is supported by Bunny for this webhook — verified instead via a
+// shared secret query param (see routes + BUNNY_WEBHOOK_SECRET).
+export const bunnyWebhookSchema = z.object({
+  VideoLibraryId: z.coerce.number(),
+  VideoGuid: z.string().min(1),
+  Status: z.coerce.number(),
+});
+
+export type BunnyWebhookInput = z.infer<typeof bunnyWebhookSchema>;
+
 // ─── Update Video Metadata ────────────────────────────────────
 export const updateVideoSchema = z.object({
   title: z.string().trim().min(2).max(200).optional(),

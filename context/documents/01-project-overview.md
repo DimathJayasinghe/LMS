@@ -89,16 +89,38 @@ Subject  (e.g. Physics, Chemistry, Combined Maths)   ← top level
 Physical classes are held at **pre-configured physical centers ("institutes")** — e.g. a Nugegoda center and a Rathnapura center. These are **not** separate tenants; there is one LMS. The Super Admin maintains the **allowlist** of supported institutes; a student can only attach barcodes for institutes on that list.
 
 **Two independent identifiers per student:**
-1. **LMS QR code** (`User.barcode`) — issued by the LMS, globally unique, shown in-app for LMS-native/online entrance attendance.
-2. **Institute barcodes** (`StudentBarcode`) — issued by each physical center's own card system, entered by the student during setup. A student who attends physical classes at two centers has **two** institute barcodes (one per institute).
+1. **LMS QR code** (`User.barcode`) — issued by the LMS, globally unique, shown in-app for LMS-native/online entrance attendance. **Auto-generated at registration** (decision 2026-07-10: `LMS-<indexNumber padded to 6 digits>`, derived from the already-unique `indexNumber` so it's collision-free with no retry loop) — every student gets one immediately, not only once an admin manually assigns it. An admin can still reassign it later (e.g. a lost card) via the pre-existing `PATCH /users/:id/barcode`.
+2. **Institute barcodes** (`StudentBarcode`) — issued by each physical center's own card system, entered by the student during setup as a **plain text field** (never a scan/photo in our UI — the student is just typing in a code the institute already printed on a card). A student who attends physical classes at two centers has **two** institute barcodes (one per institute).
 
 > **Barcode uniqueness is per-institute, not global.** Two students at two different institutes may legitimately hold the *same* barcode value. Uniqueness is enforced as `@@unique([instituteId, barcode])`; the LMS QR (`User.barcode`) stays globally unique because the LMS issues it.
 
-**Account setup (mandatory, after registration):**
-1. Register → account is **pending**.
-2. Complete setup: upload **NIC front + back photos** (stored privately in R2) and, if attending physical classes, **select each institute and enter its barcode**.
-3. An Admin verifies the NIC and **approves** the account (existing pending → approve step), which activates it.
-4. Content access stays gated until setup is complete and the account is active.
+> **Attendance-marking reality check (2026-07-10)**: the schema/docs describe three ways to mark
+> attendance (QR/barcode scan, live Zoom join, recorded-video watch), but only the *live Zoom join*
+> path is fully wired end-to-end today. The entrance-scan endpoint only resolves via the LMS QR
+> (`User.barcode`) — `StudentBarcode`/institute-scoped scanning isn't consumed anywhere yet, so
+> registering an institute barcode currently has no effect beyond being stored. The recorded-video
+> endpoint exists server-side but the video player never calls it. See
+> `context/api_endpoints/attendance.endpoints.md`'s "Attendance channels" section for the precise,
+> per-channel breakdown.
+
+**Account setup (mandatory, after registration; implemented 2026-07-10):**
+1. Register → account is **immediately active** (no pending/approval state — see below).
+2. Complete setup: upload **NIC front + back photos** (stored privately in R2, direct-to-R2 presigned
+   upload — server never touches the file) and, **only if attending physical classes**, select each
+   institute and enter its barcode (optional — doesn't gate completion).
+3. `setupCompleted` **auto-flips to `true` server-side** the instant both NIC photos are on file —
+   no separate Admin verification/approval step exists (see the decision note below). Content access
+   is gated on `setupCompleted` alone, enforced by `(app)/layout.tsx` redirecting an incomplete
+   `STUDENT` to `/auth/account-setup` before any other screen renders.
+
+> **Decision: no admin NIC-approval gate (2026-07-10).** This section previously described a
+> "pending → Admin verifies NIC → approves" flow. That state never actually existed anywhere in the
+> schema or code (only `setupCompleted` and `deletedAt` exist; `register()` always made accounts
+> immediately active) — it was written intent that was never built. Rather than build a real
+> approval queue now, the decision was to keep student self-service simple: NIC photos are stored
+> but not reviewed by anyone before the account counts as "set up." Revisit if/when there's a
+> concrete reason to gate on human review (see the fraud/abuse note in
+> `account-setup.endpoints.md`).
 
 ---
 
@@ -121,15 +143,14 @@ Physical classes are held at **pre-configured physical centers ("institutes")** 
 1. **Entrance Desk** — scan a student's QR/barcode at the entrance to log attendance, and (optionally) collect the monthly fee on the spot (pay-at-entrance).
 2. **Manage Timetable** — maintain the recurring weekly timetable and edit individual scheduled sessions (the schedule students see).
 3. **Upload Payments** — bulk-create/update monthly payment records from an Excel sheet.
-3. **Verify Accounts** — approve pending student registrations.
-4. **Support Students** — reset passwords, resend activation, resolve access issues.
+4. **Support Students** — reassign a lost LMS QR (`PATCH /users/:id/barcode`), activate/deactivate accounts, resolve access issues. There is no account-approval step to action (§4.1) — setup completes automatically once a student uploads both NIC photos.
 
 ### Marker
 1. **View Assigned Exams** — only exams they are assigned to.
 2. **Grade Submissions** — open answer PDFs, input marks + feedback, submit final score (idempotent).
 
 ### Student
-1. **Account Setup** (first login) — upload NIC front/back photos; select physical institute(s) and enter each institute's barcode. Required before content access.
+1. **Account Setup** (first login) — upload NIC front/back photos (required, gates content access) and, only if attending physical classes, select institute(s) and enter each one's barcode (optional).
 2. **Dashboard** — upcoming classes, recent results, payment status at a glance.
 3. **Attendance QR** — show a personal QR code in the app to scan at the physical entrance.
 3. **Watch / Join** — stream recordings via Bunny.net; join live classes via Zoom.

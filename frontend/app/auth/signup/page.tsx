@@ -1,216 +1,248 @@
-"use client"
+"use client";
 
-import Nav from "@/components/custom/Nav";
-import styled from "styled-components";
-import {
-    Field,
-    FieldContent,
-    FieldDescription,
-    FieldError,
-    FieldGroup,
-    FieldLabel,
-    FieldLegend,
-    FieldSeparator,
-    FieldSet,
-    FieldTitle,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { RippleButton } from "@/components/ui/ripple-button"
-
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
-import LoginLeftSide from "./_components/LoginLeftSide";
+import { Loader2 } from "lucide-react";
+
+import AuthAside from "@/components/custom/AuthAside";
+import { PasswordInput } from "@/components/custom/PasswordInput";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/hooks/useAuth";
+import type { ApiSuccess, User } from "@/lib/types";
 
 type FormValues = {
-    fullName: string;
-    email: string;
-    phone: string;
-    nic: string;
-    password: string;
-    confirmPassword: string;
+  name: string;
+  email: string;
+  phone: string;
+  nic: string;
+  password: string;
+  confirmPassword: string;
 };
 
+// Client-side hints; the backend is the final authority (see 04-api-integration §4).
 const PATTERNS = {
-    fullName: /^[A-Za-z][A-Za-z\s.'\-]{1,99}$/,
-    email: /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/,
-    phone: /^(?:\+94|0)[0-9]{9}$/,         // Sri Lankan: 0712345678 or +94712345678
-    nic: /^(?:\d{9}[VvXx]|\d{12})$/,     // Old (9 digits + V/X) or new (12 digits)
-    password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#_\-])[A-Za-z\d@$!%*?&#_\-]{8,}$/,
+  name: /^[A-Za-z][A-Za-z\s.'\-]{1,99}$/,
+  email: /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/,
+  phone: /^(?:\+94|0)[0-9]{9}$/, // Sri Lankan: 0712345678 or +94712345678
+  nic: /^(?:\d{9}[VvXx]|\d{12})$/, // Old (9 digits + V/X) or new (12 digits)
+  // Matches the backend rule: min 8, upper + lower + number.
+  password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,72}$/,
 };
 
+export default function SignupPage() {
+  const router = useRouter();
+  const { refresh } = useAuth();
+  const [formError, setFormError] = useState<string | null>(null);
 
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ mode: "onBlur" });
 
+  const onSubmit = async (values: FormValues) => {
+    setFormError(null);
+    try {
+      await api.post<ApiSuccess<User>>("/auth/register", {
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        phone: values.phone,
+        nic: values.nic,
+      });
+      await refresh();
+      router.push("/dashboard");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        err.fields?.forEach((f) =>
+          setError(f.field as keyof FormValues, { message: f.message }),
+        );
+        setFormError(err.message);
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
+    }
+  };
 
+  return (
+    <div className="flex min-h-screen">
+      <AuthAside
+        tagline="Your journey begins with a single step — sign up and unlock your potential."
+        tips={[
+          "Pay online and access unlocks automatically once it clears.",
+          "Missed a live class? The recording is ready right after.",
+          "Attendance is tracked with a quick QR scan at the door.",
+          "Exam results land in your account as soon as they're marked.",
+        ]}
+      />
 
-export default function Login() {
+      <main className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
+        <div className="w-full max-w-sm">
+          <h1 className="text-4xl font-bold tracking-tight">Get started now</h1>
+          <p className="mt-2 mb-8 text-muted-foreground">
+            Create your account to explore, connect, and grow with ease.
+          </p>
 
-    const {
-        register,
-        handleSubmit,
-        watch,
-        formState: { errors },
-    } = useForm<FormValues>({ mode: "onBlur" });
-
-    const onSubmit = (data: FormValues) => console.log(data);
-
-
-    return <>
-        {/* <Nav /> */}
-
-        <div
-            data-name="login-container"
-            className="flex h-[90vh mt-10"
-        >
-            <LoginLeftSide />
-
-
+          {formError && (
             <div
-                data-name="login-right-side"
-                className="h-full p-20 "
+              role="alert"
+              className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
             >
-
-                <h1
-                    className="text-5xl font-medium "
-                >Get start now</h1>
-
-                <p
-                    className="text-muted-foreground mt-2 mb-10"
-                >
-                    Create your account to explore, connect, and grow with ease.
-                    We’re excited to have you with us.</p>
-
-
-                <form onSubmit={handleSubmit(onSubmit)}>
-                    <FieldSet>
-                        <FieldGroup>
-
-                            <Field>
-                                <FieldLabel htmlFor="fullName">Full Name</FieldLabel>
-                                <Input
-                                    id="fullName"
-                                    className="h-10"
-                                    autoComplete="off"
-                                    placeholder="A.K. Dimath Jayasinghe"
-                                    {...register("fullName", {
-                                        required: "Full name is required",
-                                        pattern: {
-                                            value: PATTERNS.fullName,
-                                            message: "Letters, spaces, dots, apostrophes and hyphens only (2–100 chars)",
-                                        },
-                                    })}
-                                />
-                                {errors.fullName && <p className="text-red-500 text-xs mt-1">{errors.fullName.message}</p>}
-                            </Field>
-
-                            <Field>
-                                <FieldLabel htmlFor="email">Email</FieldLabel>
-                                <Input
-                                    id="email"
-                                    className="h-10"
-                                    type="email"
-                                    autoComplete="off"
-                                    placeholder="example@gmail.com"
-                                    {...register("email", {
-                                        required: "Email is required",
-                                        pattern: {
-                                            value: PATTERNS.email,
-                                            message: "Enter a valid email address",
-                                        },
-                                    })}
-                                />
-                                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-                            </Field>
-
-                            <Field>
-                                <FieldLabel htmlFor="phone">Phone Number</FieldLabel>
-                                <Input
-                                    id="phone"
-                                    type="tel"
-                                    className="h-10"
-                                    autoComplete="off"
-                                    placeholder="0712345678"
-                                    {...register("phone", {
-                                        required: "Phone number is required",
-                                        pattern: {
-                                            value: PATTERNS.phone,
-                                            message: "Enter a valid Sri Lankan number (e.g. 0712345678 or +94712345678)",
-                                        },
-                                    })}
-                                />
-                                {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
-                            </Field>
-
-                            <Field>
-                                <FieldLabel htmlFor="nic">NIC</FieldLabel>
-                                <Input
-                                    id="nic"
-                                    className="h-10"
-                                    autoComplete="off"
-                                    placeholder="200123456789"
-                                    {...register("nic", {
-                                        required: "NIC is required",
-                                        pattern: {
-                                            value: PATTERNS.nic,
-                                            message: "Old NIC: 9 digits + V or X (e.g. 901234567V). New NIC: 12 digits",
-                                        },
-                                    })}
-                                />
-                                {errors.nic && <p className="text-red-500 text-xs mt-1">{errors.nic.message}</p>}
-                            </Field>
-
-                            <Field>
-                                <FieldLabel htmlFor="password">Password</FieldLabel>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    className="h-10"
-                                    autoComplete="off"
-                                    placeholder="Enter your password"
-                                    {...register("password", {
-                                        required: "Password is required",
-                                        pattern: {
-                                            value: PATTERNS.password,
-                                            message: "Min 8 chars with uppercase, lowercase, digit, and special character",
-                                        },
-                                    })}
-                                />
-                                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-                            </Field>
-
-                            <Field>
-                                <FieldLabel htmlFor="confirmPassword">Confirm Password</FieldLabel>
-                                <Input
-                                    id="confirmPassword"
-                                    autoComplete="off"
-                                    className="h-10"
-                                    type="password"
-                                    placeholder="Re-enter your password"
-                                    {...register("confirmPassword", {
-                                        required: "Please confirm your password",
-                                        validate: (value) =>
-                                            value === watch("password") || "Passwords do not match",
-                                    })}
-                                />
-                                {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword.message}</p>}
-                            </Field>
-
-                        </FieldGroup>
-                    </FieldSet>
-
-                    <button className="w-full mt-10 p-3 pr-5 pl-5   border border-gray-400 rounded-lg cursor-pointer bg-black text-white hover:bg-black hover:text-white">
-                        Register
-                    </button>
-                </form>
-
-                <p className="mt-4 text-sm text-center">If you already have an account <a href="/auth/login" className="
-                underline text-blue-600">login</a></p>
-
-
+              {formError}
             </div>
+          )}
 
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="name">Full name</FieldLabel>
+                <Input
+                  id="name"
+                  className="h-10"
+                  autoComplete="name"
+                  placeholder="A.K. Dimath Jayasinghe"
+                  aria-invalid={!!errors.name}
+                  {...register("name", {
+                    required: "Full name is required",
+                    pattern: {
+                      value: PATTERNS.name,
+                      message:
+                        "Letters, spaces, dots, apostrophes and hyphens only (2–100 chars)",
+                    },
+                  })}
+                />
+                <FieldError>{errors.name?.message}</FieldError>
+              </Field>
 
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input
+                  id="email"
+                  type="email"
+                  className="h-10"
+                  autoComplete="email"
+                  placeholder="example@gmail.com"
+                  aria-invalid={!!errors.email}
+                  {...register("email", {
+                    required: "Email is required",
+                    pattern: {
+                      value: PATTERNS.email,
+                      message: "Enter a valid email address",
+                    },
+                  })}
+                />
+                <FieldError>{errors.email?.message}</FieldError>
+              </Field>
 
+              <Field>
+                <FieldLabel htmlFor="phone">Phone number</FieldLabel>
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  className="h-10"
+                  autoComplete="tel"
+                  placeholder="0712345678"
+                  aria-invalid={!!errors.phone}
+                  {...register("phone", {
+                    required: "Phone number is required",
+                    pattern: {
+                      value: PATTERNS.phone,
+                      message:
+                        "Enter a valid Sri Lankan number (e.g. 0712345678 or +94712345678)",
+                    },
+                  })}
+                />
+                <FieldError>{errors.phone?.message}</FieldError>
+              </Field>
 
+              <Field>
+                <FieldLabel htmlFor="nic">NIC</FieldLabel>
+                <Input
+                  id="nic"
+                  className="h-10"
+                  autoComplete="off"
+                  placeholder="200123456789"
+                  aria-invalid={!!errors.nic}
+                  {...register("nic", {
+                    required: "NIC is required",
+                    pattern: {
+                      value: PATTERNS.nic,
+                      message:
+                        "Old NIC: 9 digits + V or X (e.g. 901234567V). New NIC: 12 digits",
+                    },
+                  })}
+                />
+                <FieldError>{errors.nic?.message}</FieldError>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <PasswordInput
+                  id="password"
+                  className="h-10"
+                  autoComplete="new-password"
+                  placeholder="Enter your password"
+                  aria-invalid={!!errors.password}
+                  {...register("password", {
+                    required: "Password is required",
+                    pattern: {
+                      value: PATTERNS.password,
+                      message:
+                        "Min 8 characters with an uppercase, lowercase, and a number",
+                    },
+                  })}
+                />
+                <FieldError>{errors.password?.message}</FieldError>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="confirmPassword">
+                  Confirm password
+                </FieldLabel>
+                <PasswordInput
+                  id="confirmPassword"
+                  className="h-10"
+                  autoComplete="new-password"
+                  placeholder="Re-enter your password"
+                  aria-invalid={!!errors.confirmPassword}
+                  {...register("confirmPassword", {
+                    required: "Please confirm your password",
+                    validate: (value, formValues) =>
+                      value === formValues.password ||
+                      "Passwords do not match",
+                  })}
+                />
+                <FieldError>{errors.confirmPassword?.message}</FieldError>
+              </Field>
+            </FieldGroup>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 font-medium text-primary-foreground transition hover:scale-[1.02] disabled:pointer-events-none disabled:opacity-60 motion-reduce:hover:scale-100"
+            >
+              {isSubmitting && <Loader2 className="size-4 animate-spin" />}
+              {isSubmitting ? "Creating account…" : "Register"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link
+              href="/auth/login"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              Sign in
+            </Link>
+          </p>
         </div>
-    </>
+      </main>
+    </div>
+  );
 }

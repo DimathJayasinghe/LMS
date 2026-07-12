@@ -6,7 +6,10 @@ import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
 import {
     assignBarcodeSchema,
+    createStudentBarcodeSchema,
     listUsersQuerySchema,
+    nicUploadUrlSchema,
+    studentBarcodeIdParamSchema,
     updateRoleSchema,
     updateStatusSchema,
     userIdParamSchema,
@@ -25,6 +28,43 @@ userRoutes.get(
 
 // GET /api/users/me — Current user profile
 userRoutes.get('/me', verifyToken, UserController.getMe);
+
+// ─── Account Setup (Student-only self-service) ─────────────
+
+// POST /api/users/me/nic/upload-url — Presign a direct-to-R2 NIC photo upload
+userRoutes.post(
+    '/me/nic/upload-url',
+    verifyToken,
+    requireRole(Role.STUDENT),
+    validateBody(nicUploadUrlSchema),
+    UserController.getNicUploadUrl,
+);
+
+// GET /api/users/me/institute-barcodes — List my per-institute barcodes
+userRoutes.get(
+    '/me/institute-barcodes',
+    verifyToken,
+    requireRole(Role.STUDENT),
+    UserController.listMyInstituteBarcodes,
+);
+
+// POST /api/users/me/institute-barcodes — Register a barcode for an institute
+userRoutes.post(
+    '/me/institute-barcodes',
+    verifyToken,
+    requireRole(Role.STUDENT),
+    validateBody(createStudentBarcodeSchema),
+    UserController.createMyInstituteBarcode,
+);
+
+// DELETE /api/users/me/institute-barcodes/:barcodeId — Remove one of my barcodes
+userRoutes.delete(
+    '/me/institute-barcodes/:barcodeId',
+    verifyToken,
+    requireRole(Role.STUDENT),
+    validateParams(studentBarcodeIdParamSchema),
+    UserController.deleteMyInstituteBarcode,
+);
 
 // GET /api/users/:id — Get user by id (Admin + Staff)
 userRoutes.get(
