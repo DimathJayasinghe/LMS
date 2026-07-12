@@ -130,6 +130,34 @@ services:
       - lms
     restart: unless-stopped
 
+  # ── DEV-ONLY public tunnel ──────────────────────────────────────────────────
+  # Exposes the local stack (via nginx:80) on a public HTTPS URL so external
+  # webhooks — Bunny (video), Zoom (live-class attendance), PayHere (payments) —
+  # can reach it during local development. Reads NGROK_AUTHTOKEN (required) and
+  # an optional reserved NGROK_DOMAIN (for a URL that survives restarts) from
+  # backend/.env. ⚠️ REMOVE this whole service before hosting on a real domain.
+  ngrok:
+    image: ngrok/ngrok:latest
+    env_file:
+      - ./backend/.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$NGROK_AUTHTOKEN" ]; then
+          echo "ngrok: set NGROK_AUTHTOKEN in backend/.env (https://dashboard.ngrok.com/get-started/your-authtoken)"; sleep 86400
+        elif [ -n "$$NGROK_DOMAIN" ]; then
+          exec ngrok http http://nginx:80 --url="$$NGROK_DOMAIN" --log=stdout
+        else
+          exec ngrok http http://nginx:80 --log=stdout
+        fi
+    ports:
+      - "4040:4040" # ngrok web inspector + local API (see the live public URL here)
+    depends_on:
+      - nginx
+    networks:
+      - lms
+    restart: unless-stopped
+
 networks:
   lms:
     driver: bridge
