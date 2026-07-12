@@ -7,10 +7,10 @@ Learning Management System for a **single tuition institution** (~1,200 students
 - **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — with optional per-user permission overrides
 - **Academic model** — Subject → Course (one teacher) → Class Sessions & Exams; students enrol + pay per course
 - **Classes** — delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes
-- **Content protection** — enrolled + paid gating, IP-bound video tokens, per-student watermark, server-signed live join
+- **Content protection** — enrolled + paid gating; recorded video via Bunny's **token-authenticated embed player** (MediaCage DRM) + a per-student watermark overlay; server-signed Zoom live join
 - **Exams** — one mixed paper (MCQ + structured + essay) for both online and physical students; submit via MCQ, typed answers, or scanned PDF upload; server-authoritative timers
 - **Marking & Results** — marker assignment, grading, batch result publishing via SSE
-- **Payments** — PayHere online, pay-at-entrance (front-desk), and bulk Excel import; idempotency keys
+- **Payments** — PayHere **onsite checkout** (in-app modal, no redirect), bulk Excel import, and an admin records/summary dashboard; idempotency keys
 - **Notifications** — SMS (Notify.lk), real-time SSE push, BullMQ background jobs
 
 ## Tech Stack
@@ -37,11 +37,23 @@ Learning Management System for a **single tuition institution** (~1,200 students
 
 ## Getting Started (local dev)
 
-```bash
-# Backend
-cd backend && npm install && npx prisma generate && npm run dev
+**Option A — run everything in Docker** (recommended; also the way to exercise external webhooks).
+The whole app comes up behind nginx on one origin — `/` → frontend, `/api` → backend — and an
+optional `ngrok` service tunnels it to a public HTTPS URL so Bunny/Zoom/PayHere webhooks can reach
+`localhost`. Put secrets in `backend/.env` (see `backend/.env.example`), then:
 
-# Frontend
+```bash
+docker compose up -d --build      # postgres + redis + backend + worker + nginx + frontend + ngrok
+```
+
+For ngrok: set `NGROK_AUTHTOKEN` (+ optional reserved `NGROK_DOMAIN`) in `backend/.env`. Webhook
+URLs are `https://<ngrok-domain>/api/{videos/bunny-webhook, attendance/zoom-webhook, payments/payhere/notify}`.
+See the appendix in [`context/documents/09-cost-and-hosting.md`](./context/documents/09-cost-and-hosting.md).
+
+**Option B — run the apps directly** (fast UI iteration with hot-reload):
+
+```bash
+cd backend && npm install && npx prisma generate && npm run dev
 cd frontend && npm install && npm run dev
 ```
 
@@ -61,7 +73,7 @@ Full runbook and monthly cost breakdown: [`context/documents/09-cost-and-hosting
 - **Stateless API** — no in-memory shared state; keeps the worker/API split clean and a future second instance a config change
 - **3-tier separation** — Routes (URLs) → Controllers (req/res) → Services (business logic + DB)
 - **Direct-to-cloud uploads** — presigned URLs; files never touch the API server
-- **Content gated per enrollment + paid month** — IP-bound video tokens, watermark, server-signed live join
+- **Content gated per enrollment + paid month** — token-authenticated Bunny embed (DRM) + watermark, server-signed Zoom live join
 
 ## Docs
 
