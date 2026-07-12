@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, Clock, CreditCard, Loader2, Lock, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
+import { accumulateWatch, initWatch, type WatchState } from "@/lib/watch";
 import type { ApiSuccess, StreamData } from "@/lib/types";
 
 interface VideoPlayerProps {
   videoId: string;
   /** Course the video belongs to — powers the enroll / pay call-to-action. */
   courseId: string;
+  /** Session this recording belongs to — records watch attendance. */
+  classSessionId: string;
 }
 
 // Watermark parks in one of these spots and hops between them so it can't be
@@ -29,11 +32,14 @@ const WATERMARK_SPOTS = [
  * browser (not the parent Server Component) so gating runs per-viewer, and a
  * per-student watermark is overlaid to deter screen/phone capture.
  */
-export function VideoPlayer({ videoId, courseId }: VideoPlayerProps) {
+export function VideoPlayer({ videoId, courseId, classSessionId }: VideoPlayerProps) {
   const [stream, setStream] = useState<StreamData | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [spot, setSpot] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const watchRef = useRef<WatchState>(initWatch());
+  const markedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -61,6 +67,51 @@ export function VideoPlayer({ videoId, courseId }: VideoPlayerProps) {
     const t = setInterval(() => setSpot((s) => (s + 1) % WATERMARK_SPOTS.length), 4000);
     return () => clearInterval(t);
   }, [stream]);
+
+  // Mark attendance once the student has actually watched ~30s. Bunny's iframe is
+  // Player.js-compatible, so we read progress via its `timeupdate` events.
+  // Best-effort: never blocks playback or surfaces an error over the video.
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!stream || !iframe) return;
+    watchRef.current = initWatch();
+    markedRef.current = false;
+
+    let cancelled = false;
+    let player: { off?: (e: string) => void } | null = null;
+
+    const mark = (): void => {
+      if (markedRef.current) return;
+      markedRef.current = true;
+      api.post("/attendance/video", { classSessionId }).catch(() => {});
+    };
+
+    import("player.js")
+      .then(({ default: playerjs }) => {
+        if (cancelled) return;
+        const p = new playerjs.Player(iframe);
+        player = p;
+        p.on("ready", () => {
+          p.on("timeupdate", (e) => {
+            const { state, reached } = accumulateWatch(watchRef.current, e?.seconds ?? 0);
+            watchRef.current = state;
+            if (reached) mark();
+          });
+          p.on("ended", mark);
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      try {
+        player?.off?.("timeupdate");
+        player?.off?.("ended");
+      } catch {
+        /* player may not have attached */
+      }
+    };
+  }, [stream, classSessionId]);
 
   if (error) {
     // Still processing on Bunny's side — the upload succeeded, but their webhook
@@ -150,6 +201,7 @@ export function VideoPlayer({ videoId, courseId }: VideoPlayerProps) {
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-border bg-black">
       <iframe
+        ref={iframeRef}
         key={stream.videoId}
         src={stream.embedUrl}
         title={stream.title}
