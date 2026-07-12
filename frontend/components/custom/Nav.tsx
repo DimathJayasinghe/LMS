@@ -37,7 +37,7 @@ export default function Nav() {
   }, [pathname]);
 
   return (
-    <nav className="relative z-50 mx-4 mb-8 mt-8 w-auto min-w-fit max-w-[50rem] sm:mx-auto sm:mt-14 sm:w-full">
+    <nav className="relative z-[70] mx-4 mb-8 mt-8 w-auto min-w-fit max-w-[50rem] sm:mx-auto sm:mt-14 sm:w-full">
       <div className="flex items-center justify-between rounded-full border border-foreground bg-background p-1.5">
         <Link
           href="/home"
@@ -101,9 +101,10 @@ export default function Nav() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: reduceMotion ? 0.1 : 0.18, ease: "easeOut" }}
-            // z-[60], not z-50 — StudentReviews/Header are later-DOM siblings
-            // also at z-50, so at equal z-index they'd paint over this panel
-            // (ties resolve by DOM order, not who's "on top" visually).
+            // The parent <nav> is z-[70] (above the z-50 StudentReviews/Header
+            // hero sections), so this panel — inside the nav's stacking context —
+            // paints over them. (A child z-index can't escape its parent context,
+            // which is why lifting the nav itself, not just this panel, is the fix.)
             className="absolute inset-x-0 top-full z-[60] mt-2 overflow-hidden rounded-3xl border border-foreground bg-background p-2 md:hidden"
           >
             <ul className="flex flex-col text-base text-muted-foreground">
