@@ -45,13 +45,15 @@ since the schema anticipates more than the code currently does:
 2. **Live Zoom join (`POST /zoom-webhook`).** Fully automatic — Zoom's `meeting.participant_joined`
    webhook fires on join, matched by `classSession.zoomMeetingId`. This is real and working
    (subject to real Zoom credentials being configured — see `live-class.endpoints.md`).
-3. **Recorded video watch (`POST /video`).** The **backend** endpoint is real (`STUDENT`-only,
-   upserts attendance immediately on call, tagged `source: ZOOM_WEBHOOK` "same as online" per the
-   service comment) — but **nothing on the frontend calls it**. `VideoPlayer.tsx` doesn't invoke
-   `POST /attendance/video` anywhere, so watching a recording currently marks no attendance at
-   all in practice. There's also no watch-duration/completion gating server-side (it fires
-   immediately on the first call) — if this gets wired up, decide then whether "started playing"
-   is enough or a minimum watched-duration should gate it.
+3. **Recorded video watch (`POST /video`).** **Wired (2026-07-12).** `VideoPlayer.tsx` now attaches
+   to Bunny's iframe via **Player.js** and fires `POST /attendance/video { classSessionId }` **once**
+   the student has actually watched **≥ 30s** (accumulated forward playback only — seeks/scrubs don't
+   count; `lib/watch.ts` `accumulateWatch`), or on `ended` for shorter clips. Best-effort (never
+   blocks/erroring over the player). The endpoint upserts (`source: ZOOM_WEBHOOK`, unchanged) and is
+   now **enrollment-gated**: `markVideoAttendance` runs `assertStudentContentAccess(actor, courseId,
+   { requirePaid: false })`, so a student can only mark attendance for a course they're enrolled in
+   (previously any student could POST for any session). Payment is already enforced when the stream
+   token is issued, so enrollment is the gate here.
 
 ## Attendance Record Shape
 

@@ -47,7 +47,7 @@ export default async function VideoPage({
         Back to class
       </Link>
 
-      <VideoPlayer videoId={video.id} courseId={classId} />
+      <VideoPlayer videoId={video.id} courseId={classId} classSessionId={video.classSessionId} />
 
       <header className="mt-5">
         <h1 className="text-xl font-bold tracking-tight text-foreground">{video.title}</h1>

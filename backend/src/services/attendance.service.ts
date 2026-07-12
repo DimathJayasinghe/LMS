@@ -3,6 +3,7 @@ import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { logger } from '@/config/logger';
 import { assertCourseAccess } from '@/services/class.service';
+import { assertStudentContentAccess } from '@/services/access.service';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type { ScanBarcodeInput, ManualAttendanceInput, AttendanceQuery } from '@/schemas/attendance.schema';
 
@@ -212,17 +213,22 @@ export const markManualAttendance = async (input: ManualAttendanceInput): Promis
 // Source is MANUAL since it's triggered by the system on video watch.
 
 export const markVideoAttendance = async (
-  userId: string,
+  actor: AuthenticatedUser,
   classSessionId: string,
 ): Promise<AttendanceRecord> => {
-  await ensureClassSessionExists(classSessionId);
+  const session = await ensureClassSessionExists(classSessionId);
+
+  // A student can only mark video-attendance for a course they're enrolled in.
+  // (Payment is already enforced when the stream token is issued, so enrollment
+  // is the right gate here.) Non-students fall through the assertion.
+  await assertStudentContentAccess(actor, session.courseId, { requirePaid: false });
 
   return prisma.attendance.upsert({
     where: {
-      userId_classSessionId: { userId, classSessionId },
+      userId_classSessionId: { userId: actor.userId, classSessionId },
     },
     create: {
-      userId,
+      userId: actor.userId,
       classSessionId,
       source: AttendanceSource.ZOOM_WEBHOOK, // Video attendance uses same source as online
       scannedAt: new Date(),

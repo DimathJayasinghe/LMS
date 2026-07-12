@@ -126,7 +126,7 @@ export const markVideoAttendance = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = videoAttendanceSchema.parse(req.body);
     const attendance = await AttendanceService.markVideoAttendance(
-      req.user!.userId,
+      req.user!,
       input.classSessionId,
     );
 
