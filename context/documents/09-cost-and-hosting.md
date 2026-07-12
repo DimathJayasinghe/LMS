@@ -124,3 +124,45 @@ Most security here costs nothing but discipline:
 - Audit log on every privileged mutation.
 
 See [02-architecture.md §7](./02-architecture.md#7-security-model) for the full model.
+
+---
+
+## Appendix — Local development: whole app in Compose behind one ngrok URL (DEV ONLY)
+
+Production keeps the **split**: frontend on Vercel, API/worker/db on the VPS (above). But for
+local development — especially exercising **external webhooks** (Bunny, Zoom, PayHere) that must
+reach `localhost` — it's convenient to run *everything* in Compose and expose it on a single public
+HTTPS URL. Two **dev-only** `docker-compose.yml` services do this:
+
+- **`frontend`** — builds/serves the Next.js app in the stack. Built with
+  `NEXT_PUBLIC_API_URL=/api` (browser calls the API **same-origin**) and runs with
+  `INTERNAL_API_URL=http://backend:5000/api` (SSR reaches the backend directly — see
+  `frontend/lib/env.ts`). nginx routes `/` → `frontend:3000`, `/api` → `backend:5000`, so the whole
+  app is one origin.
+- **`ngrok`** — tunnels `nginx:80` to a public URL. Reads `NGROK_AUTHTOKEN` + optional reserved
+  `NGROK_DOMAIN` from `backend/.env`.
+
+Result — one domain serves everything:
+
+| Path | Goes to |
+|---|---|
+| `https://<ngrok-domain>/` | frontend |
+| `https://<ngrok-domain>/api/...` | backend (incl. webhooks) |
+
+**Webhook URLs** (unchanged by adding the frontend — they're still under `/api`):
+`…/api/videos/bunny-webhook` (Bunny), `…/api/attendance/zoom-webhook` (Zoom),
+`…/api/payments/payhere/notify` (PayHere, if you point `PAYHERE_NOTIFY_URL` at it).
+
+**Gotchas:**
+- After changing frontend code: `docker compose build frontend && docker compose up -d frontend`
+  (it runs a production `next start`, not HMR — for rapid iteration, run `npm run dev` on
+  `:3000` separately as before; that path still uses the absolute `NEXT_PUBLIC_API_URL` in
+  `frontend/.env`).
+- ngrok's **free-tier browser interstitial** shows once per session on first page load — click
+  "Visit Site"; a session cookie then suppresses it (API `fetch`es are unaffected after that).
+
+**Reverting for production (back to Vercel + VPS):**
+1. Delete the `frontend` and `ngrok` services from `docker-compose.yml`.
+2. In `nginx/nginx.conf`, remove the `frontend_upstream` block and restore
+   `location / { return 404; }`.
+3. Deploy the frontend to Vercel with `NEXT_PUBLIC_API_URL=https://api.<domain>/api`.
