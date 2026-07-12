@@ -60,6 +60,13 @@ export const paymentsSummaryQuerySchema = z.object({
 
 export type PaymentsSummaryQuery = z.infer<typeof paymentsSummaryQuerySchema>;
 
+// ─── Financial Reports (Admin) ────────────────────────────
+export const financialReportQuerySchema = z.object({
+	month: paymentMonthSchema.optional(),
+});
+
+export type FinancialReportQuery = z.infer<typeof financialReportQuerySchema>;
+
 // ─── Params ───────────────────────────────────────────────
 export const paymentIdParamSchema = z.object({
 	id: z.string().uuid(),

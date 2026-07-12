@@ -13,6 +13,7 @@ import {
 	overridePaymentSchema,
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
+	financialReportQuerySchema,
 } from '@/schemas/payment.schema';
 import { PAYMENTS_BULK_UPLOAD_MAX_BYTES } from '@/utils/constants';
 
@@ -80,6 +81,16 @@ paymentRoutes.get(
 	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
 	validateQuery(paymentsSummaryQuerySchema),
 	PaymentController.getPaymentsSummary,
+);
+
+// ─── Financial Reports (Super Admin) ──────────────────────
+// Registered BEFORE '/:id' so "reports" isn't captured as an id param.
+paymentRoutes.get(
+	'/reports',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN),
+	validateQuery(financialReportQuerySchema),
+	PaymentController.getFinancialReport,
 );
 
 // ─── Get Payment by Id (Owner/Admin/Staff) ────────────────
