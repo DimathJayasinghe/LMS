@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '@/config/env';
 import { AppError } from '@/utils/app-error';
@@ -56,10 +62,11 @@ export const createR2PresignedPutUrl = async (
   key: string,
   contentType: string,
   expiresInSeconds: number,
+  bucket: string = env.R2_BUCKET_NAME,
 ): Promise<string> => {
   const client = getR2Client();
   const command = new PutObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
+    Bucket: bucket,
     Key: key,
     ContentType: contentType,
   });
@@ -89,11 +96,12 @@ export const createR2PresignedGetUrl = async (
  */
 export const r2HeadObject = async (
   key: string,
+  bucket: string = env.R2_BUCKET_NAME,
 ): Promise<{ exists: boolean; size?: number; contentType?: string }> => {
   const client = getR2Client();
   try {
     const res = await client.send(
-      new HeadObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key }),
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
     );
     return { exists: true, size: res.ContentLength, contentType: res.ContentType };
   } catch (err: unknown) {
@@ -104,4 +112,34 @@ export const r2HeadObject = async (
     }
     throw err;
   }
+};
+
+/**
+ * Resolves the *public* avatar bucket + its public base URL. Avatars are served
+ * from a separate public bucket (the main bucket is private — NIC/exam PDFs), so
+ * this throws 503 until both env vars are set (and the bucket is made public in the
+ * Cloudflare dashboard — the app's S3 key cannot enable public access itself).
+ */
+export const getPublicAvatarConfig = (): { bucket: string; publicBaseUrl: string } => {
+  ensureR2Configured();
+  if (!env.R2_PUBLIC_BUCKET_NAME || !env.R2_PUBLIC_URL) {
+    throw new AppError(
+      'R2_NOT_CONFIGURED',
+      503,
+      'Public avatar storage is not configured (R2_PUBLIC_BUCKET_NAME / R2_PUBLIC_URL).',
+    );
+  }
+  return {
+    bucket: env.R2_PUBLIC_BUCKET_NAME,
+    publicBaseUrl: env.R2_PUBLIC_URL.replace(/\/+$/, ''),
+  };
+};
+
+/** Best-effort object delete (used when replacing/removing an avatar). */
+export const deleteR2Object = async (
+  key: string,
+  bucket: string = env.R2_BUCKET_NAME,
+): Promise<void> => {
+  const client = getR2Client();
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 };
