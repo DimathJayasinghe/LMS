@@ -126,6 +126,10 @@ fallback retained). Current-user avatar spots (TopBar, dashboard greeting) use i
 *Other users'* avatars (e.g. marker grading rows) are an explicit follow-up — those
 list endpoints don't return `profileImage` yet, and adding it there is out of scope.
 
+**Entry point:** the top-right user menu (`TopBar`) gains a **Profile** item — a `Link`
+to `/profile` for every role, following the existing "Account setup" `Link` pattern in
+that dropdown (placed above "Sign out"). This is how the user reaches the profile page.
+
 `lib/types.ts` gains `profileImage`, `emailChangedAt`, `passwordChangedAt` on the user
 type; `lib/api` calls for the new endpoints.
 
