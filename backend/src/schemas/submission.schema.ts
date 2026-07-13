@@ -51,6 +51,15 @@ export const startSubmissionSchema = z.object({
 
 export type StartSubmissionInput = z.infer<typeof startSubmissionSchema>;
 
+// Body for completing a submission. `key` (the presigned answer-PDF key) is
+// present for the PDF channel — the server HeadObject-verifies it landed in R2
+// before persisting `answerPdfUrl`. Absent for MCQ/typed-only completions.
+export const completeSubmissionBodySchema = z.object({
+  key: z.string().trim().min(1).max(300).optional(),
+});
+
+export type CompleteSubmissionInput = z.infer<typeof completeSubmissionBodySchema>;
+
 // ─── List My Submissions (Student) ─────────────────────────
 
 export const listMySubmissionsQuerySchema = z.object({

@@ -10,6 +10,7 @@ import { logger } from '@/config/logger';
 import {
   startSubmissionSchema,
   completeSubmissionSchema,
+  completeSubmissionBodySchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
   listMySubmissionsQuerySchema,
@@ -38,7 +39,8 @@ export const startSubmission = asyncHandler(
 export const completeSubmission = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = completeSubmissionSchema.parse(req.params);
-    const submission = await SubmissionService.completeSubmission(id, req.user!.userId);
+    const body = completeSubmissionBodySchema.parse(req.body);
+    const submission = await SubmissionService.completeSubmission(id, req.user!.userId, body);
 
     res.status(200).json({
       status: 'success',

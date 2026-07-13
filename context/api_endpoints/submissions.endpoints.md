@@ -108,6 +108,17 @@
 ### URL Params
 - `id` — Submission UUID
 
+### Body (optional)
+```json
+{ "key": "answers/<examId>/<userId>/file.pdf" }
+```
+> Changed 2026-07-13: the PDF channel's presign (`POST /submissions`) no longer eagerly writes
+> `answerPdfUrl`. The client passes the presigned `key` here; the server HeadObject-verifies it in R2
+> and only then persists `answerPdfUrl` before flipping `status = COMPLETED` — so a blocked/failed
+> PUT can't leave a "submitted" answer that isn't stored. The key must match
+> `answers/<examId>/<callerId>/` (→ `403 FORBIDDEN_KEY`); a missing object → `409 UPLOAD_NOT_FOUND`.
+> Typed-only/MCQ completions send no `key` and skip the R2 check.
+
 ### Success Response (200)
 
 ```json

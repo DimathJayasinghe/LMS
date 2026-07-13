@@ -52,6 +52,15 @@ export const nicUploadUrlSchema = z.object({
 
 export type NicUploadUrlInput = z.infer<typeof nicUploadUrlSchema>;
 
+// Confirms a NIC photo actually landed in R2 (the client calls this after the
+// browser PUT). `key` is the value handed back by the presign endpoint.
+export const nicConfirmSchema = z.object({
+	side: z.enum(['FRONT', 'BACK']),
+	key: z.string().trim().min(1).max(300),
+});
+
+export type NicConfirmInput = z.infer<typeof nicConfirmSchema>;
+
 export const createStudentBarcodeSchema = z.object({
 	instituteId: z.string().uuid(),
 	barcode: z.string().trim().min(1).max(50),

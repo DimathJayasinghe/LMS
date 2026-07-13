@@ -43,7 +43,8 @@ nothing to enter here and isn't blocked by it.
 
 | Method | Path | Roles | Description |
 |--------|------|-------|--------------|
-| `POST` | `/nic/upload-url` | `STUDENT` | Presigns a direct-to-R2 PUT for one NIC photo (front or back). |
+| `POST` | `/nic/upload-url` | `STUDENT` | Presigns a direct-to-R2 PUT for one NIC photo (front or back). Persists nothing. |
+| `POST` | `/nic/confirm` | `STUDENT` | Confirms the photo actually reached R2 (HeadObject), then stores the key + flips `setupCompleted`. |
 | `GET` | `/institute-barcodes` | `STUDENT` | Lists the caller's own per-institute barcodes. |
 | `POST` | `/institute-barcodes` | `STUDENT` | Registers a barcode for one institute. |
 | `DELETE` | `/institute-barcodes/:barcodeId` | `STUDENT` | Removes one of the caller's own barcodes. |
@@ -80,15 +81,35 @@ added there.
   }
 }
 ```
-The DB row is written **eagerly, at URL-generation time** (same pattern as
-`generateExamPaperUploadUrl`) — the server never receives the actual bytes, only this metadata
-call. `setupCompleted` in the response reflects the account state *after this write*: `true` only
-once both `nicFrontUrl` and `nicBackUrl` are set (computed server-side from whichever side wasn't
-just written, in the same request — no separate "confirm" step needed).
+Presign **persists nothing** — no `nicFrontUrl`/`nicBackUrl`, no `setupCompleted` flip. The
+`setupCompleted` field here is the *current* account state, informational only. The server never
+receives the bytes; the client PUTs straight to R2, then confirms (below).
 
-The client then does a plain `fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file })`
-straight to R2 — verified with a real PUT against live R2 credentials (unlike Bunny/Zoom, R2 is
-already provisioned and working).
+> **Why a confirm step (changed 2026-07-13).** The presign used to write the key + flip
+> `setupCompleted` eagerly, before the browser PUT. A blocked/failed PUT (e.g. an R2 bucket CORS
+> rule that doesn't allow the app origin) then left a photo marked "uploaded" that never landed —
+> "Upload failed" in the UI but "done" after a refresh. Presign is now write-free; the DB reflects
+> a photo only once `/nic/confirm` HeadObject-verifies it in R2. (R2 bucket CORS is a Cloudflare
+> dashboard setting — the app's key can't set `PutBucketCors`; if browser PUTs 403 with no
+> `Access-Control-Allow-Origin`, fix the bucket CORS, not the code.)
+
+The client does `fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file })`
+straight to R2, then calls `/nic/confirm`.
+
+## `POST /nic/confirm`
+
+**Request**
+```json
+{ "side": "FRONT", "key": "nic/<userId>/front-front.jpg" }
+```
+`key` is the value returned by `/nic/upload-url`; the server re-validates its prefix is
+`nic/<callerId>/<side>-` (→ `403 FORBIDDEN_KEY` otherwise) before HeadObject-checking R2.
+
+**Success (200)** — `{ "status": "success", "data": { "setupCompleted": true } }`.
+`setupCompleted` flips to `true` once both sides are confirmed on file. Idempotent.
+
+**Errors** — `403 FORBIDDEN_KEY` (key not owned by caller), `409 UPLOAD_NOT_FOUND` (object not in
+R2 — the PUT never landed; re-upload).
 
 ## `GET /institute-barcodes` / `POST /institute-barcodes` / `DELETE /institute-barcodes/:barcodeId`
 

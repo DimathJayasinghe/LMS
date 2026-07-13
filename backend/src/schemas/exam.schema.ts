@@ -84,6 +84,13 @@ export const examUploadUrlSchema = z.object({
 
 export type ExamUploadUrlInput = z.infer<typeof examUploadUrlSchema>;
 
+// Confirms the paper PDF actually landed in R2 (called after the browser PUT).
+export const examPaperConfirmSchema = z.object({
+	key: z.string().trim().min(1).max(300),
+});
+
+export type ExamPaperConfirmInput = z.infer<typeof examPaperConfirmSchema>;
+
 // ─── Marker Assignment ──────────────────────────────────────
 
 export const assignMarkersSchema = z.object({

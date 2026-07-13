@@ -5,12 +5,13 @@ import type { AuthenticatedUser } from '@/types/auth.types';
 import { assertCourseAccess } from '@/services/class.service';
 import { assertStudentContentAccess } from '@/services/access.service';
 import { EXAM_PDF_KEY_PREFIX, EXAM_PDF_URL_TTL_SECONDS } from '@/utils/constants';
-import { createR2PresignedGetUrl, createR2PresignedPutUrl } from '@/utils/r2';
+import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import {
 	mcqPayloadSchema,
 	type AssignMarkersInput,
 	type CreateExamInput,
 	type ExamUploadUrlInput,
+	type ExamPaperConfirmInput,
 	type ListExamsQuery,
 	type UpdateExamInput,
 } from '@/schemas/exam.schema';
@@ -410,22 +411,64 @@ export const generateExamPaperUploadUrl = async (
 
 	const paperKey = `${EXAM_PDF_KEY_PREFIX}/${examId}/${input.fileName}`;
 
+	// Presign only — do NOT persist `paperPdfUrl` yet. The browser PUT can fail
+	// (connection / R2 CORS) and eagerly writing the key marked a paper attached
+	// that never landed. `confirmExamPaper` writes it once the object is verified.
 	const uploadUrl = await createR2PresignedPutUrl(
 		paperKey,
 		input.contentType,
 		EXAM_PDF_URL_TTL_SECONDS,
 	);
 
-	await prisma.exam.update({
-		where: { id: examId },
-		data: { paperPdfUrl: paperKey },
-	});
-
 	return {
 		uploadUrl,
 		paperKey,
 		expiresAt: new Date(Date.now() + EXAM_PDF_URL_TTL_SECONDS * 1000),
 	};
+};
+
+/**
+ * Confirms the exam paper PDF actually reached R2 (HeadObject), then persists
+ * `paperPdfUrl`. Re-applies the same access + type guards as the presign, and
+ * validates the key belongs to this exam so a client can't attach an arbitrary
+ * object. Idempotent.
+ */
+export const confirmExamPaper = async (
+	examId: string,
+	input: ExamPaperConfirmInput,
+	actor: AuthenticatedUser,
+): Promise<{ paperPdfUrl: string }> => {
+	const exam = await ensureExamExists(examId);
+	await assertCourseAccess(exam.courseId, actor);
+
+	if (exam.deletedAt) {
+		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot accept uploads.');
+	}
+
+	if (exam.type === ExamType.MCQ) {
+		throw new AppError('PAPER_NOT_ALLOWED', 400, 'MCQ exams do not accept paper uploads.');
+	}
+
+	const expectedPrefix = `${EXAM_PDF_KEY_PREFIX}/${examId}/`;
+	if (!input.key.startsWith(expectedPrefix)) {
+		throw new AppError('FORBIDDEN_KEY', 403, 'That upload key does not belong to this exam.');
+	}
+
+	const { exists } = await r2HeadObject(input.key);
+	if (!exists) {
+		throw new AppError(
+			'UPLOAD_NOT_FOUND',
+			409,
+			"We couldn't find the uploaded paper. Please try uploading it again.",
+		);
+	}
+
+	await prisma.exam.update({
+		where: { id: examId },
+		data: { paperPdfUrl: input.key },
+	});
+
+	return { paperPdfUrl: input.key };
 };
 
 // ─── Marker Assignment ─────────────────────────────────────

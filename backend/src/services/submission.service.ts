@@ -2,13 +2,14 @@ import { ExamType, NotificationType, Prisma, Role, SubmissionStatus } from '@pri
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/constants';
-import { createR2PresignedGetUrl, createR2PresignedPutUrl } from '@/utils/r2';
+import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
   ListSubmissionsQuery,
   McqAnswersInput,
+  CompleteSubmissionInput,
 } from '@/schemas/submission.schema';
 import * as StreamService from '@/services/stream.service';
 import * as NotificationService from '@/services/notification.service';
@@ -305,16 +306,12 @@ export const startSubmission = async (
       ANSWER_PDF_URL_TTL_SECONDS,
     );
 
-    // Store the R2 key so we know where the file will land
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: { answerPdfUrl: uploadKey },
-    });
-
+    // Presign only — do NOT persist `answerPdfUrl` yet. The browser PUT can fail
+    // (connection / R2 CORS); eagerly storing the key marked an answer submitted
+    // that never landed. `confirmAnswerPdf` writes it once the object is verified.
     result.uploadUrl = uploadUrl;
     result.uploadKey = uploadKey;
     result.uploadExpiresAt = new Date(Date.now() + ANSWER_PDF_URL_TTL_SECONDS * 1000);
-    result.submission.answerPdfUrl = uploadKey;
   }
 
   return result;
@@ -327,10 +324,15 @@ export const startSubmission = async (
 export const completeSubmission = async (
   submissionId: string,
   userId: string,
+  input: CompleteSubmissionInput = {},
 ): Promise<SubmissionResult> => {
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
-    select: { ...submissionDetailSelect, exam: { select: { endTime: true } } },
+    select: {
+      ...submissionDetailSelect,
+      examId: true,
+      exam: { select: { endTime: true } },
+    },
   });
 
   if (!submission) {
@@ -357,9 +359,32 @@ export const completeSubmission = async (
     );
   }
 
+  // For the PDF answer channel, verify the file actually reached R2 (HeadObject)
+  // before persisting `answerPdfUrl` — the presign no longer eagerly writes it, so
+  // a failed/blocked browser PUT never leaves a "submitted" answer that isn't there.
+  let answerPdfUrl: string | undefined;
+  if (input.key) {
+    const expectedPrefix = `${ANSWER_PDF_KEY_PREFIX}/${submission.examId}/${userId}/`;
+    if (!input.key.startsWith(expectedPrefix)) {
+      throw new AppError('FORBIDDEN_KEY', 403, 'That upload key does not belong to this submission.');
+    }
+    const { exists } = await r2HeadObject(input.key);
+    if (!exists) {
+      throw new AppError(
+        'UPLOAD_NOT_FOUND',
+        409,
+        "We couldn't find the uploaded answer PDF. Please try uploading it again.",
+      );
+    }
+    answerPdfUrl = input.key;
+  }
+
   const updated = await prisma.submission.update({
     where: { id: submissionId },
-    data: { status: SubmissionStatus.COMPLETED },
+    data: {
+      status: SubmissionStatus.COMPLETED,
+      ...(answerPdfUrl ? { answerPdfUrl } : {}),
+    },
     select: submissionDetailSelect,
   });
 

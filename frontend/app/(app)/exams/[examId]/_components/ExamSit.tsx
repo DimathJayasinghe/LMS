@@ -122,7 +122,11 @@ export function ExamSit({ exam }: { exam: ExamDetail }) {
           body: pdfToUpload,
         });
         if (!put.ok) throw new Error("Upload failed. Please check your connection and try again.");
-        await api.patch(`/submissions/${res.data.submission.id}/complete`);
+        // `complete` HeadObject-verifies the file landed and only then persists
+        // answerPdfUrl — so a blocked PUT can't leave a submitted-but-empty answer.
+        await api.patch(`/submissions/${res.data.submission.id}/complete`, {
+          key: res.data.uploadKey,
+        });
       }
 
       try {

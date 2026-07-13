@@ -9,6 +9,7 @@ import {
 	createExamSchema,
 	examIdParamSchema,
 	examUploadUrlSchema,
+	examPaperConfirmSchema,
 	listExamsQuerySchema,
 	updateExamSchema,
 } from '@/schemas/exam.schema';
@@ -108,6 +109,20 @@ export const getPaperUploadUrl = asyncHandler(
 			status: 'success',
 			data: upload,
 			message: 'Upload URL generated successfully.',
+		});
+	},
+);
+
+export const confirmPaperUpload = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const { id } = examIdParamSchema.parse(req.params);
+		const input = examPaperConfirmSchema.parse(req.body);
+		const result = await ExamService.confirmExamPaper(id, input, req.user!);
+
+		res.status(200).json({
+			status: 'success',
+			data: result,
+			message: 'Paper upload confirmed.',
 		});
 	},
 );

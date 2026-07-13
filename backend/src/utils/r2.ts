@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '@/config/env';
 import { AppError } from '@/utils/app-error';
@@ -78,4 +78,30 @@ export const createR2PresignedGetUrl = async (
   });
 
   return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
+};
+
+/**
+ * Confirms an object actually exists in R2 (a HeadObject read, within the same
+ * scoped key permissions). Direct-to-cloud uploads presign a browser PUT but the
+ * API never sees the bytes — callers use this to verify the upload really landed
+ * before persisting a "done" flag, instead of trusting an eager presign-time write.
+ * Returns `{ exists: false }` on 404/NotFound; other errors (auth, network) rethrow.
+ */
+export const r2HeadObject = async (
+  key: string,
+): Promise<{ exists: boolean; size?: number; contentType?: string }> => {
+  const client = getR2Client();
+  try {
+    const res = await client.send(
+      new HeadObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key }),
+    );
+    return { exists: true, size: res.ContentLength, contentType: res.ContentType };
+  } catch (err: unknown) {
+    const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+    const name = (err as { name?: string })?.name;
+    if (status === 404 || name === 'NotFound' || name === 'NoSuchKey') {
+      return { exists: false };
+    }
+    throw err;
+  }
 };
