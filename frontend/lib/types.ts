@@ -46,12 +46,19 @@ export interface User {
   role: Role;
   phone?: string | null;
   nic?: string | null;
+  address?: string | null;
+  city?: string | null;
   barcode?: string | null;
+  /** Public CDN URL of the profile avatar (see profile.endpoints.md). */
+  profileImage?: string | null;
   /** Account-setup gate: both NIC photos uploaded (see account-setup.endpoints.md). */
   setupCompleted?: boolean;
   /** Presence-only flags — never a raw R2 key or signed URL. */
   nicFrontUploaded?: boolean;
   nicBackUploaded?: boolean;
+  /** Cooldown anchors for self email/password changes (see profile.endpoints.md). */
+  emailChangedAt?: string | null;
+  passwordChangedAt?: string | null;
   deletedAt?: string | null;
   createdAt: string;
 }
@@ -73,6 +80,13 @@ export interface NicUploadUrlResult {
   expiresAt: string;
   /** Reflects the account *after* this write — true once both sides are on file. */
   setupCompleted: boolean;
+}
+
+/** Signed direct-to-public-R2 avatar upload (POST /users/me/avatar/upload-url). */
+export interface AvatarUploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
 }
 
 // ── Academic hierarchy ───────────────────────────────────────────────────────
