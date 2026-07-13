@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -31,11 +31,13 @@ function NicPhotoField({
   side,
   uploaded,
   uploading,
+  previewUrl,
   onSelect,
 }: {
   side: Side;
   uploaded: boolean;
   uploading: boolean;
+  previewUrl: string | null;
   onSelect: (file: File) => void;
 }) {
   const label = side === "FRONT" ? "NIC — front" : "NIC — back";
@@ -43,6 +45,14 @@ function NicPhotoField({
     <div className="space-y-1.5">
       <label className="text-sm font-medium text-foreground">{label}</label>
       <div className="flex items-center gap-3">
+        {previewUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={`${label} preview`}
+            className="size-12 shrink-0 rounded-md border border-border object-cover"
+          />
+        )}
         <input
           type="file"
           accept="image/jpeg,image/png"
@@ -80,6 +90,17 @@ export function AccountSetupForm({
   const [setupCompleted, setSetupCompleted] = useState(initialSetupCompleted);
   const [uploadingSide, setUploadingSide] = useState<Side | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Local object-URL previews of the just-uploaded photos (revoked on replace/unmount).
+  const [previews, setPreviews] = useState<{ FRONT: string | null; BACK: string | null }>({
+    FRONT: null,
+    BACK: null,
+  });
+  useEffect(() => {
+    return () => {
+      Object.values(previews).forEach((url) => url && URL.revokeObjectURL(url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [barcodes, setBarcodes] = useState(initialBarcodes);
   const availableInstitutes = institutes.filter(
@@ -113,9 +134,21 @@ export function AccountSetupForm({
       });
       if (!put.ok) throw new Error("Upload failed. Please check your connection and try again.");
 
+      // Confirm the photo actually reached storage before marking it done — a
+      // blocked/failed PUT must not leave a "uploaded" state that isn't real.
+      const confirmed = await api.post<ApiSuccess<{ setupCompleted: boolean }>>(
+        "/users/me/nic/confirm",
+        { side, key: res.data.key },
+      );
+
+      const objectUrl = URL.createObjectURL(file);
+      setPreviews((prev) => {
+        if (prev[side]) URL.revokeObjectURL(prev[side]!);
+        return { ...prev, [side]: objectUrl };
+      });
       if (side === "FRONT") setNicFrontUploaded(true);
       else setNicBackUploaded(true);
-      setSetupCompleted(res.data.setupCompleted);
+      setSetupCompleted(confirmed.data.setupCompleted);
     } catch (e) {
       setUploadError(
         e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Upload failed. Try again.",
@@ -185,12 +218,14 @@ export function AccountSetupForm({
             side="FRONT"
             uploaded={nicFrontUploaded}
             uploading={uploadingSide === "FRONT"}
+            previewUrl={previews.FRONT}
             onSelect={(file) => void uploadNicPhoto("FRONT", file)}
           />
           <NicPhotoField
             side="BACK"
             uploaded={nicBackUploaded}
             uploading={uploadingSide === "BACK"}
+            previewUrl={previews.BACK}
             onSelect={(file) => void uploadNicPhoto("BACK", file)}
           />
         </div>

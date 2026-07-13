@@ -2,13 +2,14 @@ import { Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
-import { createR2PresignedPutUrl } from '@/utils/r2';
+import { createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import type {
 	ListUsersQuery,
 	UpdateRoleInput,
 	UpdateStatusInput,
 	AssignBarcodeInput,
 	NicUploadUrlInput,
+	NicConfirmInput,
 	CreateStudentBarcodeInput,
 } from '@/schemas/user.schema';
 
@@ -196,11 +197,13 @@ interface NicUploadUrlResult {
 }
 
 /**
- * Presigns a direct-to-R2 PUT for one NIC photo (front or back) and eagerly
- * writes the key — same "server never touches the file" pattern as exam
- * papers (see exam.service.ts::generateExamPaperUploadUrl). `setupCompleted`
- * auto-flips once both sides are on file; there is no separate admin
- * approval step (see context/documents/02-architecture.md §4.1).
+ * Presigns a direct-to-R2 PUT for one NIC photo (front or back). Persists
+ * NOTHING — the browser PUT can still fail (a bad connection, an R2 CORS rule
+ * that doesn't allow the app origin), and eagerly writing the key here used to
+ * mark a photo "uploaded" that never actually landed. The client confirms the
+ * upload via `confirmNicUpload` after the PUT succeeds; only then is the key
+ * stored and `setupCompleted` flipped. Same "server never touches the file"
+ * pattern as exam papers (see context/documents/02-architecture.md §4.1).
  */
 export const generateNicUploadUrl = async (
 	userId: string,
@@ -208,7 +211,7 @@ export const generateNicUploadUrl = async (
 ): Promise<NicUploadUrlResult> => {
 	const existing = await prisma.user.findUnique({
 		where: { id: userId },
-		select: { nicFrontUrl: true, nicBackUrl: true },
+		select: { setupCompleted: true },
 	});
 
 	if (!existing) {
@@ -218,24 +221,60 @@ export const generateNicUploadUrl = async (
 	const key = `${NIC_IMAGE_KEY_PREFIX}/${userId}/${input.side.toLowerCase()}-${input.fileName}`;
 	const uploadUrl = await createR2PresignedPutUrl(key, input.contentType, NIC_IMAGE_URL_TTL_SECONDS);
 
+	return {
+		uploadUrl,
+		key,
+		expiresAt: new Date(Date.now() + NIC_IMAGE_URL_TTL_SECONDS * 1000),
+		setupCompleted: existing.setupCompleted,
+	};
+};
+
+/**
+ * Confirms a NIC photo actually reached R2 (HeadObject), then stores the key and
+ * flips `setupCompleted` once both sides are on file. Idempotent: re-confirming a
+ * present object simply rewrites the same key. The `key` is the one handed out by
+ * `generateNicUploadUrl`; we re-validate its prefix belongs to THIS user so a
+ * client can't confirm an object it doesn't own.
+ */
+export const confirmNicUpload = async (
+	userId: string,
+	input: NicConfirmInput,
+): Promise<{ setupCompleted: boolean }> => {
+	const expectedPrefix = `${NIC_IMAGE_KEY_PREFIX}/${userId}/${input.side.toLowerCase()}-`;
+	if (!input.key.startsWith(expectedPrefix)) {
+		throw new AppError('FORBIDDEN_KEY', 403, 'That upload key does not belong to you.');
+	}
+
+	const { exists } = await r2HeadObject(input.key);
+	if (!exists) {
+		throw new AppError(
+			'UPLOAD_NOT_FOUND',
+			409,
+			"We couldn't find the uploaded photo. Please try uploading it again.",
+		);
+	}
+
+	const existing = await prisma.user.findUnique({
+		where: { id: userId },
+		select: { nicFrontUrl: true, nicBackUrl: true },
+	});
+	if (!existing) {
+		throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
+	}
+
 	const otherSideKey = input.side === 'FRONT' ? existing.nicBackUrl : existing.nicFrontUrl;
 	const setupCompleted = Boolean(otherSideKey);
 
 	const updated = await prisma.user.update({
 		where: { id: userId },
 		data: {
-			...(input.side === 'FRONT' ? { nicFrontUrl: key } : { nicBackUrl: key }),
+			...(input.side === 'FRONT' ? { nicFrontUrl: input.key } : { nicBackUrl: input.key }),
 			...(setupCompleted ? { setupCompleted: true } : {}),
 		},
 		select: { setupCompleted: true },
 	});
 
-	return {
-		uploadUrl,
-		key,
-		expiresAt: new Date(Date.now() + NIC_IMAGE_URL_TTL_SECONDS * 1000),
-		setupCompleted: updated.setupCompleted,
-	};
+	return { setupCompleted: updated.setupCompleted };
 };
 
 interface StudentBarcodeSummary {

@@ -297,6 +297,16 @@ Generate a presigned upload URL for a PDF exam paper.
 - 404 `EXAM_NOT_FOUND`
 - 503 `R2_NOT_CONFIGURED` or `R2_BUCKET_MISSING`
 
+> Presign **persists nothing** (changed 2026-07-13). `paperPdfUrl` is written only by
+> `POST /:id/paper/confirm` after the browser PUT, so a failed/blocked upload never marks a paper
+> attached that isn't in R2. See `account-setup.endpoints.md` for the rationale.
+
+### POST `/:id/paper/confirm`
+
+Confirms the paper PDF reached R2 (HeadObject) and persists `paperPdfUrl`. Same role + MCQ/deleted
+guards as the presign. Body: `{ "key": "exams/<examId>/paper.pdf" }` (must match this exam's key
+prefix → `403 FORBIDDEN_KEY`). Errors: `409 UPLOAD_NOT_FOUND` if the object never landed. Idempotent.
+
 ### POST `/:id/assign-markers`
 
 Assign markers to an exam.

@@ -8,6 +8,7 @@ import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
   startSubmissionSchema,
   completeSubmissionSchema,
+  completeSubmissionBodySchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
   listMySubmissionsQuerySchema,
@@ -37,6 +38,7 @@ submissionRoutes.patch(
   verifyToken,
   requireRole(Role.STUDENT),
   validateParams(completeSubmissionSchema),
+  validateBody(completeSubmissionBodySchema),
   SubmissionController.completeSubmission,
 );
 

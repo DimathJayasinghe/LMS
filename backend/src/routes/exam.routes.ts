@@ -9,6 +9,7 @@ import {
 	createExamSchema,
 	examIdParamSchema,
 	examUploadUrlSchema,
+	examPaperConfirmSchema,
 	listExamsQuerySchema,
 	updateExamSchema,
 } from '@/schemas/exam.schema';
@@ -40,6 +41,16 @@ examRoutes.post(
 	validateParams(examIdParamSchema),
 	validateBody(examUploadUrlSchema),
 	ExamController.getPaperUploadUrl,
+);
+
+// ─── Confirm Paper Upload (after the browser PUT) ──────────
+examRoutes.post(
+	'/:id/paper/confirm',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	validateBody(examPaperConfirmSchema),
+	ExamController.confirmPaperUpload,
 );
 
 // ─── Assign Markers ─────────────────────────────────────────

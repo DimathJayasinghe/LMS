@@ -8,6 +8,7 @@ import {
 	listUsersQuerySchema,
 	userIdParamSchema,
 	nicUploadUrlSchema,
+	nicConfirmSchema,
 	createStudentBarcodeSchema,
 	studentBarcodeIdParamSchema,
 	type AssignBarcodeInput,
@@ -129,6 +130,16 @@ export const getNicUploadUrl = asyncHandler(async (req: Request, res: Response):
 	res.status(200).json({
 		status: 'success',
 		data: upload,
+	});
+});
+
+export const confirmNicUpload = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const input = nicConfirmSchema.parse(req.body);
+	const result = await UserService.confirmNicUpload(req.user!.userId, input);
+
+	res.status(200).json({
+		status: 'success',
+		data: result,
 	});
 });
 

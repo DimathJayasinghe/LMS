@@ -9,6 +9,7 @@ import {
     createStudentBarcodeSchema,
     listUsersQuerySchema,
     nicUploadUrlSchema,
+    nicConfirmSchema,
     studentBarcodeIdParamSchema,
     updateRoleSchema,
     updateStatusSchema,
@@ -38,6 +39,15 @@ userRoutes.post(
     requireRole(Role.STUDENT),
     validateBody(nicUploadUrlSchema),
     UserController.getNicUploadUrl,
+);
+
+// POST /api/users/me/nic/confirm — Confirm the NIC photo actually reached R2
+userRoutes.post(
+    '/me/nic/confirm',
+    verifyToken,
+    requireRole(Role.STUDENT),
+    validateBody(nicConfirmSchema),
+    UserController.confirmNicUpload,
 );
 
 // GET /api/users/me/institute-barcodes — List my per-institute barcodes

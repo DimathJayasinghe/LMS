@@ -76,6 +76,10 @@ export function ExamForm({ courses }: { courses: Course[] }) {
       body: file,
     });
     if (!put.ok) throw new Error("Paper upload failed. Please check your connection and try again.");
+
+    // Confirm the PDF actually reached storage before the exam records it as
+    // attached — the presign no longer persists the key on its own.
+    await api.post(`/exams/${id}/paper/confirm`, { key: res.data.paperKey });
   };
 
   const submit = async (): Promise<void> => {
