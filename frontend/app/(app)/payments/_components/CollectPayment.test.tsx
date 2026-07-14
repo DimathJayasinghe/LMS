@@ -1,0 +1,214 @@
+import { useEffect } from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { CollectPayment } from "./CollectPayment";
+import { formatCurrency } from "@/lib/utils";
+import type { Enrollment, Payment, ResolvedBarcodeStudent, User } from "@/lib/types";
+
+const { get, post, push, refresh } = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  push: vi.fn(),
+  refresh: vi.fn(),
+}));
+
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return { ...actual, api: { get, post, patch: vi.fn(), upload: vi.fn(), del: vi.fn() } };
+});
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
+vi.mock("@/components/custom/QrCamera", () => ({
+  QrCamera: ({ onDecode }: { onDecode: (text: string) => void }) => {
+    useEffect(() => onDecode("NUG-001"), [onDecode]);
+    return null;
+  },
+}));
+
+const student: User = {
+  id: "u1",
+  name: "Nimal Perera",
+  email: "n@x.lk",
+  role: "STUDENT",
+  indexNumber: 42,
+  createdAt: "",
+};
+
+const enrollment: Enrollment = {
+  id: "e1",
+  classType: "PHYSICAL",
+  isActive: true,
+  userId: "u1",
+  courseId: "c1",
+  createdAt: "2026-06-01T00:00:00.000Z",
+  updatedAt: "",
+  course: {
+    id: "c1",
+    name: "Physics",
+    year: 2026,
+    monthlyFee: "2500.00",
+    isActive: true,
+    subjectId: "s1",
+    teacherId: "t1",
+  },
+};
+
+const paymentFixture = (overrides: Partial<Payment> = {}): Payment => ({
+  id: "p1",
+  amount: "2500.00",
+  status: "SUCCESS",
+  method: "ENTRANCE",
+  paymentMonth: "2026-07",
+  createdAt: "",
+  updatedAt: "",
+  enrollment: {
+    id: "e1",
+    classType: "PHYSICAL",
+    userId: "u1",
+    user: { id: "u1", name: "Nimal Perera", email: "n@x.lk", indexNumber: 42 },
+    course: { id: "c1", name: "Physics", year: 2026, monthlyFee: "2500.00" },
+  },
+  ...overrides,
+});
+
+function mockGet(paymentsHistory: Payment[] = []) {
+  get.mockReset().mockImplementation((path: string) => {
+    if (path.startsWith("/users?search=")) return Promise.resolve({ data: [student], count: 1 });
+    if (path.startsWith("/enrollments?userId=")) return Promise.resolve({ data: [enrollment], count: 1 });
+    if (path.startsWith("/payments?enrollmentId=")) return Promise.resolve({ data: paymentsHistory, count: paymentsHistory.length });
+    if (path.startsWith("/users/resolve-barcode")) {
+      const resolved: ResolvedBarcodeStudent = {
+        user: { id: "u1", name: "Nimal Perera", indexNumber: 42 },
+        instituteId: "inst-1",
+        matchedBarcode: "NUG-001",
+      };
+      return Promise.resolve({ data: resolved });
+    }
+    return Promise.resolve({ data: [], count: 0 });
+  });
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-07-14T00:00:00.000Z"));
+  mockGet();
+  post.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+async function selectStudentByName(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Search student"), "Nimal");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  const selectBtn = await screen.findByRole("button", { name: "Select" });
+  await user.click(selectBtn);
+}
+
+describe("CollectPayment — search → select → collect", () => {
+  it("collects the current outstanding month with the pre-filled amount", async () => {
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    await selectStudentByName(user);
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    const amountInput = await screen.findByLabelText<HTMLInputElement>("Amount");
+    expect(amountInput.value).toBe("2500.00");
+
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+
+    expect(post).toHaveBeenCalledWith(
+      "/payments/collect-entrance",
+      { enrollmentId: "e1", paymentMonth: "2026-07", amount: 2500 },
+      { headers: { "Idempotency-Key": expect.any(String) } },
+    );
+    expect(await screen.findByText("Payment collected — view receipt")).toBeInTheDocument();
+  });
+
+  it("lets staff edit the pre-filled amount before submitting", async () => {
+    post.mockResolvedValueOnce({ data: paymentFixture({ amount: "1000.00" }) });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    await selectStudentByName(user);
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    const amountInput = await screen.findByLabelText("Amount");
+    await user.clear(amountInput);
+    await user.type(amountInput, "1000");
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+
+    expect(post).toHaveBeenCalledWith(
+      "/payments/collect-entrance",
+      expect.objectContaining({ amount: 1000 }),
+      expect.anything(),
+    );
+  });
+});
+
+describe("CollectPayment — barcode scan resolution", () => {
+  it("captures institute + barcode from a scan and includes them in the submit body", async () => {
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    await user.click(screen.getByLabelText("Turn camera on"));
+    await screen.findByText("Nimal Perera");
+
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+
+    expect(post).toHaveBeenCalledWith(
+      "/payments/collect-entrance",
+      {
+        enrollmentId: "e1",
+        paymentMonth: "2026-07",
+        amount: 2500,
+        collectedAtInstituteId: "inst-1",
+        collectedViaBarcode: "NUG-001",
+      },
+      { headers: { "Idempotency-Key": expect.any(String) } },
+    );
+  });
+});
+
+describe("CollectPayment — already-paid months are excluded", () => {
+  it("does not offer a month that already has a SUCCESS payment", async () => {
+    mockGet([paymentFixture({ paymentMonth: "2026-07", method: "ONLINE", payhereId: "pay_1" })]);
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    await selectStudentByName(user);
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+
+    await screen.findByLabelText("Select month to collect");
+    expect(screen.queryByRole("option", { name: /2026-07/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /2026-06/ })).toBeInTheDocument();
+  });
+});
+
+describe("CollectPayment — session summary", () => {
+  it("accumulates each successful collection into the session list with a running total", async () => {
+    post
+      .mockResolvedValueOnce({ data: paymentFixture({ id: "p1" }) })
+      .mockResolvedValueOnce({ data: paymentFixture({ id: "p2", paymentMonth: "2026-06" }) });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    await selectStudentByName(user);
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+    await screen.findByText("Payment collected — view receipt");
+
+    await user.selectOptions(screen.getByLabelText("Select month to collect"), "2026-06");
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+
+    await screen.findByText("Collected this session");
+    const list = screen.getByText("Collected this session").closest("div")!.parentElement!;
+    expect(within(list).getAllByText(/Nimal Perera/)).toHaveLength(2);
+    expect(within(list).getByText(formatCurrency(5000))).toBeInTheDocument();
+  });
+});
