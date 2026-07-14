@@ -89,6 +89,13 @@ export interface AvatarUploadUrlResult {
   expiresAt: string;
 }
 
+/** GET /users/resolve-barcode?code= result (see users.endpoints.md). */
+export interface ResolvedBarcodeStudent {
+  user: { id: string; name: string; indexNumber: number };
+  instituteId: string | null;
+  matchedBarcode: string;
+}
+
 // ── Academic hierarchy ───────────────────────────────────────────────────────
 export interface Subject {
   id: string;
@@ -408,9 +415,13 @@ export interface Payment {
   id: string;
   amount: string; // decimal as string
   status: PaymentStatus;
+  method: PaymentMethod;
   payhereId?: string | null;
   paymentMonth: string; // "YYYY-MM"
   note?: string | null;
+  collectedBy?: { id: string; name: string } | null;
+  collectedAtInstitute?: { id: string; name: string; code: string } | null;
+  collectedViaBarcode?: string | null;
   createdAt: string;
   updatedAt: string;
   enrollment: {
