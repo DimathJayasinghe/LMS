@@ -125,7 +125,7 @@ export const overridePayment = asyncHandler(
 
 		// Fetch before state for audit
 		const before = await PaymentService.getPaymentById(id, req.user!.userId, req.user!.role);
-		const payment = await PaymentService.overridePayment(id, input);
+		const payment = await PaymentService.overridePayment(id, input, req.user!.userId);
 
 		void AuditService.log({
 			action: AUDIT_ACTION.PAYMENT_OVERRIDDEN,

@@ -65,11 +65,15 @@ interface PaymentSummary {
 	id: string;
 	amount: Prisma.Decimal;
 	status: PaymentStatus;
+	method: PaymentMethod;
 	payhereId: string | null;
 	paymentMonth: string;
 	note: string | null;
 	createdAt: Date;
 	updatedAt: Date;
+	collectedBy: { id: string; name: string } | null;
+	collectedAtInstitute: { id: string; name: string; code: string } | null;
+	collectedViaBarcode: string | null;
 	enrollment: {
 		id: string;
 		classType: ClassType;
@@ -110,11 +114,19 @@ const paymentSelect = {
 	id: true,
 	amount: true,
 	status: true,
+	method: true,
 	payhereId: true,
 	paymentMonth: true,
 	note: true,
 	createdAt: true,
 	updatedAt: true,
+	collectedBy: {
+		select: { id: true, name: true },
+	},
+	collectedAtInstitute: {
+		select: { id: true, name: true, code: true },
+	},
+	collectedViaBarcode: true,
 	enrollment: {
 		select: {
 			id: true,
@@ -587,6 +599,7 @@ export const getPaymentById = async (
 export const overridePayment = async (
 	paymentId: string,
 	input: OverridePaymentInput,
+	actingAdminId: string,
 ): Promise<PaymentSummary> => {
 	const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
 
@@ -600,6 +613,8 @@ export const overridePayment = async (
 			status: input.status,
 			amount: input.amount,
 			note: input.note,
+			method: PaymentMethod.MANUAL,
+			collectedById: actingAdminId,
 		},
 		select: paymentSelect,
 	});
@@ -784,6 +799,7 @@ export const bulkUploadPayments = async (
 					data: {
 						amount,
 						status: PaymentStatus.SUCCESS,
+						method: PaymentMethod.BULK,
 						note: normalized.note ?? existing.note,
 					},
 				});
@@ -797,6 +813,7 @@ export const bulkUploadPayments = async (
 					paymentMonth: normalized.paymentMonth,
 					amount,
 					status: PaymentStatus.SUCCESS,
+					method: PaymentMethod.BULK,
 					note: normalized.note ?? 'Bulk upload',
 				},
 			});

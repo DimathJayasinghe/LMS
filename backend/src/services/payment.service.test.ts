@@ -1,22 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma } from '@prisma/client';
 
-const { paymentAggregate, paymentCount } = vi.hoisted(() => ({
+const { paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, dispatch } = vi.hoisted(() => ({
 	paymentAggregate: vi.fn(),
 	paymentCount: vi.fn(),
+	paymentFindUnique: vi.fn(),
+	paymentUpdate: vi.fn(),
+	dispatch: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
-		payment: { aggregate: paymentAggregate, count: paymentCount },
+		payment: {
+			aggregate: paymentAggregate,
+			count: paymentCount,
+			findUnique: paymentFindUnique,
+			update: paymentUpdate,
+		},
 	},
 }));
 
-import { getPaymentsSummary } from './payment.service';
+vi.mock('@/services/notification.service', () => ({ dispatch }));
+
+import { getPaymentsSummary, overridePayment } from './payment.service';
 
 beforeEach(() => {
 	paymentAggregate.mockReset();
 	paymentCount.mockReset();
+	paymentFindUnique.mockReset();
+	paymentUpdate.mockReset();
+	dispatch.mockReset();
 });
 
 describe('getPaymentsSummary', () => {
@@ -63,5 +76,31 @@ describe('getPaymentsSummary', () => {
 			pendingCount: 0,
 			failedCount: 0,
 		});
+	});
+});
+
+describe('overridePayment — method/collectedById', () => {
+	const existingPayment = { id: 'pay-1', status: 'PENDING' };
+	const updatedPayment = {
+		id: 'pay-1',
+		amount: new Prisma.Decimal('2500'),
+		status: 'SUCCESS',
+		method: 'MANUAL',
+		collectedById: 'admin-1',
+		paymentMonth: '2026-07',
+		enrollment: { userId: 'u1', course: { name: 'Physics' } },
+	};
+
+	it('sets method: MANUAL and collectedById to the acting admin', async () => {
+		paymentFindUnique.mockResolvedValueOnce(existingPayment);
+		paymentUpdate.mockResolvedValueOnce(updatedPayment);
+
+		await overridePayment('pay-1', { status: 'SUCCESS' as const, amount: 2500 }, 'admin-1');
+
+		expect(paymentUpdate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ method: 'MANUAL', collectedById: 'admin-1' }),
+			}),
+		);
 	});
 });
