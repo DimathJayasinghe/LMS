@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma } from '@prisma/client';
 
-const { paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, dispatch } = vi.hoisted(() => ({
+const { paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, paymentCreate, enrollmentFindUnique, dispatch, getCurrentPaymentMonth } = vi.hoisted(() => ({
 	paymentAggregate: vi.fn(),
 	paymentCount: vi.fn(),
 	paymentFindUnique: vi.fn(),
 	paymentUpdate: vi.fn(),
+	paymentCreate: vi.fn(),
+	enrollmentFindUnique: vi.fn(),
 	dispatch: vi.fn(),
+	getCurrentPaymentMonth: vi.fn(() => '2026-07'),
 }));
 
 vi.mock('@/config/database', () => ({
@@ -16,20 +19,26 @@ vi.mock('@/config/database', () => ({
 			count: paymentCount,
 			findUnique: paymentFindUnique,
 			update: paymentUpdate,
+			create: paymentCreate,
 		},
+		enrollment: { findUnique: enrollmentFindUnique },
 	},
 }));
 
 vi.mock('@/services/notification.service', () => ({ dispatch }));
+vi.mock('@/services/access.service', () => ({ getCurrentPaymentMonth }));
 
-import { getPaymentsSummary, overridePayment } from './payment.service';
+import { getPaymentsSummary, overridePayment, collectEntrancePayment } from './payment.service';
 
 beforeEach(() => {
 	paymentAggregate.mockReset();
 	paymentCount.mockReset();
 	paymentFindUnique.mockReset();
 	paymentUpdate.mockReset();
+	paymentCreate.mockReset();
+	enrollmentFindUnique.mockReset();
 	dispatch.mockReset();
+	getCurrentPaymentMonth.mockReturnValue('2026-07');
 });
 
 describe('getPaymentsSummary', () => {
@@ -100,6 +109,109 @@ describe('overridePayment — method/collectedById', () => {
 		expect(paymentUpdate).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({ method: 'MANUAL', collectedById: 'admin-1' }),
+			}),
+		);
+	});
+});
+
+describe('collectEntrancePayment', () => {
+	const activeEnrollment = {
+		id: 'e1',
+		isActive: true,
+		userId: 'u1',
+		course: { name: 'Physics', monthlyFee: new Prisma.Decimal('2500') },
+	};
+	const created = {
+		id: 'pay-new',
+		amount: new Prisma.Decimal('2500'),
+		status: 'SUCCESS',
+		method: 'ENTRANCE',
+		paymentMonth: '2026-07',
+		enrollment: { userId: 'u1', course: { name: 'Physics' } },
+	};
+
+	it('creates a new SUCCESS/ENTRANCE payment when none exists, defaulting the amount to monthlyFee', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce(null);
+		paymentCreate.mockResolvedValueOnce(created);
+
+		const result = await collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' });
+
+		expect(paymentCreate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					enrollmentId: 'e1',
+					paymentMonth: '2026-07',
+					amount: 2500,
+					status: 'SUCCESS',
+					method: 'ENTRANCE',
+					collectedById: 'admin-1',
+				}),
+			}),
+		);
+		expect(result).toEqual(created);
+	});
+
+	it('updates an existing PENDING/FAILED row instead of creating a duplicate', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce({ id: 'pay-old', status: 'FAILED', payhereId: null });
+		paymentUpdate.mockResolvedValueOnce(created);
+
+		await collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' });
+
+		expect(paymentUpdate).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: 'pay-old' } }),
+		);
+		expect(paymentCreate).not.toHaveBeenCalled();
+	});
+
+	it('rejects with ALREADY_PAID_ONLINE when the month is already a confirmed online payment', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce({ id: 'pay-online', status: 'SUCCESS', payhereId: 'payhere_1' });
+
+		await expect(
+			collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' }),
+		).rejects.toMatchObject({ code: 'ALREADY_PAID_ONLINE', statusCode: 409 });
+		expect(paymentUpdate).not.toHaveBeenCalled();
+		expect(paymentCreate).not.toHaveBeenCalled();
+	});
+
+	it('rejects ENROLLMENT_NOT_ACTIVE before touching Payment', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce({ ...activeEnrollment, isActive: false });
+
+		await expect(
+			collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' }),
+		).rejects.toMatchObject({ code: 'ENROLLMENT_NOT_ACTIVE', statusCode: 400 });
+		expect(paymentFindUnique).not.toHaveBeenCalled();
+	});
+
+	it('rejects FUTURE_MONTH', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+
+		await expect(
+			collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-08' }),
+		).rejects.toMatchObject({ code: 'FUTURE_MONTH', statusCode: 400 });
+		expect(paymentFindUnique).not.toHaveBeenCalled();
+	});
+
+	it('persists collectedAtInstituteId/collectedViaBarcode when passed', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce(null);
+		paymentCreate.mockResolvedValueOnce(created);
+
+		await collectEntrancePayment('admin-1', {
+			enrollmentId: 'e1',
+			paymentMonth: '2026-07',
+			collectedAtInstituteId: 'inst-1',
+			collectedViaBarcode: 'NUG-001',
+		});
+
+		expect(paymentCreate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					collectedAtInstituteId: 'inst-1',
+					collectedViaBarcode: 'NUG-001',
+				}),
 			}),
 		);
 	});
