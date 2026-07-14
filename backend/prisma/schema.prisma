@@ -256,6 +256,13 @@ model Payment {
   collectedById String? // staff who took an ENTRANCE/MANUAL payment
   collectedBy   User?   @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
 
+  collectedAtInstituteId String?
+  collectedAtInstitute   Institute? @relation(fields: [collectedAtInstituteId], references: [id], onDelete: SetNull)
+  collectedViaBarcode    String? // raw barcode value that identified the student — a
+                                  // point-in-time snapshot, not a live FK, since
+                                  // StudentBarcode rows can be hard-deleted later
+                                  // and this must stay a stable audit fact
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -264,6 +271,7 @@ model Payment {
   @@index([status])
   @@index([method])
   @@index([paymentMonth])
+  @@index([collectedAtInstituteId])
 }
 
 model ClassSession {
@@ -502,6 +510,7 @@ model Institute {
 
   studentBarcodes StudentBarcode[]
   timetableSlots  TimetableSlot[]
+  payments        Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
