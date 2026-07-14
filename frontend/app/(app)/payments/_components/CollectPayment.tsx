@@ -331,18 +331,18 @@ export function CollectPayment() {
                     </Button>
 
                     {submitError && <p className="text-xs text-destructive">{submitError}</p>}
-
-                    {lastReceiptId && (
-                      <Link
-                        href={`/payments/${lastReceiptId}`}
-                        target="_blank"
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-                      >
-                        <Receipt className="size-3.5" aria-hidden />
-                        Payment collected — view receipt
-                      </Link>
-                    )}
                   </>
+                )}
+
+                {lastReceiptId && (
+                  <Link
+                    href={`/payments/${lastReceiptId}`}
+                    target="_blank"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                  >
+                    <Receipt className="size-3.5" aria-hidden />
+                    Payment collected — view receipt
+                  </Link>
                 )}
               </div>
             )}

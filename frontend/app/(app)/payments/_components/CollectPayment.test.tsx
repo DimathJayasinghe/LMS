@@ -190,6 +190,44 @@ describe("CollectPayment — already-paid months are excluded", () => {
   });
 });
 
+describe("CollectPayment — receipt link survives an exhausted outstanding list", () => {
+  it("still shows the view-receipt link when the collected month was the only one outstanding", async () => {
+    // This enrollment's only outstanding month is the current one — after a
+    // successful collection the post-submit history refetch reports it as
+    // paid, so `outstandingMonths` becomes empty and the component falls
+    // into its "Nothing outstanding" branch. The receipt link must not be
+    // nested inside that branch, or it disappears exactly when it matters.
+    const singleMonthEnrollment = { ...enrollment, createdAt: "2026-07-01T00:00:00.000Z" };
+    get.mockReset().mockImplementation((path: string) => {
+      if (path.startsWith("/users?search=")) return Promise.resolve({ data: [student], count: 1 });
+      if (path.startsWith("/enrollments?userId=")) return Promise.resolve({ data: [singleMonthEnrollment], count: 1 });
+      if (path.startsWith("/payments?enrollmentId=")) {
+        return Promise.resolve({ data: [], count: 0 });
+      }
+      return Promise.resolve({ data: [], count: 0 });
+    });
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    await selectStudentByName(user);
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    await screen.findByLabelText("Select month to collect");
+
+    get.mockImplementation((path: string) => {
+      if (path.startsWith("/payments?enrollmentId=")) {
+        return Promise.resolve({ data: [paymentFixture({ status: "SUCCESS" })], count: 1 });
+      }
+      return Promise.resolve({ data: [], count: 0 });
+    });
+
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+
+    expect(await screen.findByText("Nothing outstanding for this enrollment.")).toBeInTheDocument();
+    expect(screen.getByText("Payment collected — view receipt")).toBeInTheDocument();
+  });
+});
+
 describe("CollectPayment — session summary", () => {
   it("accumulates each successful collection into the session list with a running total", async () => {
     post
