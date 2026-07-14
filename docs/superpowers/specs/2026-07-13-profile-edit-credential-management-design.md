@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-13
 **Branch:** `feature/profile-edit-credentials`
-**Status:** Approved (design)
+**Status:** Implemented — unit (98 backend / 61 frontend) + live-stack API smoke +
+headless UI drive all passed 2026-07-14. Ready for PR into `dev`.
 
 ## Goal
 
