@@ -11,6 +11,7 @@ import {
 	nicConfirmSchema,
 	createStudentBarcodeSchema,
 	studentBarcodeIdParamSchema,
+	resolveBarcodeQuerySchema,
 	type AssignBarcodeInput,
 	type UpdateRoleInput,
 	type UpdateStatusInput,
@@ -187,6 +188,16 @@ export const deleteMyInstituteBarcode = asyncHandler(async (req: Request, res: R
 		status: 'success',
 		data: null,
 		message: 'Institute barcode removed.',
+	});
+});
+
+export const resolveBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { code } = resolveBarcodeQuerySchema.parse(req.query);
+	const data = await UserService.resolveStudentByBarcode(code);
+
+	res.status(200).json({
+		status: 'success',
+		data,
 	});
 });
 

@@ -350,3 +350,43 @@ export const deleteMyInstituteBarcode = async (userId: string, barcodeId: string
 
 	await prisma.studentBarcode.delete({ where: { id: barcodeId } });
 };
+
+interface ResolvedBarcodeStudent {
+	user: { id: string; name: string; indexNumber: number };
+	instituteId: string | null;
+	matchedBarcode: string;
+}
+
+/**
+ * Resolves a scanned code to a student for staff-facing flows (payment collection today;
+ * a natural future fit for the entrance attendance scanner too, which currently only checks
+ * `User.barcode` — see 06-progress-tracker.md). Tries the institute-scoped `StudentBarcode`
+ * first; a code that matches more than one institute (barcode uniqueness is only enforced
+ * *per institute*, not globally) is treated as unresolved rather than guessed.
+ */
+export const resolveStudentByBarcode = async (code: string): Promise<ResolvedBarcodeStudent> => {
+	const instituteMatches = await prisma.studentBarcode.findMany({
+		where: { barcode: code },
+		select: { instituteId: true, user: { select: { id: true, name: true, indexNumber: true } } },
+	});
+
+	if (instituteMatches.length === 1) {
+		const match = instituteMatches[0]!;
+		return { user: match.user, instituteId: match.instituteId, matchedBarcode: code };
+	}
+
+	const user = await prisma.user.findUnique({
+		where: { barcode: code },
+		select: { id: true, name: true, indexNumber: true },
+	});
+
+	if (!user) {
+		throw new AppError(
+			'BARCODE_NOT_FOUND',
+			404,
+			'No student found with this barcode. Please verify the barcode is assigned.',
+		);
+	}
+
+	return { user, instituteId: null, matchedBarcode: code };
+};
