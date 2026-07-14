@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-14
 **Branch:** `feature/pay-at-entrance`
-**Status:** Approved (design)
+**Status:** Implemented — all 13 plan tasks done, unit + system + live-stack smoke verified (2026-07-14)
 
 ## Goal
 

@@ -44,7 +44,7 @@ React Testing Library (frontend); `qrcode.react` (already a dependency) for the 
 **Interfaces:**
 - Produces: `Payment.collectedAtInstituteId`, `Payment.collectedAtInstitute`, `Payment.collectedViaBarcode`; `Institute.payments`; `AUDIT_ACTION.PAYMENT_ENTRANCE_COLLECTED`.
 
-- [ ] **Step 1: Add the two new `Payment` columns.** In `schema.prisma`, inside `model Payment`, right after the `collectedBy` relation block (after the line `collectedBy   User?   @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)`), add:
+- [x] **Step 1: Add the two new `Payment` columns.** In `schema.prisma`, inside `model Payment`, right after the `collectedBy` relation block (after the line `collectedBy   User?   @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)`), add:
 
 ```prisma
   collectedAtInstituteId String?
@@ -61,7 +61,7 @@ Then add a new index inside the same model's `@@index(...)` block (alongside the
   @@index([collectedAtInstituteId])
 ```
 
-- [ ] **Step 2: Add the inverse relation on `Institute`.** In `model Institute`, add `payments Payment[]` alongside the existing `studentBarcodes`/`timetableSlots` lines:
+- [x] **Step 2: Add the inverse relation on `Institute`.** In `model Institute`, add `payments Payment[]` alongside the existing `studentBarcodes`/`timetableSlots` lines:
 
 ```prisma
   studentBarcodes StudentBarcode[]
@@ -69,7 +69,7 @@ Then add a new index inside the same model's `@@index(...)` block (alongside the
   payments        Payment[]
 ```
 
-- [ ] **Step 3: Add the audit action constant.** In `backend/src/utils/constants.ts`, inside the `AUDIT_ACTION` object's `// Payments` section, add a third entry after `PAYMENT_BULK_UPLOAD`:
+- [x] **Step 3: Add the audit action constant.** In `backend/src/utils/constants.ts`, inside the `AUDIT_ACTION` object's `// Payments` section, add a third entry after `PAYMENT_BULK_UPLOAD`:
 
 ```ts
 	// Payments
@@ -78,17 +78,17 @@ Then add a new index inside the same model's `@@index(...)` block (alongside the
 	PAYMENT_ENTRANCE_COLLECTED: 'PAYMENT_ENTRANCE_COLLECTED',
 ```
 
-- [ ] **Step 4: Regenerate the Prisma client.** This only reads `schema.prisma` — no DB connection needed, safe to run locally.
+- [x] **Step 4: Regenerate the Prisma client.** This only reads `schema.prisma` — no DB connection needed, safe to run locally.
 
 Run: `cd backend && npx prisma generate`
 Expected: PASS, no DB connection attempted.
 
-- [ ] **Step 5: Typecheck.**
+- [x] **Step 5: Typecheck.**
 
 Run: `cd backend && npx tsc --noEmit`
 Expected: PASS (new fields/constant compile; nothing references them yet so no new errors).
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add backend/prisma/schema.prisma backend/src/utils/constants.ts
@@ -106,7 +106,7 @@ git commit -m "feat(payments): add collectedAtInstitute/collectedViaBarcode sche
 **Interfaces:**
 - Produces: `collectEntrancePaymentSchema`/`CollectEntrancePaymentInput`; `resolveBarcodeQuerySchema`/`ResolveBarcodeQuery`.
 
-- [ ] **Step 1: Add the entrance-collection schema.** In `payment.schema.ts`, append after `bulkPaymentRowSchema`'s `export type BulkPaymentRow = ...` line:
+- [x] **Step 1: Add the entrance-collection schema.** In `payment.schema.ts`, append after `bulkPaymentRowSchema`'s `export type BulkPaymentRow = ...` line:
 
 ```ts
 // ─── Entrance Collection (Admin/Staff) ─────────────────────
@@ -121,7 +121,7 @@ export const collectEntrancePaymentSchema = z.object({
 export type CollectEntrancePaymentInput = z.infer<typeof collectEntrancePaymentSchema>;
 ```
 
-- [ ] **Step 2: Add the barcode-resolution query schema.** In `user.schema.ts`, append after `studentBarcodeIdParamSchema`:
+- [x] **Step 2: Add the barcode-resolution query schema.** In `user.schema.ts`, append after `studentBarcodeIdParamSchema`:
 
 ```ts
 // ─── Barcode Resolution (Admin/Staff) ───────────────────────
@@ -132,12 +132,12 @@ export const resolveBarcodeQuerySchema = z.object({
 export type ResolveBarcodeQuery = z.infer<typeof resolveBarcodeQuerySchema>;
 ```
 
-- [ ] **Step 3: Typecheck.**
+- [x] **Step 3: Typecheck.**
 
 Run: `cd backend && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add backend/src/schemas/payment.schema.ts backend/src/schemas/user.schema.ts
@@ -160,7 +160,7 @@ git commit -m "feat(payments): zod schemas for entrance collection + barcode res
   `overridePayment(paymentId, input, actingAdminId: string)` (signature change — third param
   added); `bulkUploadPayments` sets `method: BULK` on both its create and update branches.
 
-- [ ] **Step 1: Write the failing tests.** In `payment.service.test.ts`, expand the `vi.mock('@/config/database', ...)` block to also stub `findUnique`, `update`, and `create`, and add a `notification.service` mock (both `overridePayment` and the later `collectEntrancePayment` call `NotificationService.dispatch`). Replace the top of the file (everything before `import { getPaymentsSummary } from './payment.service';`) with:
+- [x] **Step 1: Write the failing tests.** In `payment.service.test.ts`, expand the `vi.mock('@/config/database', ...)` block to also stub `findUnique`, `update`, and `create`, and add a `notification.service` mock (both `overridePayment` and the later `collectEntrancePayment` call `NotificationService.dispatch`). Replace the top of the file (everything before `import { getPaymentsSummary } from './payment.service';`) with:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -229,12 +229,12 @@ describe('overridePayment — method/collectedById', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to confirm the new one fails (signature mismatch).**
+- [x] **Step 2: Run the tests to confirm the new one fails (signature mismatch).**
 
 Run: `cd backend && npm run test -- payment.service`
 Expected: FAIL — `overridePayment` doesn't yet accept a third argument, and doesn't set `method`/`collectedById`.
 
-- [ ] **Step 3: Fix `paymentSelect` and `PaymentSummary`.** In `payment.service.ts`, replace the `paymentSelect` constant with:
+- [x] **Step 3: Fix `paymentSelect` and `PaymentSummary`.** In `payment.service.ts`, replace the `paymentSelect` constant with:
 
 ```ts
 const paymentSelect = {
@@ -322,7 +322,7 @@ interface PaymentSummary {
 }
 ```
 
-- [ ] **Step 4: Fix `overridePayment`.** Replace the function with:
+- [x] **Step 4: Fix `overridePayment`.** Replace the function with:
 
 ```ts
 export const overridePayment = async (
@@ -363,7 +363,7 @@ export const overridePayment = async (
 };
 ```
 
-- [ ] **Step 5: Fix `bulkUploadPayments`.** In the same file, inside `bulkUploadPayments`, add `method: PaymentMethod.BULK,` to both the `update` and `create` data objects:
+- [x] **Step 5: Fix `bulkUploadPayments`.** In the same file, inside `bulkUploadPayments`, add `method: PaymentMethod.BULK,` to both the `update` and `create` data objects:
 
 ```ts
 			if (existing) {
@@ -392,23 +392,23 @@ export const overridePayment = async (
 			});
 ```
 
-- [ ] **Step 6: Update the controller call site.** In `payment.controller.ts`, in the `overridePayment` handler, change the call to pass the acting admin's id:
+- [x] **Step 6: Update the controller call site.** In `payment.controller.ts`, in the `overridePayment` handler, change the call to pass the acting admin's id:
 
 ```ts
 		const payment = await PaymentService.overridePayment(id, input, req.user!.userId);
 ```
 
-- [ ] **Step 7: Run the tests to green.**
+- [x] **Step 7: Run the tests to green.**
 
 Run: `cd backend && npm run test -- payment.service`
 Expected: PASS (both `getPaymentsSummary` cases and the new `overridePayment` case).
 
-- [ ] **Step 8: Typecheck.**
+- [x] **Step 8: Typecheck.**
 
 Run: `cd backend && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 9: Commit.**
+- [x] **Step 9: Commit.**
 
 ```bash
 git add backend/src/services/payment.service.ts backend/src/services/payment.service.test.ts backend/src/controllers/payment.controller.ts
@@ -429,7 +429,7 @@ git commit -m "fix(payments): paymentSelect exposes method/collectedBy/institute
 - Consumes: nothing new.
 - Produces: `resolveStudentByBarcode(code: string): Promise<{ user: { id: string; name: string; indexNumber: number }; instituteId: string | null; matchedBarcode: string }>`; route `GET /api/users/resolve-barcode?code=`.
 
-- [ ] **Step 1: Write the failing tests.** In `user.service.test.ts`, extend the top-of-file mock to add `studentBarcode.findMany`:
+- [x] **Step 1: Write the failing tests.** In `user.service.test.ts`, extend the top-of-file mock to add `studentBarcode.findMany`:
 
 ```ts
 const { findUnique, update, studentBarcodeFindMany } = vi.hoisted(() => ({
@@ -505,12 +505,12 @@ describe('resolveStudentByBarcode', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails (export not found).**
+- [x] **Step 2: Run it to confirm it fails (export not found).**
 
 Run: `cd backend && npm run test -- user.service`
 Expected: FAIL — `resolveStudentByBarcode` is not exported yet.
 
-- [ ] **Step 3: Implement `resolveStudentByBarcode`.** In `user.service.ts`, append after `deleteMyInstituteBarcode`:
+- [x] **Step 3: Implement `resolveStudentByBarcode`.** In `user.service.ts`, append after `deleteMyInstituteBarcode`:
 
 ```ts
 
@@ -555,7 +555,7 @@ export const resolveStudentByBarcode = async (code: string): Promise<ResolvedBar
 };
 ```
 
-- [ ] **Step 4: Wire the controller.** In `user.controller.ts`, change the `@/schemas/user.schema` import block from:
+- [x] **Step 4: Wire the controller.** In `user.controller.ts`, change the `@/schemas/user.schema` import block from:
 
 ```ts
 import {
@@ -603,7 +603,7 @@ export const resolveBarcode = asyncHandler(async (req: Request, res: Response): 
 });
 ```
 
-- [ ] **Step 5: Wire the route.** In `user.routes.ts`, change the `@/schemas/user.schema` import block from:
+- [x] **Step 5: Wire the route.** In `user.routes.ts`, change the `@/schemas/user.schema` import block from:
 
 ```ts
 import {
@@ -651,17 +651,17 @@ userRoutes.get(
 // GET /api/users/:id — Get user by id (Admin + Staff)
 ```
 
-- [ ] **Step 6: Run the tests to green.**
+- [x] **Step 6: Run the tests to green.**
 
 Run: `cd backend && npm run test -- user.service`
 Expected: PASS (all 4 new cases, plus the existing `updateStatus`/`assignBarcode` suites unaffected).
 
-- [ ] **Step 7: Typecheck.**
+- [x] **Step 7: Typecheck.**
 
 Run: `cd backend && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add backend/src/services/user.service.ts backend/src/services/user.service.test.ts backend/src/controllers/user.controller.ts backend/src/routes/user.routes.ts
@@ -682,7 +682,7 @@ git commit -m "feat(payments): resolveStudentByBarcode (StudentBarcode-then-glob
 - Consumes: `getCurrentPaymentMonth` (`@/services/access.service`); `paymentSelect` (Task 3).
 - Produces: `collectEntrancePayment(collectedById: string, input: CollectEntrancePaymentInput): Promise<PaymentSummary>`; route `POST /api/payments/collect-entrance`.
 
-- [ ] **Step 1: Write the failing tests.** In `payment.service.test.ts`, extend the mocked `prisma` object (from Task 3) to add `enrollment.findUnique` and `payment.create`, and add an `access.service` mock for a deterministic "current month":
+- [x] **Step 1: Write the failing tests.** In `payment.service.test.ts`, extend the mocked `prisma` object (from Task 3) to add `enrollment.findUnique` and `payment.create`, and add an `access.service` mock for a deterministic "current month":
 
 ```ts
 const { paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, paymentCreate, enrollmentFindUnique, dispatch, getCurrentPaymentMonth } = vi.hoisted(() => ({
@@ -834,12 +834,12 @@ describe('collectEntrancePayment', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails (export not found).**
+- [x] **Step 2: Run it to confirm it fails (export not found).**
 
 Run: `cd backend && npm run test -- payment.service`
 Expected: FAIL — `collectEntrancePayment` is not exported yet.
 
-- [ ] **Step 3: Implement `collectEntrancePayment`.** In `payment.service.ts`, add a new import line right after the existing `import { formatPayhereAmount, ... } from '@/utils/payhere';` line:
+- [x] **Step 3: Implement `collectEntrancePayment`.** In `payment.service.ts`, add a new import line right after the existing `import { formatPayhereAmount, ... } from '@/utils/payhere';` line:
 
 ```ts
 import { getCurrentPaymentMonth } from '@/services/access.service';
@@ -949,7 +949,7 @@ export const collectEntrancePayment = async (
 };
 ```
 
-- [ ] **Step 4: Wire the controller.** In `payment.controller.ts`, change the `@/schemas/payment.schema` import block from:
+- [x] **Step 4: Wire the controller.** In `payment.controller.ts`, change the `@/schemas/payment.schema` import block from:
 
 ```ts
 import {
@@ -1013,7 +1013,7 @@ export const collectEntrancePayment = asyncHandler(
 );
 ```
 
-- [ ] **Step 5: Wire the route.** In `payment.routes.ts`, change the `@/schemas/payment.schema` import block from:
+- [x] **Step 5: Wire the route.** In `payment.routes.ts`, change the `@/schemas/payment.schema` import block from:
 
 ```ts
 import {
@@ -1056,17 +1056,17 @@ paymentRoutes.post(
 );
 ```
 
-- [ ] **Step 6: Run the tests to green.**
+- [x] **Step 6: Run the tests to green.**
 
 Run: `cd backend && npm run test -- payment.service`
 Expected: PASS (all `getPaymentsSummary`, `overridePayment`, and 6 new `collectEntrancePayment` cases).
 
-- [ ] **Step 7: Typecheck + full backend test run.**
+- [x] **Step 7: Typecheck + full backend test run.**
 
 Run: `cd backend && npx tsc --noEmit && npm run test`
 Expected: PASS (all suites).
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add backend/src/services/payment.service.ts backend/src/services/payment.service.test.ts backend/src/controllers/payment.controller.ts backend/src/routes/payment.routes.ts
@@ -1081,7 +1081,7 @@ git commit -m "feat(payments): collectEntrancePayment service + POST /payments/c
 - Modify: `context/api_endpoints/payments.endpoints.md`
 - Modify: `context/api_endpoints/users.endpoints.md`
 
-- [ ] **Step 1: Document the new payments endpoint.** In `payments.endpoints.md`, insert a new section after "### 7. Bulk Upload Payments (Admin)" (before the `## Sandbox testing` heading):
+- [x] **Step 1: Document the new payments endpoint.** In `payments.endpoints.md`, insert a new section after "### 7. Bulk Upload Payments (Admin)" (before the `## Sandbox testing` heading):
 
 ```markdown
 ### 8. Collect Entrance Payment (Admin/Staff)
@@ -1114,9 +1114,9 @@ confirmed **online** `SUCCESS` (has a `payhereId`) is refused rather than overwr
 
 Then update the note at the top of the file (right under `## Base URL: /api/payments`) that says *"A dedicated pay-at-entrance endpoint is a follow-up"* — delete that sentence; it's no longer a follow-up. Also amend the `### 6. Override Payment (Admin)` section to note it now sets `method: MANUAL` and `collectedById` to the acting admin, and `### 7. Bulk Upload Payments (Admin)` to note it now sets `method: BULK`.
 
-- [ ] **Step 2: Document the new users endpoint.** In `users.endpoints.md`, add a row to the `## Endpoints Summary` table and a new `### GET /resolve-barcode` subsection (mirroring the existing `### GET /:id` section's structure) covering: roles (`SUPER_ADMIN`, `ADMIN`), query param `code`, the `StudentBarcode`-then-`User.barcode` resolution order, the `{ user, instituteId, matchedBarcode }` response shape, and the `404 BARCODE_NOT_FOUND` error.
+- [x] **Step 2: Document the new users endpoint.** In `users.endpoints.md`, add a row to the `## Endpoints Summary` table and a new `### GET /resolve-barcode` subsection (mirroring the existing `### GET /:id` section's structure) covering: roles (`SUPER_ADMIN`, `ADMIN`), query param `code`, the `StudentBarcode`-then-`User.barcode` resolution order, the `{ user, instituteId, matchedBarcode }` response shape, and the `404 BARCODE_NOT_FOUND` error.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
 ```bash
 git add context/api_endpoints/payments.endpoints.md context/api_endpoints/users.endpoints.md
@@ -1133,7 +1133,7 @@ git commit -m "docs: entrance-collection + barcode-resolution endpoints"
 **Interfaces:**
 - Produces: `Payment.method`, `Payment.collectedBy`, `Payment.collectedAtInstitute`, `Payment.collectedViaBarcode`; `ResolvedBarcodeStudent`.
 
-- [ ] **Step 1: Extend the `Payment` interface.** Add `method` right after `status`, and the three new fields right after `note` (before `createdAt`):
+- [x] **Step 1: Extend the `Payment` interface.** Add `method` right after `status`, and the three new fields right after `note` (before `createdAt`):
 
 ```ts
 export interface Payment {
@@ -1167,7 +1167,7 @@ export interface Payment {
 }
 ```
 
-- [ ] **Step 2: Add the barcode-resolution result type.** Add near `AvatarUploadUrlResult`:
+- [x] **Step 2: Add the barcode-resolution result type.** Add near `AvatarUploadUrlResult`:
 
 ```ts
 /** GET /users/resolve-barcode?code= result (see users.endpoints.md). */
@@ -1178,12 +1178,12 @@ export interface ResolvedBarcodeStudent {
 }
 ```
 
-- [ ] **Step 3: Typecheck.**
+- [x] **Step 3: Typecheck.**
 
 Run: `cd frontend && npx tsc --noEmit`
 Expected: FAIL initially if `AdminPayments.tsx`/`StudentPayments.tsx` construct a `Payment` object anywhere without the new required `method` field in a way TS can't infer — in practice these components only *read* `Payment` fields (never construct one), so this should PASS. If it fails, the error will point at the exact non-conforming literal; fix it there.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add frontend/lib/types.ts
@@ -1199,7 +1199,7 @@ git commit -m "feat(payments): frontend types for method/collectedBy/institute/b
 - Modify: `frontend/app/(app)/attendance/_components/StaffScanner.tsx`
 - Modify: `frontend/app/(app)/attendance/_components/StaffScanner.test.tsx`
 
-- [ ] **Step 1: Move the file.**
+- [x] **Step 1: Move the file.**
 
 ```bash
 git mv frontend/app/\(app\)/attendance/_components/QrCamera.tsx frontend/components/custom/QrCamera.tsx
@@ -1207,7 +1207,7 @@ git mv frontend/app/\(app\)/attendance/_components/QrCamera.tsx frontend/compone
 
 No content changes — the file has no attendance-specific logic (confirmed: only `getUserMedia`/zxing).
 
-- [ ] **Step 2: Update `StaffScanner.tsx`'s import.** Change:
+- [x] **Step 2: Update `StaffScanner.tsx`'s import.** Change:
 
 ```tsx
 import { QrCamera } from "./QrCamera";
@@ -1219,7 +1219,7 @@ to:
 import { QrCamera } from "@/components/custom/QrCamera";
 ```
 
-- [ ] **Step 3: Update the test's mock path.** In `StaffScanner.test.tsx`, change:
+- [x] **Step 3: Update the test's mock path.** In `StaffScanner.test.tsx`, change:
 
 ```ts
 vi.mock("./QrCamera", () => ({ QrCamera: () => null }));
@@ -1231,17 +1231,17 @@ to:
 vi.mock("@/components/custom/QrCamera", () => ({ QrCamera: () => null }));
 ```
 
-- [ ] **Step 4: Run the attendance tests to confirm the move didn't break anything.**
+- [x] **Step 4: Run the attendance tests to confirm the move didn't break anything.**
 
 Run: `cd frontend && npm run test -- StaffScanner`
 Expected: PASS (all existing StaffScanner cases).
 
-- [ ] **Step 5: Typecheck.**
+- [x] **Step 5: Typecheck.**
 
 Run: `cd frontend && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add -A
@@ -1259,7 +1259,7 @@ git commit -m "refactor(frontend): move QrCamera to components/custom for reuse 
 - Consumes: `api` (`get`/`post`), `QrCamera` (Task 8), `currentPaymentMonth` (`@/lib/payhere`), `formatCurrency` (`@/lib/utils`), `User`/`Enrollment`/`Payment`/`ResolvedBarcodeStudent`/`ApiList`/`ApiSuccess` (`@/lib/types`).
 - Produces: `export function CollectPayment()` — no props, self-contained (mounted inside `AdminPayments.tsx` in Task 11).
 
-- [ ] **Step 1: Write the component.**
+- [x] **Step 1: Write the component.**
 
 ```tsx
 "use client";
@@ -1650,12 +1650,12 @@ export function CollectPayment() {
 }
 ```
 
-- [ ] **Step 2: Typecheck.**
+- [x] **Step 2: Typecheck.**
 
 Run: `cd frontend && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
 ```bash
 git add "frontend/app/(app)/payments/_components/CollectPayment.tsx"
@@ -1674,12 +1674,12 @@ git commit -m "feat(payments): CollectPayment component (search/scan, outstandin
 - Consumes: `api`, `ApiError`, `Payment` (`@/lib/types`), `PaymentStatusBadge`, `formatCurrency`, `QRCodeSVG` (`qrcode.react`).
 - Produces: `export function PaymentReceipt({ payment }: { payment: Payment })`; the `/payments/[id]` route.
 
-- [ ] **Step 1: Read the Next 16 dynamic-route param convention.**
+- [x] **Step 1: Read the Next 16 dynamic-route param convention.**
 
 Run: `grep -rn "params: Promise" frontend/app/\(app\)/submissions/\[examId\]/page.tsx | head -5`
 Expected: confirms `params` is a `Promise<{ ... }>` that must be `await`ed (Next 16, not older Next) — mirror it below.
 
-- [ ] **Step 2: Write `PaymentReceipt.tsx`.**
+- [x] **Step 2: Write `PaymentReceipt.tsx`.**
 
 ```tsx
 "use client";
@@ -1767,7 +1767,7 @@ export function PaymentReceipt({ payment }: { payment: Payment }) {
 }
 ```
 
-- [ ] **Step 3: Write `page.tsx`.**
+- [x] **Step 3: Write `page.tsx`.**
 
 ```tsx
 import { cookies } from "next/headers";
@@ -1802,12 +1802,12 @@ export default async function PaymentReceiptPage({
 }
 ```
 
-- [ ] **Step 4: Typecheck + build.**
+- [x] **Step 4: Typecheck + build.**
 
 Run: `cd frontend && npx tsc --noEmit && npm run build`
 Expected: PASS; `/payments/[id]` appears in the route manifest.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add "frontend/app/(app)/payments/_components/PaymentReceipt.tsx" "frontend/app/(app)/payments/[id]"
@@ -1822,7 +1822,7 @@ git commit -m "feat(payments): printable receipt page with QR (/payments/[id])"
 - Modify: `frontend/app/(app)/payments/_components/AdminPayments.tsx`
 - Modify: `frontend/app/(app)/payments/_components/StudentPayments.tsx`
 
-- [ ] **Step 1: Add `CollectPayment` to `AdminPayments.tsx`.** Add the import:
+- [x] **Step 1: Add `CollectPayment` to `AdminPayments.tsx`.** Add the import:
 
 ```tsx
 import { CollectPayment } from "./CollectPayment";
@@ -1838,7 +1838,7 @@ Then insert `<CollectPayment />` right before the `{/* Bulk upload */}` section'
       <section className="rounded-2xl border border-border bg-card p-4">
 ```
 
-- [ ] **Step 2: Add a receipt link to `StudentPayments.tsx`.** Add the import:
+- [x] **Step 2: Add a receipt link to `StudentPayments.tsx`.** Add the import:
 
 ```tsx
 import Link from "next/link";
@@ -1871,12 +1871,12 @@ And a matching cell in each row (right after the `PaymentStatusBadge` cell):
                     </td>
 ```
 
-- [ ] **Step 3: Typecheck + build.**
+- [x] **Step 3: Typecheck + build.**
 
 Run: `cd frontend && npx tsc --noEmit && npm run build`
 Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add "frontend/app/(app)/payments/_components/AdminPayments.tsx" "frontend/app/(app)/payments/_components/StudentPayments.tsx"
@@ -1894,7 +1894,7 @@ git commit -m "feat(payments): wire CollectPayment into /payments admin view + s
 **Interfaces:**
 - Consumes: the components from Tasks 9–10; mock `@/lib/api`, `next/navigation`, `@/components/custom/QrCamera` — mirror `StaffScanner.test.tsx`/`CredentialForms.test.tsx`.
 
-- [ ] **Step 1: Write `CollectPayment.test.tsx`.**
+- [x] **Step 1: Write `CollectPayment.test.tsx`.**
 
 ```tsx
 import { useEffect } from "react";
@@ -2110,7 +2110,7 @@ describe("CollectPayment — session summary", () => {
 });
 ```
 
-- [ ] **Step 2: Write `PaymentReceipt.test.tsx`.**
+- [x] **Step 2: Write `PaymentReceipt.test.tsx`.**
 
 ```tsx
 import { describe, it, expect } from "vitest";
@@ -2167,12 +2167,12 @@ describe("PaymentReceipt", () => {
 });
 ```
 
-- [ ] **Step 3: Run the frontend tests.**
+- [x] **Step 3: Run the frontend tests.**
 
 Run: `cd frontend && npm run test`
 Expected: PASS (all existing 61 + the 8 new cases here — 6 `CollectPayment` + 3 `PaymentReceipt`... verify the exact count in the summary line, not a hardcoded number).
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add "frontend/app/(app)/payments/_components/CollectPayment.test.tsx" "frontend/app/(app)/payments/_components/PaymentReceipt.test.tsx"
@@ -2185,26 +2185,26 @@ git commit -m "test(payments): CollectPayment + PaymentReceipt RTL tests"
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Rebuild + bring up the stack.**
+- [x] **Step 1: Rebuild + bring up the stack.**
 
 Run: `docker compose build backend frontend && docker compose up -d`
 Expected: containers healthy. Per this repo's actual DB-sync mechanism (see Global Constraints), the entrypoint's `prisma db push` picks up the two new nullable `Payment` columns automatically on backend start — confirm via `docker compose logs backend --tail 20` showing `Running prisma db push...` then either `already in sync` or a successful apply. Do **not** run `prisma migrate deploy`/`migrate dev` here.
 
-- [ ] **Step 2: API smoke (as a logged-in ADMIN or SUPER_ADMIN, via cookies), against a real enrollment + student:**
+- [x] **Step 2: API smoke (as a logged-in ADMIN or SUPER_ADMIN, via cookies), against a real enrollment + student:**
   - `GET /api/users/resolve-barcode?code=<a real StudentBarcode>` → 200 with the right `instituteId`; `code=<the student's global User.barcode>` → 200 with `instituteId: null`; `code=garbage` → 404 `BARCODE_NOT_FOUND`.
   - `POST /api/payments/collect-entrance { enrollmentId, paymentMonth }` (current month, no existing payment) → 200, `Payment.method === "ENTRANCE"`, `collectedById` set; repeat with a fresh `Idempotency-Key` for a month that already has a `SUCCESS`/`payhereId` PayHere payment → 409 `ALREADY_PAID_ONLINE`; repeat with `collectedAtInstituteId`/`collectedViaBarcode` from Step 1's scan resolution → confirm both persisted on the row.
   - `PATCH /api/payments/:id/override` on any payment → confirm the response now has `method: "MANUAL"` and `collectedBy` populated with the acting admin.
   - `POST /api/payments/bulk-upload` with a small test `.xlsx` → confirm the resulting `Payment` row(s) have `method: "BULK"`.
   - `GET /api/payments/:id` → confirm the response includes `method`, `collectedBy`, `collectedAtInstitute`, `collectedViaBarcode` (verifies the `paymentSelect` fix reaches every read path, not just `collect-entrance`'s own response).
 
-- [ ] **Step 3: Headless UI drive** (Playwright-core against the cached Chromium, `waitUntil: "domcontentloaded"`, mirroring the driver script used for the profile feature's verification): log in as an admin → `/payments` → use the "Collect payment" card to search a student by name, select an enrollment, collect the current month → assert the "view receipt" link appears → click it (or navigate directly) → assert `/payments/[id]` renders the QR + all fields, including collected-by/institute when present → go back, use the camera-scan path (mock/QR test code) if a scan target is available in the dev environment, otherwise verify the resolve-barcode call shape via the network tab → print-preview the receipt page. Capture a screenshot of the receipt page.
+- [x] **Step 3: Headless UI drive** (Playwright-core against the cached Chromium, `waitUntil: "domcontentloaded"`, mirroring the driver script used for the profile feature's verification): log in as an admin → `/payments` → use the "Collect payment" card to search a student by name, select an enrollment, collect the current month → assert the "view receipt" link appears → click it (or navigate directly) → assert `/payments/[id]` renders the QR + all fields, including collected-by/institute when present → go back, use the camera-scan path (mock/QR test code) if a scan target is available in the dev environment, otherwise verify the resolve-barcode call shape via the network tab → print-preview the receipt page. Capture a screenshot of the receipt page.
 
-- [ ] **Step 4: Final gate — run both suites once more.**
+- [x] **Step 4: Final gate — run both suites once more.**
 
 Run: `cd backend && npm run test && cd ../frontend && npm run test`
 Expected: PASS. (Lint is intentionally not gating — backend has no eslint flat config; see CLAUDE.md.)
 
-- [ ] **Step 5: Update the spec's status + open the PR** into `dev` once unit + system + smoke all pass (per the test-gate rule). Do not delete the branch after merge.
+- [x] **Step 5: Update the spec's status + open the PR** into `dev` once unit + system + smoke all pass (per the test-gate rule). Do not delete the branch after merge.
 
 ---
 
