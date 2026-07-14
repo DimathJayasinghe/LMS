@@ -5,7 +5,7 @@ import { Camera, CameraOff, Check, Loader2, ScanLine, Search, UserPlus, X } from
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
-import { QrCamera } from "./QrCamera";
+import { QrCamera } from "@/components/custom/QrCamera";
 import type { ApiList, ApiSuccess, AttendanceRecord, ClassSession, Course, User } from "@/lib/types";
 
 interface Props {
