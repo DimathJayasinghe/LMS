@@ -38,6 +38,7 @@ const envSchema = z.object({
   R2_ENDPOINT: z.string().default(''),
   R2_BUCKET_NAME: z.string().default(''),
   R2_PUBLIC_URL: z.string().default(''),
+  R2_PUBLIC_BUCKET_NAME: z.string().default(''),
 
   // Bunny.net Video Streaming (Bunny Stream)
   // Optional at boot — validated at runtime when stream URLs are requested.

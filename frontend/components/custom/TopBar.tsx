@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, IdCard, LogOut, Menu } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ChevronDown, IdCard, LogOut, Menu, UserRound } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NotificationBell } from "@/components/custom/NotificationBell";
 import { useAuth } from "@/lib/hooks/useAuth";
 import type { User } from "@/lib/types";
@@ -78,6 +78,9 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
           className="flex items-center gap-2 rounded-full p-1 pr-2 transition-colors hover:bg-muted"
         >
           <Avatar className="size-8">
+            {user.profileImage ? (
+              <AvatarImage src={user.profileImage} alt={user.name} />
+            ) : null}
             <AvatarFallback className="text-xs font-medium">
               {initials(user.name)}
             </AvatarFallback>
@@ -109,6 +112,15 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
                 {user.email}
               </p>
             </div>
+            <Link
+              href="/profile"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            >
+              <UserRound className="size-4" aria-hidden />
+              Profile
+            </Link>
             {user.role === "STUDENT" && (
               <Link
                 href="/auth/account-setup"

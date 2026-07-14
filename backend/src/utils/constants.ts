@@ -136,6 +136,17 @@ export const NIC_IMAGE_URL_TTL_SECONDS = 15 * 60;
 /** R2 object key prefix for NIC photos */
 export const NIC_IMAGE_KEY_PREFIX = 'nic';
 
+// ─── Profile (avatar + credential cooldown) ────────────────
+
+/** Allowed content types for a profile avatar upload. */
+export const AVATAR_IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+
+/** Max avatar size — 5 MB. */
+export const AVATAR_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+/** Minimum gap between self email/password changes — 7 days. */
+export const CREDENTIAL_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
 // ─── Payments + PayHere ───────────────────────────────────
 
 /** PayHere checkout path appended to PAYHERE_BASE_URL */

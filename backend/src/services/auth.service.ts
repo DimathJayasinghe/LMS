@@ -12,7 +12,7 @@ import type { JwtPayload } from '../types/auth.types';
 // ─── Types ───────────────────────────────────────────────────
 
 /** Shape returned to the controller after successful auth operations */
-interface AuthTokens {
+export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
@@ -29,12 +29,16 @@ interface SafeUser {
   address: string | null;
   city: string | null;
   createdAt: Date;
+  profileImage: string | null;
   /** Present on `/auth/me` — the caller's own account fields. */
   barcode?: string | null;
   setupCompleted?: boolean;
   /** Presence-only flags — never the raw R2 key (see account-setup.endpoints.md). */
   nicFrontUploaded?: boolean;
   nicBackUploaded?: boolean;
+  /** Self-only — credential-change cooldown anchors (see profile.endpoints.md). */
+  emailChangedAt?: Date | null;
+  passwordChangedAt?: Date | null;
 }
 
 // ─── Token Helpers (private) ─────────────────────────────────
@@ -109,6 +113,7 @@ const toSafeUser = (user: {
   address: string | null;
   city: string | null;
   createdAt: Date;
+  profileImage?: string | null;
 }): SafeUser => ({
   id: user.id,
   indexNumber: user.indexNumber,
@@ -120,6 +125,7 @@ const toSafeUser = (user: {
   address: user.address,
   city: user.city,
   createdAt: user.createdAt,
+  profileImage: user.profileImage ?? null,
 });
 
 // ─── Public Service Methods ──────────────────────────────────
@@ -175,7 +181,7 @@ export const register = async (
     data: { barcode: formatLmsBarcode(created.indexNumber) },
   });
 
-  const tokens = await generateAndStoreTokens(user.id, user.role);
+  const tokens = await issueTokenPair(user.id, user.role);
 
   logger.info({ userId: user.id, email: user.email }, 'New student registered');
 
@@ -213,7 +219,7 @@ export const login = async (
     throw new AppError('INVALID_CREDENTIALS', 401, 'Invalid email or password.');
   }
 
-  const tokens = await generateAndStoreTokens(user.id, user.role);
+  const tokens = await issueTokenPair(user.id, user.role);
 
   logger.info({ userId: user.id }, 'User logged in');
 
@@ -278,7 +284,7 @@ export const refreshTokens = async (
   }
 
   // Issue a fresh token pair
-  const tokens = await generateAndStoreTokens(user.id, user.role);
+  const tokens = await issueTokenPair(user.id, user.role);
 
   return { user: toSafeUser(user), tokens };
 };
@@ -324,10 +330,13 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
       address: true,
       city: true,
       createdAt: true,
+      profileImage: true,
       barcode: true,
       setupCompleted: true,
       nicFrontUrl: true,
       nicBackUrl: true,
+      emailChangedAt: true,
+      passwordChangedAt: true,
     },
   });
 
@@ -345,16 +354,19 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
     setupCompleted: user.setupCompleted,
     nicFrontUploaded: Boolean(user.nicFrontUrl),
     nicBackUploaded: Boolean(user.nicBackUrl),
+    emailChangedAt: user.emailChangedAt,
+    passwordChangedAt: user.passwordChangedAt,
   };
 };
 
-// ─── Private Helpers ─────────────────────────────────────────
+// ─── Token Helpers ───────────────────────────────────────────
 
 /**
  * Generates an access + refresh token pair and persists the refresh token hash.
  * The raw refresh token is returned (not the hash) — the controller sets it as a cookie.
+ * Exported so self-service flows (e.g. password change) can reissue a session.
  */
-const generateAndStoreTokens = async (
+export const issueTokenPair = async (
   userId: string,
   role: string,
 ): Promise<AuthTokens> => {
@@ -374,4 +386,9 @@ const generateAndStoreTokens = async (
   });
 
   return { accessToken, refreshToken };
+};
+
+/** Deletes every refresh-token row for a user (used on password change). */
+export const revokeAllRefreshTokens = async (userId: string): Promise<void> => {
+  await prisma.refreshToken.deleteMany({ where: { userId } });
 };

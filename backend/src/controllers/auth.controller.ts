@@ -1,36 +1,9 @@
 import { Request, Response } from 'express';
 import * as AuthService from '../services/auth.service';
 import { asyncHandler } from '../utils/async-handler';
-import {
-  COOKIE_ACCESS_TOKEN,
-  COOKIE_REFRESH_TOKEN,
-  COOKIE_OPTIONS,
-} from '../utils/constants';
+import { COOKIE_REFRESH_TOKEN } from '../utils/constants';
+import { setAuthCookies, clearAuthCookies } from '../utils/auth-cookies';
 import type { RegisterInput, LoginInput } from '../schemas/auth.schema';
-
-// ─── Helpers ─────────────────────────────────────────────────
-
-/** Sets both access and refresh token cookies on the response */
-const setAuthCookies = (res: Response, accessToken: string, refreshToken: string): void => {
-  const { accessMaxAge, refreshMaxAge } = AuthService.getCookieMaxAge();
-
-  res.cookie(COOKIE_ACCESS_TOKEN, accessToken, {
-    ...COOKIE_OPTIONS,
-    maxAge: accessMaxAge,
-  });
-
-  res.cookie(COOKIE_REFRESH_TOKEN, refreshToken, {
-    ...COOKIE_OPTIONS,
-    maxAge: refreshMaxAge,
-    path: '/api/auth', // Restrict refresh cookie to auth endpoints only
-  });
-};
-
-/** Clears both auth cookies */
-const clearAuthCookies = (res: Response): void => {
-  res.clearCookie(COOKIE_ACCESS_TOKEN, COOKIE_OPTIONS);
-  res.clearCookie(COOKIE_REFRESH_TOKEN, { ...COOKIE_OPTIONS, path: '/api/auth' });
-};
 
 // ─── Controller Methods ─────────────────────────────────────
 
