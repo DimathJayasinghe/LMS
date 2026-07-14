@@ -4,7 +4,7 @@
 
 > **Roles (2026-07-09)**: enum is `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. Below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk). `PATCH /:id/override` is `SUPER_ADMIN` only.
 >
-> **New**: `Payment.method` (`ONLINE` | `ENTRANCE` | `BULK` | `MANUAL`) + `collectedById` (staff who took an `ENTRANCE`/`MANUAL` payment). A dedicated pay-at-entrance endpoint is a follow-up.
+> **New**: `Payment.method` (`ONLINE` | `ENTRANCE` | `BULK` | `MANUAL`) + `collectedById` (staff who took an `ENTRANCE`/`MANUAL` payment).
 
 ### 1. Initiate Payment (PayHere Checkout)
 Generates the payload required to redirect a student to PayHere checkout.
@@ -198,6 +198,7 @@ Allows admins to list and filter all payments in the system.
 
 ### 6. Override Payment (Admin)
 Allows an admin to manually update a payment status or amount (e.g., for physical payments).
+Sets `method: MANUAL` and `collectedById` to the acting admin's id.
 
 - **URL:** `/:id/override`
 - **Method:** `PATCH`
@@ -212,12 +213,40 @@ Allows an admin to manually update a payment status or amount (e.g., for physica
   ```
 
 ### 7. Bulk Upload Payments (Admin)
-Upload an Excel file to process multiple payments at once.
+Upload an Excel file to process multiple payments at once. Sets `method: BULK` on every row
+written or updated.
 
 - **URL:** `/bulk-upload`
 - **Method:** `POST`
 - **Auth:** Required (Role: `ADMIN`, `STAFF`)
 - **Body:** `multipart/form-data` with `file` field.
+
+### 8. Collect Entrance Payment (Admin/Staff)
+Records a cash/in-person payment collected at the physical center, without going through
+PayHere. Upserts: a missing or PENDING/FAILED row is written to `SUCCESS`/`ENTRANCE`; a
+confirmed **online** `SUCCESS` (has a `payhereId`) is refused rather than overwritten — use
+`/override` to correct an online payment.
+
+- **URL:** `/collect-entrance`
+- **Method:** `POST`
+- **Auth:** Required (Role: `SUPER_ADMIN`, `ADMIN`)
+- **Headers:** `Idempotency-Key: <uuid>` **required**.
+- **Body:**
+  ```json
+  {
+    "enrollmentId": "uuid",
+    "paymentMonth": "YYYY-MM",
+    "amount": 2500,
+    "collectedAtInstituteId": "uuid",
+    "collectedViaBarcode": "NUG-00123"
+  }
+  ```
+  `amount` optional (defaults to the course's `monthlyFee`). `collectedAtInstituteId`/
+  `collectedViaBarcode` optional — present only when the student was identified via
+  `GET /users/resolve-barcode` (see `users.endpoints.md`) rather than a name/index search.
+- **Success Response (200 OK):** the `Payment` (same shape as `/override`'s response).
+- **Errors:** `404 ENROLLMENT_NOT_FOUND`, `400 ENROLLMENT_NOT_ACTIVE`, `400 FUTURE_MONTH`
+  (cannot collect for a month after the current payment month), `409 ALREADY_PAID_ONLINE`.
 
 ---
 

@@ -117,6 +117,7 @@ Returned in list and detail endpoints:
 | PATCH | `/:id/role` | ADMIN | Update user role. |
 | PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
+| GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
 
 ## Endpoint Details
 
@@ -185,6 +186,41 @@ Returns the user profile by id.
 - 401 auth middleware error
 - 403 forbidden (role guard)
 - 404 `USER_NOT_FOUND` (service error shape)
+
+### GET `/resolve-barcode`
+
+Resolves a scanned/typed barcode to a student, for staff-facing flows (entrance payment
+collection today). Roles: `SUPER_ADMIN`, `ADMIN`.
+
+Resolution order: tries the institute-scoped `StudentBarcode` table first (barcode uniqueness
+is enforced **per institute**, not globally); if exactly one institute match is found, returns
+it with that `instituteId`. Otherwise (zero or more-than-one institute matches — ambiguous
+matches are treated as unresolved rather than guessed) falls back to the global `User.barcode`
+field, returning `instituteId: null`.
+
+**Query params**
+
+- `code`: string, required, 1–50 chars — the scanned/typed barcode value.
+
+**Success (200)**
+
+```json
+{
+	"status": "success",
+	"data": {
+		"user": { "id": "...", "name": "...", "indexNumber": 123 },
+		"instituteId": "uuid | null",
+		"matchedBarcode": "NUG-00123"
+	}
+}
+```
+
+**Errors**
+
+- 400 validation error
+- 401 auth middleware error
+- 403 forbidden (role guard)
+- 404 `BARCODE_NOT_FOUND` — no `StudentBarcode` or `User.barcode` matches the code.
 
 ### PATCH `/:id/role`
 
