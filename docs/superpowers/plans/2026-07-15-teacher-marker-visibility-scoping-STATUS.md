@@ -13,7 +13,7 @@ task, two-stage review between tasks.
 
 | Task | Status |
 |---|---|
-| 1. `exam.service.ts` — listExams/getExamById | not started |
+| 1. `exam.service.ts` — listExams/getExamById | **done** (commit `9a49ed9`, review clean) |
 | 2. `video.service.ts` — listVideosByClass/getVideoById/generateStreamUrl | not started |
 | 3. `submission.service.ts` — listSubmissions | not started |
 | 4. `class-session.service.ts` — listClassSessions/getClassSessionById | not started |

@@ -59,7 +59,7 @@ changes in this plan).
 - Consumes: `assertCourseAccess(courseId: string, actor: AuthenticatedUser): Promise<{ id: string; teacherId: string }>` (already imported at `exam.service.ts:5`).
 - Produces: no signature changes — `listExams`/`getExamById` keep their existing parameter lists.
 
-- [ ] **Step 1: Write the failing tests.** Create `backend/src/services/exam.service.test.ts`:
+- [x] **Step 1: Write the failing tests.** Create `backend/src/services/exam.service.test.ts`:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -186,13 +186,13 @@ describe('getExamById — TEACHER course-ownership scoping', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails (no scoping yet).**
+- [x] **Step 2: Run it to confirm it fails (no scoping yet).**
 
 Run: `cd backend && npm run test -- exam.service`
 Expected: FAIL — `listExams`'s `where.course` is `undefined` for a TEACHER; `getExamById` never
 calls `assertCourseAccess` (the mock's call count is 0).
 
-- [ ] **Step 3: Fix `listExams`.** In `exam.service.ts`, the `where` object (currently lines
+- [x] **Step 3: Fix `listExams`.** In `exam.service.ts`, the `where` object (currently lines
 247-256) — add a `course` branch right after the existing STUDENT branch:
 
 ```ts
@@ -211,7 +211,7 @@ calls `assertCourseAccess` (the mock's call count is 0).
 	};
 ```
 
-- [ ] **Step 4: Fix `getExamById`.** Add the new check right after the existing `deletedAt` guard
+- [x] **Step 4: Fix `getExamById`.** Add the new check right after the existing `deletedAt` guard
 (currently lines 272-277):
 
 ```ts
@@ -226,19 +226,19 @@ calls `assertCourseAccess` (the mock's call count is 0).
 	await assertStudentContentAccess(actor, exam.courseId, { requirePaid: false });
 ```
 
-- [ ] **Step 5: Run the tests to green.**
+- [x] **Step 5: Run the tests to green.**
 
 Run: `cd backend && npm run test -- exam.service`
 Expected: PASS (all 6 new cases).
 
-- [ ] **Step 6: Typecheck + full backend test run (confirm no other exam.service consumer broke).**
+- [x] **Step 6: Typecheck + full backend test run (confirm no other exam.service consumer broke).**
 
 Run: `cd backend && npx tsc --noEmit && npm run test`
 Expected: PASS (all suites — this also re-confirms `upload-confirm.service.test.ts`'s
 `confirmExamPaper` cases, which mock `class.service`/`access.service` independently and are
 unaffected).
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add backend/src/services/exam.service.ts backend/src/services/exam.service.test.ts
