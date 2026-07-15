@@ -12,7 +12,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...actual, api: { get, post, patch: vi.fn(), upload: vi.fn(), del: vi.fn() } };
 });
 // Isolate the webcam (getUserMedia/zxing can't run in jsdom).
-vi.mock("./QrCamera", () => ({ QrCamera: () => null }));
+vi.mock("@/components/custom/QrCamera", () => ({ QrCamera: () => null }));
 
 const classes: Course[] = [
   {

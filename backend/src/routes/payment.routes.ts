@@ -7,6 +7,7 @@ import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
+	collectEntrancePaymentSchema,
 	initiatePaymentSchema,
 	listMyPaymentsQuerySchema,
 	listPaymentsQuerySchema,
@@ -41,6 +42,16 @@ paymentRoutes.post(
 	validateBody(initiatePaymentSchema),
 	checkIdempotency,
 	PaymentController.initiatePayherePayment,
+);
+
+// ─── Entrance Collection (Admin/Staff) ─────────────────────
+paymentRoutes.post(
+	'/collect-entrance',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateBody(collectEntrancePaymentSchema),
+	checkIdempotency,
+	PaymentController.collectEntrancePayment,
 );
 
 // ─── PayHere Notify (Webhook) ─────────────────────────────

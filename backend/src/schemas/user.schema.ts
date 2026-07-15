@@ -71,3 +71,10 @@ export type CreateStudentBarcodeInput = z.infer<typeof createStudentBarcodeSchem
 export const studentBarcodeIdParamSchema = z.object({
 	barcodeId: z.string().uuid(),
 });
+
+// ─── Barcode Resolution (Admin/Staff) ───────────────────────
+export const resolveBarcodeQuerySchema = z.object({
+	code: z.string().trim().min(1).max(50),
+});
+
+export type ResolveBarcodeQuery = z.infer<typeof resolveBarcodeQuerySchema>;

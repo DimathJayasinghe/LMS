@@ -28,6 +28,7 @@ const payment = (id: string, name: string, status: PaymentStatus): Payment => ({
   id,
   amount: "2500",
   status,
+  method: "ONLINE",
   paymentMonth: MONTH,
   createdAt: "",
   updatedAt: "",

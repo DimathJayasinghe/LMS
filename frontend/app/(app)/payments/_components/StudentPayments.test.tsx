@@ -55,6 +55,7 @@ const payment = (
   id,
   amount,
   status,
+  method: "ONLINE",
   paymentMonth: month,
   createdAt: "",
   updatedAt: "",

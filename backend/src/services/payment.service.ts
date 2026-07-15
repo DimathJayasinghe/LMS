@@ -16,9 +16,11 @@ import {
 	PAYHERE_STATUS_SUCCESS,
 } from '@/utils/constants';
 import { formatPayhereAmount, generatePayhereHash, generatePayhereSignature } from '@/utils/payhere';
+import { getCurrentPaymentMonth } from '@/services/access.service';
 import {
 	bulkPaymentRowSchema,
 	type BulkPaymentRow,
+	type CollectEntrancePaymentInput,
 	type InitiatePaymentInput,
 	type ListMyPaymentsQuery,
 	type ListPaymentsQuery,
@@ -65,11 +67,15 @@ interface PaymentSummary {
 	id: string;
 	amount: Prisma.Decimal;
 	status: PaymentStatus;
+	method: PaymentMethod;
 	payhereId: string | null;
 	paymentMonth: string;
 	note: string | null;
 	createdAt: Date;
 	updatedAt: Date;
+	collectedBy: { id: string; name: string } | null;
+	collectedAtInstitute: { id: string; name: string; code: string } | null;
+	collectedViaBarcode: string | null;
 	enrollment: {
 		id: string;
 		classType: ClassType;
@@ -110,11 +116,19 @@ const paymentSelect = {
 	id: true,
 	amount: true,
 	status: true,
+	method: true,
 	payhereId: true,
 	paymentMonth: true,
 	note: true,
 	createdAt: true,
 	updatedAt: true,
+	collectedBy: {
+		select: { id: true, name: true },
+	},
+	collectedAtInstitute: {
+		select: { id: true, name: true, code: true },
+	},
+	collectedViaBarcode: true,
 	enrollment: {
 		select: {
 			id: true,
@@ -587,6 +601,7 @@ export const getPaymentById = async (
 export const overridePayment = async (
 	paymentId: string,
 	input: OverridePaymentInput,
+	actingAdminId: string,
 ): Promise<PaymentSummary> => {
 	const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
 
@@ -600,6 +615,8 @@ export const overridePayment = async (
 			status: input.status,
 			amount: input.amount,
 			note: input.note,
+			method: PaymentMethod.MANUAL,
+			collectedById: actingAdminId,
 		},
 		select: paymentSelect,
 	});
@@ -616,6 +633,76 @@ export const overridePayment = async (
 	});
 
 	return updated;
+};
+
+export const collectEntrancePayment = async (
+	collectedById: string,
+	input: CollectEntrancePaymentInput,
+): Promise<PaymentSummary> => {
+	const enrollment = await prisma.enrollment.findUnique({
+		where: { id: input.enrollmentId },
+		include: { course: true },
+	});
+
+	if (!enrollment) {
+		throw new AppError('ENROLLMENT_NOT_FOUND', 404, 'Enrollment not found.');
+	}
+
+	if (!enrollment.isActive) {
+		throw new AppError('ENROLLMENT_NOT_ACTIVE', 400, 'This enrollment is not active.');
+	}
+
+	if (input.paymentMonth > getCurrentPaymentMonth()) {
+		throw new AppError('FUTURE_MONTH', 400, 'Cannot collect a payment for a future month.');
+	}
+
+	const resolvedAmount = input.amount ?? Number(enrollment.course.monthlyFee);
+
+	const existing = await prisma.payment.findUnique({
+		where: {
+			enrollmentId_paymentMonth: {
+				enrollmentId: input.enrollmentId,
+				paymentMonth: input.paymentMonth,
+			},
+		},
+	});
+
+	if (existing?.status === PaymentStatus.SUCCESS && existing.payhereId) {
+		throw new AppError('ALREADY_PAID_ONLINE', 409, 'This month is already paid online.');
+	}
+
+	const fields = {
+		status: PaymentStatus.SUCCESS,
+		method: PaymentMethod.ENTRANCE,
+		amount: resolvedAmount,
+		collectedById,
+		collectedAtInstituteId: input.collectedAtInstituteId ?? null,
+		collectedViaBarcode: input.collectedViaBarcode ?? null,
+		note: 'Collected at entrance',
+	};
+
+	const payment = existing
+		? await prisma.payment.update({
+				where: { id: existing.id },
+				data: fields,
+				select: paymentSelect,
+			})
+		: await prisma.payment.create({
+				data: { enrollmentId: input.enrollmentId, paymentMonth: input.paymentMonth, ...fields },
+				select: paymentSelect,
+			});
+
+	void NotificationService.dispatch({
+		type: NotificationType.PAYMENT_CONFIRMED,
+		userId: enrollment.userId,
+		link: '/payments',
+		params: {
+			courseName: enrollment.course.name,
+			paymentMonth: input.paymentMonth,
+		},
+	});
+
+	return payment;
 };
 
 const normalizeHeader = (header: string): string => {
@@ -784,6 +871,7 @@ export const bulkUploadPayments = async (
 					data: {
 						amount,
 						status: PaymentStatus.SUCCESS,
+						method: PaymentMethod.BULK,
 						note: normalized.note ?? existing.note,
 					},
 				});
@@ -797,6 +885,7 @@ export const bulkUploadPayments = async (
 					paymentMonth: normalized.paymentMonth,
 					amount,
 					status: PaymentStatus.SUCCESS,
+					method: PaymentMethod.BULK,
 					note: normalized.note ?? 'Bulk upload',
 				},
 			});

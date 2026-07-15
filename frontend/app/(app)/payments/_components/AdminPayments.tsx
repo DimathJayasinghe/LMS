@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2, Upload } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+import { CollectPayment } from "./CollectPayment";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
 import type { ApiSuccess, BulkUploadResult, Payment, PaymentStatus, PaymentSummary } from "@/lib/types";
 
@@ -190,6 +191,9 @@ export function AdminPayments({
           </div>
         </div>
       )}
+
+      {/* Collect at entrance */}
+      <CollectPayment />
 
       {/* Bulk upload */}
       <section className="rounded-2xl border border-border bg-card p-4">

@@ -11,6 +11,7 @@ import {
     listUsersQuerySchema,
     nicUploadUrlSchema,
     nicConfirmSchema,
+    resolveBarcodeQuerySchema,
     studentBarcodeIdParamSchema,
     updateRoleSchema,
     updateStatusSchema,
@@ -127,6 +128,15 @@ userRoutes.delete(
     requireRole(Role.STUDENT),
     validateParams(studentBarcodeIdParamSchema),
     UserController.deleteMyInstituteBarcode,
+);
+
+// GET /api/users/resolve-barcode — Resolve a scanned barcode to a student (Admin + Staff)
+userRoutes.get(
+    '/resolve-barcode',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+    validateQuery(resolveBarcodeQuerySchema),
+    UserController.resolveBarcode,
 );
 
 // GET /api/users/:id — Get user by id (Admin + Staff)

@@ -1,18 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 
-const { findUnique, update } = vi.hoisted(() => ({
+const { findUnique, update, studentBarcodeFindMany } = vi.hoisted(() => ({
 	findUnique: vi.fn(),
 	update: vi.fn(),
+	studentBarcodeFindMany: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		user: { findUnique, update },
+		studentBarcode: { findMany: studentBarcodeFindMany },
 	},
 }));
 
-import { updateStatus, assignBarcode } from './user.service';
+import { updateStatus, assignBarcode, resolveStudentByBarcode } from './user.service';
 
 const baseUser = (overrides: Partial<{ id: string; role: Role; barcode: string | null }> = {}) => ({
 	id: 'target-id',
@@ -24,6 +26,7 @@ const baseUser = (overrides: Partial<{ id: string; role: Role; barcode: string |
 beforeEach(() => {
 	findUnique.mockReset();
 	update.mockReset();
+	studentBarcodeFindMany.mockReset();
 });
 
 describe('updateStatus — privileged-target guard', () => {
@@ -126,5 +129,49 @@ describe('assignBarcode — privileged-target guard', () => {
 		await expect(
 			assignBarcode('target-id', { barcode: 'BC-1' }, Role.ADMIN),
 		).rejects.toMatchObject({ code: 'BARCODE_IN_USE', statusCode: 409 });
+	});
+});
+
+describe('resolveStudentByBarcode', () => {
+	const stuUser = { id: 'u1', name: 'Nimal Perera', indexNumber: 42 };
+
+	it('resolves via a single institute-scoped StudentBarcode match', async () => {
+		studentBarcodeFindMany.mockResolvedValueOnce([{ instituteId: 'inst-1', user: stuUser }]);
+
+		const result = await resolveStudentByBarcode('NUG-001');
+
+		expect(result).toEqual({ user: stuUser, instituteId: 'inst-1', matchedBarcode: 'NUG-001' });
+		expect(findUnique).not.toHaveBeenCalled();
+	});
+
+	it('falls through to the global User.barcode when no StudentBarcode matches', async () => {
+		studentBarcodeFindMany.mockResolvedValueOnce([]);
+		findUnique.mockResolvedValueOnce(stuUser);
+
+		const result = await resolveStudentByBarcode('LMS-042');
+
+		expect(result).toEqual({ user: stuUser, instituteId: null, matchedBarcode: 'LMS-042' });
+	});
+
+	it('falls through (does not guess an institute) when the code matches more than one institute', async () => {
+		studentBarcodeFindMany.mockResolvedValueOnce([
+			{ instituteId: 'inst-1', user: stuUser },
+			{ instituteId: 'inst-2', user: { id: 'u2', name: 'Other', indexNumber: 7 } },
+		]);
+		findUnique.mockResolvedValueOnce(stuUser);
+
+		const result = await resolveStudentByBarcode('AMBIGUOUS');
+
+		expect(result).toEqual({ user: stuUser, instituteId: null, matchedBarcode: 'AMBIGUOUS' });
+	});
+
+	it('404s when the code matches nothing anywhere', async () => {
+		studentBarcodeFindMany.mockResolvedValueOnce([]);
+		findUnique.mockResolvedValueOnce(null);
+
+		await expect(resolveStudentByBarcode('NOPE')).rejects.toMatchObject({
+			code: 'BARCODE_NOT_FOUND',
+			statusCode: 404,
+		});
 	});
 });

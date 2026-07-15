@@ -7,6 +7,7 @@ import { AUDIT_ACTION } from '@/utils/constants';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import {
+	collectEntrancePaymentSchema,
 	initiatePaymentSchema,
 	listMyPaymentsQuerySchema,
 	listPaymentsQuerySchema,
@@ -125,7 +126,7 @@ export const overridePayment = asyncHandler(
 
 		// Fetch before state for audit
 		const before = await PaymentService.getPaymentById(id, req.user!.userId, req.user!.role);
-		const payment = await PaymentService.overridePayment(id, input);
+		const payment = await PaymentService.overridePayment(id, input, req.user!.userId);
 
 		void AuditService.log({
 			action: AUDIT_ACTION.PAYMENT_OVERRIDDEN,
@@ -186,6 +187,34 @@ export const bulkUploadPayments = asyncHandler(
 			status: 'success',
 			data: result,
 			message: 'Bulk upload processed successfully.',
+		});
+	},
+);
+
+export const collectEntrancePayment = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const input = collectEntrancePaymentSchema.parse(req.body);
+		const payment = await PaymentService.collectEntrancePayment(req.user!.userId, input);
+
+		void AuditService.log({
+			action: AUDIT_ACTION.PAYMENT_ENTRANCE_COLLECTED,
+			description: `Entrance payment collected for ${input.paymentMonth}`,
+			targetType: 'Payment',
+			targetId: payment.id,
+			metadata: {
+				enrollmentId: input.enrollmentId,
+				paymentMonth: input.paymentMonth,
+				amount: payment.amount.toString(),
+				collectedAtInstituteId: input.collectedAtInstituteId,
+				collectedViaBarcode: input.collectedViaBarcode,
+			},
+			context: extractAuditContext(req),
+		});
+
+		res.status(200).json({
+			status: 'success',
+			data: payment,
+			message: 'Payment collected.',
 		});
 	},
 );

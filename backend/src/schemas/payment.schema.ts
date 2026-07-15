@@ -102,3 +102,14 @@ export const bulkPaymentRowSchema = z
 	);
 
 export type BulkPaymentRow = z.infer<typeof bulkPaymentRowSchema>;
+
+// ─── Entrance Collection (Admin/Staff) ─────────────────────
+export const collectEntrancePaymentSchema = z.object({
+	enrollmentId: z.string().uuid(),
+	paymentMonth: paymentMonthSchema,
+	amount: z.coerce.number().positive().optional(),
+	collectedAtInstituteId: z.string().uuid().optional(),
+	collectedViaBarcode: z.string().trim().min(1).max(50).optional(),
+});
+
+export type CollectEntrancePaymentInput = z.infer<typeof collectEntrancePaymentSchema>;
