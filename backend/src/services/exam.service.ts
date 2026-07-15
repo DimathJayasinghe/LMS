@@ -252,6 +252,9 @@ export const listExams = async (
 		...(role === Role.STUDENT
 			? { course: { enrollments: { some: { userId: actor.userId, isActive: true } } } }
 			: {}),
+		// Teachers only see exams for courses they teach — a list filter, not a
+		// throw, mirroring the STUDENT scoping directly above.
+		...(role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
 		...timeFilter,
 	};
 
@@ -272,6 +275,9 @@ export const getExamById = async (
 	if (exam.deletedAt && role !== Role.SUPER_ADMIN) {
 		throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
 	}
+
+	// Teachers may only read exams for courses they teach.
+	await assertCourseAccess(exam.courseId, actor);
 
 	// Students may only read exams for courses they are enrolled in.
 	await assertStudentContentAccess(actor, exam.courseId, { requirePaid: false });
