@@ -127,7 +127,7 @@ export const listVideosForClass = asyncHandler(
 export const getVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
-    const video = await VideoService.getVideoById(id);
+    const video = await VideoService.getVideoById(id, req.user!);
 
     res.status(200).json({
       status: 'success',
