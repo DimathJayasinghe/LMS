@@ -1,7 +1,7 @@
 # Upload integrity — confirm-step for direct-to-R2 uploads
 
 **Date:** 2026-07-12
-**Status:** Design — awaiting review
+**Status:** Implemented (PR #65, `00bd903`) — confirm-step live for NIC/exam-paper/answer-PDF uploads on `dev`
 **Type:** Bugfix (behavioral change to a documented pattern)
 
 ## Problem
