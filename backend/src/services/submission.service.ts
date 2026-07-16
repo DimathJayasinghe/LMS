@@ -1,9 +1,11 @@
 import { ExamType, NotificationType, Prisma, Role, SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import type { AuthenticatedUser } from '@/types/auth.types';
 import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
+import { assertCourseAccess } from '@/services/class.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -397,14 +399,17 @@ export const completeSubmission = async (
 export const listSubmissions = async (
   examId: string,
   query: ListSubmissionsQuery,
-  userId: string,
-  role: Role,
+  actor: AuthenticatedUser,
 ): Promise<SubmissionListItem[]> => {
   const exam = await ensureExamActive(examId);
 
   // Markers can only view submissions for exams they're assigned to
-  if (role === Role.MARKER) {
-    await ensureMarkerAssigned(userId, examId);
+  if (actor.role === Role.MARKER) {
+    await ensureMarkerAssigned(actor.userId, examId);
+  } else {
+    // Teachers can only view submissions for their own courses' exams
+    // SUPER_ADMIN can view any course's submissions
+    await assertCourseAccess(exam.courseId, actor);
   }
 
   const statusFilter: Prisma.SubmissionWhereInput =
