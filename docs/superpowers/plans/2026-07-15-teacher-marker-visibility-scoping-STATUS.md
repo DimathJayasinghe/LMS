@@ -14,7 +14,7 @@ task, two-stage review between tasks.
 | Task | Status |
 |---|---|
 | 1. `exam.service.ts` — listExams/getExamById | **done** (commit `9a49ed9`, review clean) |
-| 2. `video.service.ts` — listVideosByClass/getVideoById/generateStreamUrl | not started |
+| 2. `video.service.ts` — listVideosByClass/getVideoById/generateStreamUrl | **done** (commit `c64f47e`, review clean) |
 | 3. `submission.service.ts` — listSubmissions | not started |
 | 4. `class-session.service.ts` — listClassSessions/getClassSessionById | not started |
 | 5. Endpoint docs + architecture.md + CLAUDE.md | not started |

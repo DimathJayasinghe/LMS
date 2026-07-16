@@ -260,7 +260,7 @@ git commit -m "fix(exams): scope listExams/getExamById to a TEACHER's own course
   — **signature change**, second parameter added. Both call sites (`generateStreamUrl` and
   `video.controller.ts`'s `getVideo` handler) must be updated in this task.
 
-- [ ] **Step 1: Write the failing tests.** Create `backend/src/services/video.service.test.ts`:
+- [x] **Step 1: Write the failing tests.** Create `backend/src/services/video.service.test.ts`:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -420,13 +420,13 @@ describe("generateStreamUrl — inherits getVideoById's course-ownership check",
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails.**
+- [x] **Step 2: Run it to confirm it fails.**
 
 Run: `cd backend && npm run test -- video.service`
 Expected: FAIL — `getVideoById` doesn't accept a second argument yet, and neither it nor
 `listVideosByClass` calls `assertCourseAccess`.
 
-- [ ] **Step 3: Fix `listVideosByClass`.** Add the new check right after the existing
+- [x] **Step 3: Fix `listVideosByClass`.** Add the new check right after the existing
 `assertStudentContentAccess` call (currently `video.service.ts:221-222`):
 
 ```ts
@@ -437,7 +437,7 @@ Expected: FAIL — `getVideoById` doesn't accept a second argument yet, and neit
   await assertCourseAccess(courseId, actor);
 ```
 
-- [ ] **Step 4: Fix `getVideoById`.** Replace the function (currently lines 251-262):
+- [x] **Step 4: Fix `getVideoById`.** Replace the function (currently lines 251-262):
 
 ```ts
 export const getVideoById = async (
@@ -459,7 +459,7 @@ export const getVideoById = async (
 };
 ```
 
-- [ ] **Step 5: Update `generateStreamUrl`'s call site.** Change (currently line 282):
+- [x] **Step 5: Update `generateStreamUrl`'s call site.** Change (currently line 282):
 
 ```ts
   const video = await getVideoById(videoId);
@@ -471,7 +471,7 @@ to:
   const video = await getVideoById(videoId, actor);
 ```
 
-- [ ] **Step 6: Update the controller call site.** In `video.controller.ts`, the `getVideo` handler
+- [x] **Step 6: Update the controller call site.** In `video.controller.ts`, the `getVideo` handler
 (currently lines 127-137) — change:
 
 ```ts
@@ -504,17 +504,17 @@ export const getVideo = asyncHandler(
 );
 ```
 
-- [ ] **Step 7: Run the tests to green.**
+- [x] **Step 7: Run the tests to green.**
 
 Run: `cd backend && npm run test -- video.service`
 Expected: PASS (all 7 new cases).
 
-- [ ] **Step 8: Typecheck + full backend test run.**
+- [x] **Step 8: Typecheck + full backend test run.**
 
 Run: `cd backend && npx tsc --noEmit && npm run test`
 Expected: PASS (all suites).
 
-- [ ] **Step 9: Commit.**
+- [x] **Step 9: Commit.**
 
 ```bash
 git add backend/src/services/video.service.ts backend/src/services/video.service.test.ts backend/src/controllers/video.controller.ts
