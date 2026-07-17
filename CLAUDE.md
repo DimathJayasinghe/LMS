@@ -77,6 +77,17 @@ needs an explicit actor-vs-target check inside the service — see
 `SUPER_ADMIN` can). This exact gap caused a real incident (front-desk deactivated the super-admin
 account) — when adding a new admin-on-user mutation, check whether it needs the same guard.
 
+A related but distinct gap: `requireRole(...)` also doesn't know whether a `TEACHER` caller
+actually **teaches** the course a request is about — it only checks the caller's role, not
+ownership of the specific resource. `assertCourseAccess` (`backend/src/services/class.service.ts`)
+is the fix for this class of gap: it throws `403 FORBIDDEN_COURSE` when a `TEACHER` isn't the
+course's `teacherId` (and passes `ADMIN`/`SUPER_ADMIN` through unconditionally). It's wired into
+every course-scoped **mutation** by convention, but as of 2026-07-15 it had been missed on 8
+**read** paths (`exam`/`video`/`submission`/`class-session` list-and-get functions) — any `TEACHER`
+could view another teacher's exam content, recordings, submissions, and session schedule. When
+adding a new course-scoped read (not just a mutation), call `assertCourseAccess` too — reads are
+easy to forget since they don't "feel" as dangerous as a mutation, but they leak the same content.
+
 Role enum: `SUPER_ADMIN, TEACHER, ADMIN, MARKER, STUDENT`. Several older `context/api_endpoints/*.md`
 docs were written against an earlier naming scheme and explicitly call out the remap: their `ADMIN`
 means today's `SUPER_ADMIN`, their `STAFF` means today's `ADMIN` (front-desk). Read those notes before

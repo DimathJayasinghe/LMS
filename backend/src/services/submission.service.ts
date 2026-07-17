@@ -1,9 +1,11 @@
 import { ExamType, NotificationType, Prisma, Role, SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import type { AuthenticatedUser } from '@/types/auth.types';
 import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
+import { assertCourseAccess } from '@/services/class.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -392,19 +394,23 @@ export const completeSubmission = async (
 };
 
 // ─── List Submissions ─────────────────────────────────────
-// Admins see all submissions; markers see only for exams they're assigned to.
+// SUPER_ADMIN sees all submissions; TEACHER is scoped to their own courses' exams; MARKER sees only exams they're assigned to.
 
 export const listSubmissions = async (
   examId: string,
   query: ListSubmissionsQuery,
-  userId: string,
-  role: Role,
+  actor: AuthenticatedUser,
 ): Promise<SubmissionListItem[]> => {
   const exam = await ensureExamActive(examId);
 
   // Markers can only view submissions for exams they're assigned to
-  if (role === Role.MARKER) {
-    await ensureMarkerAssigned(userId, examId);
+  if (actor.role === Role.MARKER) {
+    await ensureMarkerAssigned(actor.userId, examId);
+  }
+
+  // Teachers can only view submissions for their own courses' exams
+  if (actor.role === Role.TEACHER) {
+    await assertCourseAccess(exam.courseId, actor);
   }
 
   const statusFilter: Prisma.SubmissionWhereInput =

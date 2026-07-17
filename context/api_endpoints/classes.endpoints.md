@@ -317,6 +317,8 @@ Create a class session.
 
 List class sessions. Non-admin users only see non-deleted sessions.
 
+A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the class isn't one they teach.
+
 **Query params**
 
 - `classType`: filters by class type
@@ -339,6 +341,8 @@ List class sessions. Non-admin users only see non-deleted sessions.
 ### GET `/:classId/sessions/:sessionId`
 
 Get class session detail.
+
+A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the class isn't one they teach.
 
 **Success (200)**
 

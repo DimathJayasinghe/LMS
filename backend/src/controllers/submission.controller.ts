@@ -71,12 +71,7 @@ export const listSubmissions = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { examId } = listSubmissionsParamsSchema.parse(req.params);
     const query = listSubmissionsQuerySchema.parse(req.query);
-    const submissions = await SubmissionService.listSubmissions(
-      examId,
-      query,
-      req.user!.userId,
-      req.user!.role,
-    );
+    const submissions = await SubmissionService.listSubmissions(examId, query, req.user!);
 
     res.status(200).json({
       status: 'success',
