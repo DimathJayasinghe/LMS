@@ -88,6 +88,9 @@ export const listClassSessions = async (
   // Students may only see the schedule of courses they are enrolled in.
   await assertStudentContentAccess(actor, classId, { requirePaid: false });
 
+  // Teachers may only see the schedule of courses they teach.
+  await assertCourseAccess(classId, actor);
+
   const where: Prisma.ClassSessionWhereInput = {
     courseId: classId,
     ...(query.classType ? { classType: query.classType } : {}),
@@ -109,6 +112,9 @@ export const getClassSessionById = async (
   const role = actor.role;
   await ensureClassExists(classId);
   await assertStudentContentAccess(actor, classId, { requirePaid: false });
+
+  // Teachers may only see the schedule of courses they teach.
+  await assertCourseAccess(classId, actor);
 
   const session = await prisma.classSession.findUnique({
     where: { id: sessionId },
