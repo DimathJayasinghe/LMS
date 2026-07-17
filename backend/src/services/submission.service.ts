@@ -394,7 +394,7 @@ export const completeSubmission = async (
 };
 
 // ─── List Submissions ─────────────────────────────────────
-// Admins see all submissions; markers see only for exams they're assigned to.
+// SUPER_ADMIN sees all submissions; TEACHER is scoped to their own courses' exams; MARKER sees only exams they're assigned to.
 
 export const listSubmissions = async (
   examId: string,

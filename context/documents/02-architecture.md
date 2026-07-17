@@ -229,7 +229,7 @@ These rules **must never be violated**. Every code review checks against this li
 | Transport | HTTPS everywhere (Vercel TLS + nginx/Let's Encrypt on the VPS) |
 | Authentication | JWT access token (15 min) + refresh token (7 days), both in HTTP-only cookies |
 | Refresh tokens | Hashed (SHA-256) before DB storage; rotated on use; reuse detection revokes the whole family |
-| Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`), plus optional per-user `Permission` overrides (see 08) |
+| Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`) gates by the **caller's** role only; course-scoped content (exams/videos/submissions/sessions) additionally requires `assertCourseAccess` in the service layer so a `TEACHER` is scoped to courses they actually teach — see CLAUDE.md's "Auth & authorization" section. Optional per-user `Permission` overrides also exist (see 08) |
 | Input Validation | Zod schemas in middleware — reject before reaching the controller |
 | Rate Limiting | `express-rate-limit` with Redis store (auth routes tightened to 10/min/IP) |
 | HTTP Hardening | Helmet.js on all responses |

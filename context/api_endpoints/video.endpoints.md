@@ -201,6 +201,8 @@ Removes the `VideoRecording` row from the database. **Does not delete the video 
 
 Lists all video recordings attached to sessions belonging to a specific course. Sessions that have been soft-deleted are **excluded** automatically.
 
+A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
+
 **Roles:** Any authenticated user
 
 **Path Parameter:** `classId` — UUID of the Course
@@ -241,6 +243,8 @@ Results are ordered by class session date (newest first).
 
 Fetches metadata for a single video recording. Does **not** generate a stream URL.
 
+A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
+
 **Roles:** Any authenticated user
 
 **Success (200)**
@@ -267,6 +271,8 @@ Issues a **token-authenticated Bunny embed URL** (time-limited) for a video, onl
 enrolled-AND-paid gate. Playback protection is Bunny's own: **Embed View Token Authentication**
 (+ optional **MediaCage DRM** — Widevine/FairPlay) enabled on the library; we additionally overlay a
 per-student watermark client-side.
+
+A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
 
 **Roles:** Any authenticated user (student path runs the enrolled+paid gate)
 

@@ -83,8 +83,10 @@ describe('listSubmissions — TEACHER course-ownership scoping', () => {
 
 		await listSubmissions('exam-1', query, superAdmin);
 
-		// SUPER_ADMIN is neither MARKER nor TEACHER, so neither gate runs.
-		// Both checks are skipped and SUPER_ADMIN can access all submissions.
+		// This test would have caught the old if/else bug: if the code was
+		// if (MARKER) { check } else if (TEACHER) { check }, then SUPER_ADMIN
+		// (being "not MARKER") would incorrectly trigger the TEACHER check.
+		// With independent if-blocks, both checks are correctly skipped.
 		expect(assertCourseAccess).not.toHaveBeenCalled();
 		expect(submissionFindMany).toHaveBeenCalled();
 	});
@@ -118,8 +120,8 @@ describe('listSubmissions — MARKER assignment gate is unaffected by the new TE
 
 		await listSubmissions('exam-1', query, teacher);
 
-		// This regression test proves MARKER and TEACHER checks are independent if-blocks, not if/else.
-		// If they were if/else, a TEACHER would trigger markerAssignmentFindUnique.
+		// This test verifies that a TEACHER caller never triggers the MARKER-only code path,
+		// confirming the two checks are independent (both callers can have their own scoping gates).
 		expect(markerAssignmentFindUnique).not.toHaveBeenCalled();
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', teacher);
 	});

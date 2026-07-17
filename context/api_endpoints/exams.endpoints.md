@@ -169,7 +169,9 @@ Create a new exam.
 
 ### GET `/`
 
-List exams. Non-admin users only see non-deleted exams.
+List exams. Non-admin users only see non-deleted exams. A `TEACHER` caller only ever sees exams
+for courses they teach — other teachers' courses are silently excluded from the list (not a 403,
+since this is a list filter, not a single-resource fetch).
 
 **Query params**
 
@@ -209,6 +211,7 @@ Get a single exam. Student responses are time-gated.
 
 - 400 validation error
 - 401 auth middleware error
+- 403 `FORBIDDEN_COURSE` (a `TEACHER` calling for an exam whose course they don't teach)
 - 404 `EXAM_NOT_FOUND`
 
 ### PATCH `/:id`

@@ -194,6 +194,9 @@
 
 **List Submissions** — View all submissions for a specific exam.
 
+A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the exam's course isn't one they teach — distinct
+from a `MARKER`'s `403 MARKER_NOT_ASSIGNED`, which checks assignment rather than course ownership.
+
 ### Auth
 - Requires: `access_token` cookie
 - Role: `ADMIN` or `MARKER` (must be assigned to the exam)
