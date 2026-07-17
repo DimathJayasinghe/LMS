@@ -83,7 +83,9 @@ describe('listSubmissions — TEACHER course-ownership scoping', () => {
 
 		await listSubmissions('exam-1', query, superAdmin);
 
-		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', superAdmin);
+		// SUPER_ADMIN is neither MARKER nor TEACHER, so neither gate runs.
+		// Both checks are skipped and SUPER_ADMIN can access all submissions.
+		expect(assertCourseAccess).not.toHaveBeenCalled();
 		expect(submissionFindMany).toHaveBeenCalled();
 	});
 });
@@ -109,5 +111,16 @@ describe('listSubmissions — MARKER assignment gate is unaffected by the new TE
 			code: 'MARKER_NOT_ASSIGNED',
 			statusCode: 403,
 		});
+	});
+
+	it('when TEACHER calls listSubmissions, ensureMarkerAssigned (markerAssignmentFindUnique) is never called', async () => {
+		examFindUnique.mockResolvedValueOnce(examRow);
+
+		await listSubmissions('exam-1', query, teacher);
+
+		// This regression test proves MARKER and TEACHER checks are independent if-blocks, not if/else.
+		// If they were if/else, a TEACHER would trigger markerAssignmentFindUnique.
+		expect(markerAssignmentFindUnique).not.toHaveBeenCalled();
+		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', teacher);
 	});
 });

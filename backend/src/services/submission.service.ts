@@ -406,9 +406,10 @@ export const listSubmissions = async (
   // Markers can only view submissions for exams they're assigned to
   if (actor.role === Role.MARKER) {
     await ensureMarkerAssigned(actor.userId, examId);
-  } else {
-    // Teachers can only view submissions for their own courses' exams
-    // SUPER_ADMIN can view any course's submissions
+  }
+
+  // Teachers can only view submissions for their own courses' exams
+  if (actor.role === Role.TEACHER) {
     await assertCourseAccess(exam.courseId, actor);
   }
 
