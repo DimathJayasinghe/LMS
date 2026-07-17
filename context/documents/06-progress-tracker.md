@@ -9,9 +9,9 @@
 | Field | Value |
 |-------|-------|
 | **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
-| **Last Updated** | 2026-07-10 |
-| **Last Completed Task** | Student account-setup (NIC upload + institute barcodes + auto LMS-QR) + privileged-account authorization fix (front-desk could deactivate a super-admin — see Decisions Log) |
-| **Next Task** | See "Remaining follow-ups" below — no single blocker, pick by priority |
+| **Last Updated** | 2026-07-15 |
+| **Last Completed Task** | Pay-at-entrance collection + printable receipts (`collectEntrancePayment`, `resolveStudentByBarcode`, `CollectPayment`/`PaymentReceipt` UI) — merged. `teacher-marker-visibility-scoping` spec written, implementation not yet started (see `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`). |
+| **Next Task** | See "Remaining follow-ups" below and the new "2026-07-15 gap-audit pass" — no single blocker, pick by priority |
 | **Blockers** | None |
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
@@ -21,6 +21,34 @@
 > below. Two genuinely missing frontend pieces found: an **audit log viewer** and a **notification
 > bell** (backend SSE/audit endpoints exist; no frontend consumer). See `CLAUDE.md` for the
 > standing note that `context/` docs drift from code — this file is no exception.
+
+> **2026-07-15 gap-audit pass.** Full re-verification against real code (not assumed from this
+> file) across backend, frontend, and security/testing/ops. Confirmed shipped since 07-10:
+> payments UI, admin subjects/institutes, staff attendance scanner, PayHere onsite checkout,
+> secure Bunny playback (DRM/token/webhook fixes), recorded-video watch-attendance, financial
+> reports, upload-integrity confirm-step, profile edit + credential management, and pay-at-entrance
+> + receipts. **Confirmed still-open** (verbatim from 07-10, re-checked against code, not just this
+> doc): QR-vs-wedge attendance `source` tagging, institute-context barcode resolution in the
+> *attendance* scan endpoint specifically (the new payments barcode-resolver exists but attendance
+> scanning doesn't call it), payment override UI, `BUNNY_API_KEY` still a malformed GUID in `.env`,
+> no attendance-sync/reconciliation button, no Redis caching on result reads, only reactive (not
+> proactive) token refresh, no multipart/refresh-on-expiry for slow R2 uploads, TEACHER course
+> create/edit + timetable-slot authoring UI, all of Phase 9's frontend polish items, TEACHER/MARKER
+> attendance view (`ComingSoon`), timetable's raw `zoom.us` link, and SSE listeners for
+> `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL`. **Newly found this pass** (not previously
+> documented anywhere): `assertCourseAccess` missing from 8 read paths letting any TEACHER view
+> another teacher's exam/video/submission/session content (spec written, see above); a hard
+> `prisma.timetableSlot.delete()` despite an inbound FK and an unused `isActive` column, violating
+> the soft-delete invariant; `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and the
+> `/users/:id/{role,status,barcode}` mutations missing `Idempotency-Key` despite CLAUDE.md naming
+> payments and account activation explicitly; the PayHere webhook signature check uses `!==`
+> instead of `crypto.timingSafeEqual` (Zoom/Bunny both do it correctly); **10 of 21 backend
+> services have zero test coverage**, including `access.service.ts` (the core content-protection
+> gate) and the three files central to the new visibility-scoping gap (`exam`/`submission`/`video`);
+> and no CI pipeline exists at all (`.github/workflows/` is empty) — Phase 10's "Not Started" is
+> accurate for real deployment/CI even though the dev-side Docker Compose stack (postgres/nginx/
+> backend/worker/redis/backup) is fully built and has run real backups. See the refreshed
+> "Remaining follow-ups" and "Known Risks" below for the full itemized list.
 
 > **2026-07-09 docs revision.** All `documents/` were revised for **lowest cost / lowest complexity**: backend runs on **one VPS via Docker Compose** (nginx + API + worker + Redis), Postgres on **Neon free tier**, frontend on **Vercel free tier**. Kubernetes (`k8s/`), Sanity CMS, Upstash, and the abandoned `admin_frontend/` + `admin_panel/` folders were **removed**. The institution model was expanded: **multiple teachers** (new `TEACHER` role), **subjects** (new top-level `Subject`), **QR attendance**, **pay-at-entrance**, and **typed online answers**. See the Decisions Log and [09-cost-and-hosting.md](./09-cost-and-hosting.md).
 
@@ -49,18 +77,27 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 **Remaining follow-ups (columns/enums exist; endpoints not yet wired):**
 - [ ] Apply the schema to the self-hosted Postgres in-container: `docker compose exec backend npx prisma migrate deploy` (dev DB is on `localhost:5433` for host tooling) — entrypoint currently uses `prisma db push`
 - [x] Submission flow: `writtenAnswers` accepted/stored server-side (`submission.service.ts`) + frontend `WrittenAnswerPanel`/`ExamSit` wired
-- [ ] Payment flow: pay-at-entrance endpoint setting `method=ENTRANCE` + `collectedById` — **genuinely not wired**, no route/service code found
-- [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint (still always writes `BARCODE` — see `attendance.endpoints.md`)
+- [x] Payment flow: pay-at-entrance (2026-07-14/15) — `POST /payments/collect-entrance` (`collectEntrancePayment`), `GET /users/resolve-barcode` (`resolveStudentByBarcode`, institute-scoped `StudentBarcode` then global `User.barcode` fallback), `CollectPayment`/`PaymentReceipt` frontend + `/payments/[id]` printable receipt with QR. See `payments.endpoints.md` §8.
+- [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint (still always writes `BARCODE` — `attendance.service.ts:92` hardcodes it; confirmed still true 2026-07-15 — see `attendance.endpoints.md`)
 - [x] Live classes: server-signed Zoom SDK join endpoint (2026-07-10, same content gate) + per-student watermark overlay (frontend) — see `02-architecture.md §7.1`
 - [x] **Enrollment endpoints** (2026-07-10) — `POST /api/enrollments` (STUDENT self-enroll; ADMIN/SUPER_ADMIN enroll a `userId`; re-enroll reactivates a cancelled row), `GET /my`, `GET /` (admin, paginated), `GET /:id`, `DELETE /:id` (soft-cancel). Feeds the content-access gate and unblocks `POST /payments/initiate`. Files: `schemas/enrollment.schema.ts`, `services/enrollment.service.ts`, `controllers/enrollment.controller.ts`, `routes/enrollment.routes.ts`; `AUDIT_ACTION.ENROLLMENT_{CREATED,CANCELLED}`; `context/api_endpoints/enrollments.endpoints.md`. No migration (existing `Enrollment` table).
 - [x] Teacher-scoped **reads** for attendance (2026-07-10) — `GET /session/:sessionId` and `GET /class/:classId` now allow `TEACHER`, scoped via the existing `assertCourseAccess` ownership gate (reused from `class.service.ts`, not duplicated). See `attendance.endpoints.md`.
 - [x] **Student account-setup flow** (2026-07-10) — NIC front/back R2 upload, register/list/delete `StudentBarcode` per institute, `setupCompleted` auto-flip (no approval gate, explicit product decision), LMS-QR auto-generated at registration. `/auth/account-setup` page + `(app)` layout redirect gate. See `account-setup.endpoints.md`.
-- [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`)
+- [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`) — **confirmed still separate from the payments fix** (2026-07-15): `resolveStudentByBarcode` exists and is wired into `GET /users/resolve-barcode` for payments, but `attendance.service.ts`'s `scanBarcode` still does a plain `User.barcode` lookup and never calls it
 - [x] Recorded-video attendance (2026-07-12, PR #57): `VideoPlayer.tsx` wires `POST /attendance/video` via player.js `timeupdate`/`ended` events (marks after ~30s forward-watched, seek-proof), plus the missing enrollment gate on the endpoint itself.
 - [x] **Audit log viewer** (2026-07-10) — `/admin/audit` (SUPER_ADMIN-gated), action + date-range filters, expandable rows for IP/user-agent/metadata. Also fixed a real bug found while building it: the route was gated to `Role.ADMIN` (front-desk) instead of `Role.SUPER_ADMIN` — a leftover from before the 2026-07-09 role-enum remap that locked the actual super-admin out and let front-desk read the full trail. See `audit.endpoints.md`.
 - [x] **Notification bell + settings** (2026-07-10) — new `Notification`/`NotificationSetting` models, `NotificationService.dispatch()` single entry point (in-app + settings-gated SMS, fires SSE `NOTIFICATION_CREATED`), wired into results-published and payment confirmed/overridden. `/admin/notification-settings` (SUPER_ADMIN) toggles per (scenario, channel); the bell in `TopBar` is the **first frontend SSE consumer** in the codebase — `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` still have no frontend listener, a separate pre-existing gap. See `notifications.endpoints.md`.
 - [ ] Actor-vs-target privilege guard audit: `assertCanManagePrivilegedTarget` now covers `PATCH /:id/status` and `PATCH /:id/barcode` (2026-07-10 fix, see Decisions Log) — `PATCH /:id/role` is separately SUPER_ADMIN-only at the route level so needs no change, but re-check any *new* admin-on-user mutation for the same actor/target gap before shipping it
 - [x] **Refresh-token collision on rapid re-auth** (found 2026-07-10, fixed 2026-07-11): `signRefreshToken`/`signAccessToken` in `auth.service.ts` called `jwt.sign(payload, secret, { expiresIn })` with no `jti` (nonce) claim, so two token issuances for the same `(userId, role)` within the same second produced a byte-identical JWT — and since the DB stores `RefreshToken.token` as a hash of the raw token with a unique constraint, the second insert threw `P2002` and the request 500'd. Fixed by adding `jwtid: crypto.randomUUID()` to both `jwt.sign` calls. Regression test in `auth.service.test.ts` freezes system time with `vi.useFakeTimers()` so two `login()` calls share the same `iat`, then asserts the two refresh tokens (and their stored hashes) differ; confirmed the test fails without the fix and passes with it. Live-verified: registered a throwaway user then fired 5 concurrent logins against the running stack — 5 distinct `RefreshToken` rows, zero 500s.
+- [x] Upload-integrity confirm-step (2026-07-13, PR #65): split presign from persistence for NIC/exam-paper/answer-PDF direct-to-R2 uploads — `r2HeadObject` verifies the object actually landed before a `confirm*` endpoint persists the key / flips `setupCompleted`, closing the false-success gap a failed/CORS-blocked `PUT` used to cause.
+- [x] Profile edit + credential management (2026-07-13, PR #66) — see `docs/superpowers/specs/2026-07-13-profile-edit-credential-management-design.md`.
+- [x] Teacher-scoped read gaps found (2026-07-15, spec written, **implementation not yet started**): `assertCourseAccess` is missing from `exam.service.ts` (`listExams`/`getExamById`), `video.service.ts` (`listVideosByClass`/`getVideoById`/`generateStreamUrl`), `submission.service.ts` (`listSubmissions`), and `class-session.service.ts` (`listClassSessions`/`getClassSessionById`) — any TEACHER can currently view another teacher's exam content (incl. answers), recordings, submissions, and session schedule. `MARKER` scoping (`ensureMarkerAssigned`) and front-desk `ADMIN` route-gating were both independently verified correct — not part of the gap. See `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`.
+- [ ] **Security/correctness hardening found in the 2026-07-15 gap audit** (not yet fixed):
+  - `timetable.service.ts` hard-deletes a `TimetableSlot` (`prisma.timetableSlot.delete(...)`) despite an inbound FK from `ClassSession.timetableSlotId` and an existing-but-unused `isActive` column that looks built for exactly this soft-disable — violates the repo's soft-delete-only invariant.
+  - `Idempotency-Key` missing on `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` — CLAUDE.md names payments and account activation explicitly as requiring it; only `/initiate`, `/payhere/checkout`, `/collect-entrance`, and mark finalization currently have the check.
+  - PayHere webhook signature check (`payment.service.ts`) compares with `!==` instead of `crypto.timingSafeEqual` — Zoom and Bunny webhook verification both already do this correctly; inconsistent, low-real-world-risk but worth matching.
+- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services have zero `.test.ts` file — `access.service.ts` (the core enrolled+paid content gate), `exam.service.ts`, `submission.service.ts`, `video.service.ts`, `class-session.service.ts`, `enrollment.service.ts`, `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, `subject.service.ts`, `stream.service.ts`. The three central to the visibility-scoping gap above (`exam`/`submission`/`video`) have never had one.
+- [ ] **No CI pipeline** (found in the 2026-07-15 gap audit): `.github/workflows/` doesn't exist. The dev-side Docker Compose stack (postgres/nginx/backend/worker/redis/backup) is fully built and has run real backups — this is specifically about automated build/test-on-PR, which is genuinely not started (Phase 10 task).
 
 ---
 
@@ -73,9 +110,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
 | 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
-| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; role-aware `/payments` UI ✅ (2026-07-11) — student overview/history + admin summary/records/bulk-upload; new `GET /payments/summary` aggregate. PayHere live charge now works end-to-end (fixed a missing `Idempotency-Key` on initiate). Refunds/receipts still absent |
-| 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener |
-| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — verified: 18 Vitest+RTL unit tests, `tsc`+`build` green, and a headless-Chromium UI smoke on the live Docker stack: create/edit/deactivate/filter/duplicate-409 for both + ADMIN bounced by the SSR gate); audit log viewer ✅ (2026-07-10); financial reports ✅ (2026-07-12, SUPER_ADMIN-only `/admin/reports` — revenue trend / by-course / by-method / outstanding, new `GET /payments/reports` aggregate, Recharts) |
+| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; role-aware `/payments` UI ✅ (2026-07-11) — student overview/history + admin summary/records/bulk-upload; new `GET /payments/summary` aggregate. PayHere live charge works end-to-end. **Pay-at-entrance + printable receipts ✅ (2026-07-14/15)** — `collectEntrancePayment`, barcode resolution, `CollectPayment`/`PaymentReceipt` + `/payments/[id]`. **Payment override UI still absent** (backend `PAYMENT_OVERRIDDEN` audit action + `PATCH /:id/override` exist; no frontend) — genuine remaining gap. Refunds still absent. |
+| 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener (confirmed still true 2026-07-15) |
+| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — verified: 18 Vitest+RTL unit tests, `tsc`+`build` green, and a headless-Chromium UI smoke on the live Docker stack: create/edit/deactivate/filter/duplicate-409 for both + ADMIN bounced by the SSR gate); audit log viewer ✅ (2026-07-10); financial reports ✅ (2026-07-12, SUPER_ADMIN-only `/admin/reports` — revenue trend / by-course / by-method / outstanding, new `GET /payments/reports` aggregate, Recharts). Payment-override UI (see Phase 5) and the "Sync Attendance" reconciliation button (see Known Risks) are this phase's two remaining concrete gaps. |
 | 8 | Student Dashboard | 🟡 In Progress | Home/dashboard, classes, timetable, exams (incl. taking), submissions, payments, attendance, video player, live classes — all built |
 | 9 | Polish & Hardening | 🟡 In Progress | Backend hardening in progress; frontend polish pending |
 | 10 | Deployment | ⬜ Not Started | Vercel + EC2 + Upstash setup, DNS, staging/prod pipeline, monitoring |
@@ -214,12 +251,12 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 
 - [x] Create `payment.routes.ts`, `payment.controller.ts`, `payment.service.ts`
 - [x] Implement PayHere payment initiation + webhook handler
-- [x] Implement idempotency middleware for payment routes
+- [x] Implement idempotency middleware for payment routes — present on `/initiate`, `/payhere/checkout`, `/collect-entrance`; **not** on `/override` or `/bulk-upload` (gap found 2026-07-15, see Phase S follow-ups)
 - [x] Implement Excel bulk payment upload (Admin)
 - [x] Build payment page (student view) — `(app)/payments/page.tsx` role-aware: STUDENT sees per-course this-month Pay/Paid cards (reuses the initiate→PayHere flow) + filterable history (2026-07-11)
 - [x] Build payment dashboard (admin view) — SUPER_ADMIN/ADMIN: month summary (`GET /payments/summary`), status/month-filtered records table, and Excel bulk upload with per-row results (2026-07-11)
-- [ ] Build payment override UI (super admin) — backend `PAYMENT_OVERRIDDEN` audit action exists; frontend not built
-- [ ] Pay-at-entrance is not wired at all yet (backend), see Phase S follow-ups above — a UI here would need that first
+- [x] Pay-at-entrance (2026-07-14/15) — `collectEntrancePayment` + barcode resolution + `CollectPayment` UI + printable `PaymentReceipt`/`/payments/[id]`, see Phase S follow-ups above
+- [ ] Build payment override UI (super admin) — backend `PAYMENT_OVERRIDDEN` audit action + `PATCH /:id/override` exist; frontend not built — **confirmed still absent 2026-07-15** (genuine remaining gap)
 
 ---
 
@@ -242,9 +279,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 
 - [x] Build user management table (search, filter, role change) — `admin/users/page.tsx` + `UsersTable.tsx`/`UserFilters.tsx`, includes status (active/inactive/all) filter and the activate/deactivate toggle
 - [x] Build audit log viewer — `/admin/audit` (2026-07-10), see Phase S follow-ups above for the role-guard bug fixed alongside it
-- [ ] Build financial reports page (genuine gap)
-- [ ] Build support tools (password reset, account unlock) — "account unlock" is effectively the existing activate/deactivate toggle; password reset flow not confirmed built
-- [ ] Implement "Sync Attendance" reconciliation button (genuine gap)
+- [x] Build financial reports page (2026-07-12) — `/admin/reports` (SUPER_ADMIN-only), `GET /payments/reports` aggregate, Recharts revenue-trend/by-course/by-method/outstanding views
+- [x] Build support tools (password reset, account unlock) — profile/credential management shipped 2026-07-13 (`docs/superpowers/specs/2026-07-13-profile-edit-credential-management-design.md`); "account unlock" remains the existing activate/deactivate toggle
+- [ ] Implement "Sync Attendance" reconciliation button (genuine gap — **confirmed still absent 2026-07-15**, no reconciliation function/route/UI found anywhere)
 
 ---
 
@@ -292,7 +329,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Run `docker compose up -d --build` (postgres + nginx + API + worker + Redis + backup); then `prisma migrate deploy` in-container
 - [ ] Run one restore drill ([12 §8](./12-data-backup-and-recovery.md)) before cutover
 - [ ] Set up Sentry projects (frontend + backend, free tier)
-- [ ] GitHub Actions: build/test on PR; on merge to `main`, SSH deploy (`git pull && docker compose up -d --build`)
+- [ ] GitHub Actions: build/test on PR; on merge to `main`, SSH deploy (`git pull && docker compose up -d --build`) — **confirmed genuinely not started 2026-07-15**: `.github/workflows/` doesn't exist. Distinct from the dev-side Compose stack, which IS fully built (postgres/nginx/backend/worker/redis/backup all running, real backups have executed) — don't confuse the two when re-checking this phase.
 - [ ] Smoke test full system
 - [ ] Production cutover + monitoring
 - [ ] See [09-cost-and-hosting.md](./09-cost-and-hosting.md) for the full runbook + cost table
@@ -346,14 +383,19 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 
 | Risk | Mitigation | Status |
 |------|-----------|--------|
-| Thundering herd on result release | Redis caching for result queries | ⬜ To implement |
-| Zoom webhook missed during server restart | Retry config + Admin "Sync" button | ⬜ To implement |
-| JWT expiry during long exam | Silent refresh token rotation | ⬜ To implement |
-| R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement |
-| Video piracy (leaked stream link) | IP-bound Bunny tokens + enrolled/paid gating + student watermark overlay | ⬜ To implement |
-| Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ⬜ To implement |
-| DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ To implement |
+| Thundering herd on result release | Redis caching for result queries | ⬜ To implement (confirmed absent 2026-07-15 — zero `@/config/redis` usage in `exam.service.ts`/`submission.service.ts`) |
+| Zoom webhook missed during server restart | Retry config + Admin "Sync" button | ⬜ To implement (confirmed absent 2026-07-15 — no reconciliation function/route/UI exists) |
+| JWT expiry during long exam | Silent refresh token rotation | 🟡 Partial — reactive refresh-on-401 exists (`frontend/lib/api.ts`, single retry); no proactive/background rotation ahead of the 15-min expiry |
+| R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement (confirmed absent 2026-07-15 — NIC/exam-paper/answer-PDF uploaders are single presign→PUT→confirm, no resume path) |
+| Video piracy (leaked stream link) | Bunny token-authenticated embed + MediaCage DRM, enrolled/paid gating, per-student watermark overlay | ✅ Done (2026-07-11, PR #56 — see `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`) |
+| Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ✅ Done |
+| DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ Not planned — Web Meeting SDK has no OS-level capture-blocking; CLAUDE.md documents this as an **accepted limitation**, not a bug to fix |
 | Single VPS is a single point of failure | Self-hosted Postgres on a persistent volume + the `backup` service (verified, encrypted, **off-site** dumps) + nightly Redis snapshot; scripted rebuild + restore runbook ([12](./12-data-backup-and-recovery.md)) | 🟡 Backup engine built & validated; configure off-site + drill before cutover |
-| Webhook spam from flaky student connections | Upsert-based webhook handlers | ✅ Done |
-| Database cascade delete | Soft deletes + `onDelete: Restrict` | ✅ Done |
+| Webhook spam from flaky student connections | Upsert-based webhook handlers (Zoom/Bunny `updateMany`; PayHere `findUnique`+`update` on the pre-existing row) | ✅ Done |
+| Database cascade delete via FK | Soft deletes + `onDelete: Restrict`/`SetNull` (no `Cascade` anywhere in `schema.prisma`, confirmed 2026-07-15) | ✅ Done |
 | Multi-worker cron job collision | BullMQ distributed queue | ✅ Done |
+| **New 2026-07-15:** `timetable.service.ts` hard-deletes a `TimetableSlot` row despite an inbound FK and an unused `isActive` column | Switch to soft-delete (`isActive: false`) matching every other model | ⬜ To implement |
+| **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ⬜ To implement |
+| **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ⬜ To implement |
+| **New 2026-07-15:** 10/21 backend services have zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | ⬜ To implement |
+| **New 2026-07-15:** No CI pipeline — nothing runs tests/build on PR | Add `.github/workflows/ci.yml` (lint + `tsc` + `vitest run` for both apps) | ⬜ To implement |

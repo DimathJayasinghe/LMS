@@ -3,7 +3,9 @@
 > The build order and page inventory for the frontend, mirroring the backend's `06-progress-tracker.md`.
 > Keep this current: when a screen is done (per Doc 00 §7), move it to **Done** with the date.
 
-_Last updated: 2026-07-10._
+_Last updated: 2026-07-15 (see §2 for the full re-verification pass — every item this doc already
+flagged as open on 2026-07-10 is confirmed still open, unchanged, on 2026-07-15; two new rows
+added to §1 for what shipped since)._
 
 ---
 
@@ -36,6 +38,8 @@ _Last updated: 2026-07-10._
 | Admin: subjects & institutes | ✅ Wired | `/admin/subjects` + `/admin/institutes` (**SUPER_ADMIN-only** — stricter than `/admin/users`; ADMIN redirected off both, per the academic-taxonomy/center-allowlist being owner-scoped). Each is a server page (SSR gate + `GET /…?search`) → a single client `*Manager` owning search (`?search` re-fetch), a client-side Active/Inactive/All segmented filter over the SUPER_ADMIN list (which already returns inactive rows — no extra round-trip), inline **create** (toggle form card, `isActive` Switch) and inline **row edit** (one row at a time; opening either collapses the other), and per-row **activate/deactivate** — all `POST`/`PATCH` + `router.refresh()` (server-truth, no optimistic cache). Duplicate name/`code` (409) + validation errors map to inline per-form/per-row text (no toast/modal — none installed). Frontend-only (subject/institute CRUD endpoints existed + tested). **Verified**: 18 Vitest+RTL unit tests (filter, submit-gating, 409→inline, create/edit exclusivity, empty states) + `tsc` + `next build` green, plus a **headless-Chromium UI smoke on the live Docker stack** — create → edit → deactivate (Active hides / All shows "Inactive") → duplicate name/`code` 409 inline, for both resources, and an ADMIN (front-desk) served `/dashboard` at both URLs with no management control (SSR gate holds). `lint` clean on the new files (2 pre-existing errors remain in untouched `Nav.tsx`/`useNotificationStream.ts`). |
 | Payments (student + admin) | ✅ Wired | Role-aware `/payments` (SSR `/auth/me` branch; STUDENT vs SUPER_ADMIN/ADMIN, else redirected). **Student**: per active enrollment a this-month **Pay**/Paid card (Pay → shared `initiatePayherePayment` → **onsite modal** via `startPayherePayment`, redirect fallback) + a status-filterable history table. **Admin**: month **summary** (new `GET /payments/summary?month=` aggregate — SUCCESS total + status counts, Vitest-tested), status/month-filtered paginated records table, and **Excel bulk upload** (`api.upload` multipart → `{total,created,updated,skipped,errors[]}` rendered with per-row errors). Added STUDENT to the `/payments` nav item. **Bug fixed en route**: `/payments/initiate` requires a UUID `Idempotency-Key` (repo invariant) that neither EnrollPanel nor the new page sent — extracted `redirectToPayhere`/`currentPaymentMonth` + a new `initiatePayherePayment` (which mints the key) into `lib/payhere.ts`, so both call sites now complete a real PayHere charge. Verified: 10 Vitest+RTL unit tests + `tsc`/build + a headless-Chromium smoke on the live stack (student Pay → real POST to sandbox.payhere.lk; admin summary/filter/bulk-upload; TEACHER bounced). No more `(app)` route stubs remain. |
 | Admin: financial reports | ✅ Wired | `/admin/reports` (**SUPER_ADMIN-only**; ADMIN redirected — matches the backend's `requireRole(SUPER_ADMIN)` on the endpoint). Server page (SSR `/auth/me` gate) fetches the new `GET /payments/reports?month=YYYY-MM` aggregate → four views built to the **dataviz** skill: three stat tiles (collected this month / outstanding expected+count / courses earning), a 12-month **revenue-trend** bar chart, a per-**course** horizontal bar chart, and a per-**method** donut, plus a collapsible **"View as table"** fallback (accessible/print/CVD-safe). A client `MonthPicker` (`<input type=month>`) pushes `?month=` for server re-fetch. Charts use **Recharts** with every mark driven off `--foreground` (theme-aware — the design system's `--chart-*` grays don't invert, so they'd fail contrast at the ramp ends); the method donut lightness-encodes via `fillOpacity` keyed to **method identity** (`METHOD_OPACITY`, stable under filtering — never repaints by rank) with a legend + values so identity is never shade-alone; recessive grid/axes, 4px rounded bar ends, hover tooltips in popover tokens, empty/zero states. Pure formatters (`formatLkr`/`compactLkr`/`shortMonth`/`monthLabel`/`pct`) extracted to `lib/reports.ts`. Verified: 7 Vitest unit tests (`lib/reports.test.ts`) + `tsc` + `next build` green; live smoke on the Docker stack pending. Frontend-only bar the new endpoint (backend done + Vitest-tested separately). |
+| Profile edit + credential management | ✅ Wired | 2026-07-13, PR #66 — see `docs/superpowers/specs/2026-07-13-profile-edit-credential-management-design.md` for the full design (password-change cooldown, credential forms, avatar upload). |
+| Pay-at-entrance + printable receipts | ✅ Wired | 2026-07-14/15 — `CollectPayment` (search/scan a student by name or barcode → pick enrollment → outstanding month → collect, session summary + print) wired into `/payments` admin view; `PaymentReceipt` + `/payments/[id]` printable receipt with QR, linked from both the collection flow and the student's own payment history. Backend: `POST /payments/collect-entrance`, `GET /users/resolve-barcode`. `QrCamera` promoted from the attendance feature to `components/custom/` for reuse here. |
 | Student account-setup (NIC + barcode) | ✅ Wired | `/auth/account-setup` (STUDENT-only, `auth` route group — not `(app)`): two NIC photo pickers (front/back, direct-to-R2 presigned PUT, same server-never-touches-the-file pattern as exam PDFs) and an optional institute-barcode section (picker from `GET /institutes` + text input for the code the institute already gave the student, add/remove). `(app)/layout.tsx` now redirects an incomplete `STUDENT` here before any other screen renders; a completed student can revisit anytime via the TopBar user menu ("Account setup") to manage institute barcodes. **Backend** (new): `POST /users/me/nic/upload-url`, `GET/POST /users/me/institute-barcodes`, `DELETE .../:barcodeId` — all STUDENT-gated; `setupCompleted` auto-flips server-side once both NIC sides are on file, no admin-approval step (decision 2026-07-10, see `account-setup.endpoints.md`). Also: `User.barcode` (LMS QR) is now **auto-generated at registration** (`LMS-<indexNumber>`), not left null until an admin assigns one. Verified on the running production stack: **26/26** — auto-gen QR, presigned-URL round trip with a **real PUT to R2** (R2 creds are live, unlike Bunny/Zoom's placeholders), `setupCompleted` flip timing, STUDENT-only role gate, per-institute-not-global barcode uniqueness (same value accepted at institute B after being taken at institute A), ownership-scoped delete (404 not 403, cross-student), and the full SSR gate (incomplete→redirected, non-student bounced away, complete→through). `lint` + `tsc` + `next build` green. |
 
 ---
@@ -55,18 +59,42 @@ _Resolved 2026-07-10:_
 5. ~~Placeholder `href="#"` links.~~ **Fixed** — `CourseCard`/`Footer` now use real routes (`<Link>`).
 7. ~~Vendored Magic UI lint errors.~~ **Fixed** — scoped `eslint-disable` with justification; `lint` is now clean.
 
-_Still open:_
-6. **Accessibility:** icon-only controls audit ongoing (Doc 05 §1). Dark-mode toggle for the app area not wired yet.
-8. **Server-side token refresh:** the `(app)` guard redirects an expired-but-refreshable session to login instead
-   of refreshing (RSC can't set cookies). Add a Next `middleware.ts` refresh later (Doc 04 §6).
-9. **🔴 `BUNNY_API_KEY` in `backend/.env` is malformed** (found 2026-07-10 via smoke test): the value is a
-   corrupted GUID (`8-4-4-12-4-4` hex segments instead of the valid `8-4-4-4-12`), so Bunny's management API
-   rejects it with a real `401 Authentication has been denied for this request.` This blocks the direct-to-Bunny
-   upload's video-creation step. Because `BUNNY_API_KEY` is also used to sign playback tokens
-   (`generateBunnyStreamUrl`), earlier "successful" stream-URL tests only proved our server *constructs* a
-   syntactically valid signed URL — they never proved Bunny's CDN *accepts* it. **Action needed:** replace
-   `BUNNY_API_KEY` in `backend/.env` with the real Video Library API Key (Bunny dashboard → Stream → select the
-   library → API), then re-verify both upload creation and actual HLS playback end-to-end.
+_Still open (re-verified against real code 2026-07-15 — every item below confirmed unchanged since
+it was first found; none have drifted in either direction):_
+6. **Accessibility:** icon-only controls audit ongoing (Doc 05 §1). Spot-checked 2026-07-15 across
+   the newest code (`StaffScanner`, `CollectPayment`, `AdminPayments`) — every icon-only control in
+   code shipped since 07-10 correctly has an `aria-label`, so the pattern is holding up going
+   forward; the "audit" is about the older pre-07-10 surface, not a regression risk in new work.
+   Dark-mode toggle for the app area still not wired.
+8. **Server-side token refresh:** the `(app)` guard (`app/(app)/layout.tsx`) still redirects an
+   expired-but-refreshable session to login instead of refreshing (RSC can't set cookies) — no
+   `middleware.ts` exists at the frontend root. Add a Next `middleware.ts` refresh later (Doc 04 §6).
+9. **🔴 `BUNNY_API_KEY` in `backend/.env` is malformed** (found 2026-07-10, **confirmed still
+   unresolved 2026-07-15** — the `.env` value is still the same wrong `8-4-4-12-4-4`-segment shape):
+   Bunny's management API rejects it with a real `401`, blocking the direct-to-Bunny upload's
+   video-creation step. Note the playback-token mechanism it also feeds has since changed (the
+   2026-07-11 secure-playback rework replaced the old HLS token with `generateBunnyEmbedToken`,
+   signed by the separate `BUNNY_TOKEN_KEY`, not `BUNNY_API_KEY` — so this malformed key specifically
+   blocks *uploads*, not *playback*, now). **Action needed:** replace `BUNNY_API_KEY` in
+   `backend/.env` with the real Video Library API Key (Bunny dashboard → Stream → select the
+   library → API), then re-verify upload creation end-to-end. This is an environment/credential
+   fix, not something fixable by a code change.
+10. **No frontend listeners for `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` SSE events**
+    (`lib/hooks/useNotificationStream.ts` only handles `NOTIFICATION_CREATED`) — confirmed still true
+    2026-07-15.
+11. **Timetable's per-slot `zoomLink` still opens raw `zoom.us`** in a new tab
+    (`app/(app)/timetable/page.tsx`), not routed through the embedded Meeting SDK flow the
+    class-detail page uses — confirmed still true 2026-07-15.
+12. **TEACHER course create/edit + timetable-slot authoring UI still doesn't exist** — no
+    `classes/new` route, no timetable-slot-authoring component anywhere — confirmed still true
+    2026-07-15.
+13. **Attendance scanner still shows `ComingSoon` for TEACHER/MARKER** (`app/(app)/attendance/page.tsx`)
+    — confirmed still true 2026-07-15.
+14. **All of Phase 9's polish items are still un-started**, confirmed by direct grep 2026-07-15: no
+    toast library installed at all, no dark-mode/`next-themes` anywhere, zero `error.tsx`/
+    `global-error.tsx` files under `app/`, and only 12 of 32 `page.tsx` routes have a `loading.tsx`
+    (missing on `/profile`, `/attendance`, `/timetable`, `/admin/audit`,
+    `/admin/notification-settings`, the class-detail page, and the live-class room).
 
 ---
 
