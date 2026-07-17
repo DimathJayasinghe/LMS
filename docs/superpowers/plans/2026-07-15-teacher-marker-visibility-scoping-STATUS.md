@@ -16,7 +16,7 @@ task, two-stage review between tasks.
 | 1. `exam.service.ts` — listExams/getExamById | **done** (commit `9a49ed9`, review clean) |
 | 2. `video.service.ts` — listVideosByClass/getVideoById/generateStreamUrl | **done** (commit `c64f47e`, review clean) |
 | 3. `submission.service.ts` — listSubmissions | **done** (commits `075230c..3e094c4`, 1 fix round, review clean) |
-| 4. `class-session.service.ts` — listClassSessions/getClassSessionById | not started |
+| 4. `class-session.service.ts` — listClassSessions/getClassSessionById | **done** (commit `60de74c`, review clean) |
 | 5. Endpoint docs + architecture.md + CLAUDE.md | not started |
 | 6. Live-stack verification + progress-tracker update + PR | not started |
 

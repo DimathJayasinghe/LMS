@@ -782,7 +782,7 @@ git commit -m "fix(submissions): scope listSubmissions to a TEACHER's own course
 - Consumes: `assertCourseAccess` (already imported at `class-session.service.ts:10`).
 - Produces: no signature changes.
 
-- [ ] **Step 1: Write the failing tests.** Create `backend/src/services/class-session.service.test.ts`:
+- [x] **Step 1: Write the failing tests.** Create `backend/src/services/class-session.service.test.ts`:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -892,12 +892,12 @@ describe('getClassSessionById — TEACHER course-ownership scoping', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails.**
+- [x] **Step 2: Run it to confirm it fails.**
 
 Run: `cd backend && npm run test -- class-session.service`
 Expected: FAIL — neither function calls `assertCourseAccess` yet.
 
-- [ ] **Step 3: Fix `listClassSessions`.** Add the new check right after the existing
+- [x] **Step 3: Fix `listClassSessions`.** Add the new check right after the existing
 `assertStudentContentAccess` call (currently `class-session.service.ts:88-89`):
 
 ```ts
@@ -908,7 +908,7 @@ Expected: FAIL — neither function calls `assertCourseAccess` yet.
   await assertCourseAccess(classId, actor);
 ```
 
-- [ ] **Step 4: Fix `getClassSessionById`.** Add the same check right after its own
+- [x] **Step 4: Fix `getClassSessionById`.** Add the same check right after its own
 `assertStudentContentAccess` call (currently `class-session.service.ts:111-112`):
 
 ```ts
@@ -919,17 +919,17 @@ Expected: FAIL — neither function calls `assertCourseAccess` yet.
   await assertCourseAccess(classId, actor);
 ```
 
-- [ ] **Step 5: Run the tests to green.**
+- [x] **Step 5: Run the tests to green.**
 
 Run: `cd backend && npm run test -- class-session.service`
 Expected: PASS (all 5 new cases).
 
-- [ ] **Step 6: Typecheck + full backend test run.**
+- [x] **Step 6: Typecheck + full backend test run.**
 
 Run: `cd backend && npx tsc --noEmit && npm run test`
 Expected: PASS (all suites).
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add backend/src/services/class-session.service.ts backend/src/services/class-session.service.test.ts
