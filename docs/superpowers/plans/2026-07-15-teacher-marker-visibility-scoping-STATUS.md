@@ -15,7 +15,7 @@ task, two-stage review between tasks.
 |---|---|
 | 1. `exam.service.ts` — listExams/getExamById | **done** (commit `9a49ed9`, review clean) |
 | 2. `video.service.ts` — listVideosByClass/getVideoById/generateStreamUrl | **done** (commit `c64f47e`, review clean) |
-| 3. `submission.service.ts` — listSubmissions | not started |
+| 3. `submission.service.ts` — listSubmissions | **done** (commits `075230c..3e094c4`, 1 fix round, review clean) |
 | 4. `class-session.service.ts` — listClassSessions/getClassSessionById | not started |
 | 5. Endpoint docs + architecture.md + CLAUDE.md | not started |
 | 6. Live-stack verification + progress-tracker update + PR | not started |
@@ -46,3 +46,17 @@ task, two-stage review between tasks.
   `video.service.ts`, and `class-session.service.ts` — no import changes needed there. Only
   `submission.service.ts` needs both added (Task 3, Step 3).
 - Never delete `feature/teacher-marker-visibility-scoping` after merge (repo convention).
+- Minor findings logged for the final whole-branch review (Task 6, before opening the PR): (1)
+  stale comment at `submission.service.ts:397` ("Admins see all submissions...") no longer accurate
+  after Task 3's fix; (2) the TEACHER regression test added during Task 3's fix round has a
+  misleading inline comment — the real if/else regression guard is the SUPER_ADMIN test's
+  `assertCourseAccess` not-called assertion, not the TEACHER test. Both are cosmetic, not
+  functional — fix opportunistically during Task 6 or the final review, not urgent.
+- A background automated security scanner flagged the Task 3 two-`if` gate (MARKER/TEACHER) as
+  "fail-open" for unrecognized roles and suggested a default-deny switch. Deliberately NOT applied:
+  the route already restricts this endpoint to SUPER_ADMIN/TEACHER/MARKER only, and SUPER_ADMIN's
+  fall-through (no check) is the intended behavior, matching `assertCourseAccess`'s own documented
+  SUPER_ADMIN-bypasses-unconditionally pattern used everywhere else in this codebase. The bot's
+  suggested `default: throw 403` would break correct SUPER_ADMIN access. No action needed unless a
+  future session independently re-derives the same finding — if so, this note explains why it was
+  dismissed.

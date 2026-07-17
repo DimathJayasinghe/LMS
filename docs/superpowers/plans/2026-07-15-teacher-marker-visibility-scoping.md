@@ -536,7 +536,7 @@ git commit -m "fix(videos): scope listVideosByClass/getVideoById/generateStreamU
   — **signature change**: the old `(examId, query, userId: string, role: Role)` collapses to a
   single `actor` parameter. The one call site (`submission.controller.ts`) is updated in this task.
 
-- [ ] **Step 1: Write the failing tests.** Create `backend/src/services/submission.service.test.ts`:
+- [x] **Step 1: Write the failing tests.** Create `backend/src/services/submission.service.test.ts`:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -654,13 +654,13 @@ describe('listSubmissions — MARKER assignment gate is unaffected by the new TE
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails.**
+- [x] **Step 2: Run it to confirm it fails.**
 
 Run: `cd backend && npm run test -- submission.service`
 Expected: FAIL — `listSubmissions` doesn't accept a single `actor` object yet (TS will also error
 if you run `tsc`, since the test calls it with the new 3-arg shape).
 
-- [ ] **Step 3: Add the two missing imports.** In `submission.service.ts`, change the top of the
+- [x] **Step 3: Add the two missing imports.** In `submission.service.ts`, change the top of the
 file from:
 
 ```ts
@@ -685,7 +685,7 @@ import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import { assertCourseAccess } from '@/services/class.service';
 ```
 
-- [ ] **Step 4: Fix `listSubmissions`.** Replace the function signature and its opening lines
+- [x] **Step 4: Fix `listSubmissions`.** Replace the function signature and its opening lines
 (currently lines 397-408):
 
 ```ts
@@ -710,7 +710,7 @@ export const listSubmissions = async (
 (Everything below this — `statusFilter`, `gradedFilter`, the `findMany` call, the presigned-URL
 loop, and the `return results;` — is unchanged.)
 
-- [ ] **Step 5: Update the controller call site.** In `submission.controller.ts`, the
+- [x] **Step 5: Update the controller call site.** In `submission.controller.ts`, the
 `listSubmissions` handler (currently lines 70-87) — change:
 
 ```ts
@@ -752,18 +752,18 @@ export const listSubmissions = asyncHandler(
 );
 ```
 
-- [ ] **Step 6: Run the tests to green.**
+- [x] **Step 6: Run the tests to green.**
 
 Run: `cd backend && npm run test -- submission.service`
 Expected: PASS (all 5 new cases).
 
-- [ ] **Step 7: Typecheck + full backend test run.**
+- [x] **Step 7: Typecheck + full backend test run.**
 
 Run: `cd backend && npx tsc --noEmit && npm run test`
 Expected: PASS (all suites — including `upload-confirm.service.test.ts`'s `completeSubmission`
 cases, which don't call `listSubmissions` and are unaffected).
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add backend/src/services/submission.service.ts backend/src/services/submission.service.test.ts backend/src/controllers/submission.controller.ts
