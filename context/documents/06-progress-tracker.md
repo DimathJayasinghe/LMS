@@ -8,11 +8,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
-| **Last Updated** | 2026-07-15 |
-| **Last Completed Task** | Pay-at-entrance collection + printable receipts (`collectEntrancePayment`, `resolveStudentByBarcode`, `CollectPayment`/`PaymentReceipt` UI) — merged. `teacher-marker-visibility-scoping` spec written, implementation not yet started (see `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`). |
-| **Next Task** | See "Remaining follow-ups" below and the new "2026-07-15 gap-audit pass" — no single blocker, pick by priority |
-| **Blockers** | None |
+| **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain). **See [13-system-assessment-and-roadmap.md](./13-system-assessment-and-roadmap.md) (2026-07-17) for the whole-system health assessment + the sequenced P0→P3 roadmap toward launch — it reframes "current phase" as "feature-complete in dev, not yet launchable," with launch-blocking security/deploy work as P0.** |
+| **Last Updated** | 2026-07-17 |
+| **Last Completed Task** | `teacher-marker-visibility-scoping` implemented + merged (PR #71) — `assertCourseAccess` added to 8 read paths; then a whole-system assessment ([13](./13-system-assessment-and-roadmap.md)) was written. |
+| **Next Task** | Per [13 §9](./13-system-assessment-and-roadmap.md): start P0 with CI + the exam-read authz fix (§3.1). |
+| **Blockers** | None for dev work; **launch** is blocked on P0 (see [13 §8](./13-system-assessment-and-roadmap.md)) + real Bunny/Zoom credentials. |
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was
