@@ -69,16 +69,13 @@ it was first found; none have drifted in either direction):_
 8. **Server-side token refresh:** the `(app)` guard (`app/(app)/layout.tsx`) still redirects an
    expired-but-refreshable session to login instead of refreshing (RSC can't set cookies) — no
    `middleware.ts` exists at the frontend root. Add a Next `middleware.ts` refresh later (Doc 04 §6).
-9. **🔴 `BUNNY_API_KEY` in `backend/.env` is malformed** (found 2026-07-10, **confirmed still
-   unresolved 2026-07-15** — the `.env` value is still the same wrong `8-4-4-12-4-4`-segment shape):
-   Bunny's management API rejects it with a real `401`, blocking the direct-to-Bunny upload's
-   video-creation step. Note the playback-token mechanism it also feeds has since changed (the
-   2026-07-11 secure-playback rework replaced the old HLS token with `generateBunnyEmbedToken`,
-   signed by the separate `BUNNY_TOKEN_KEY`, not `BUNNY_API_KEY` — so this malformed key specifically
-   blocks *uploads*, not *playback*, now). **Action needed:** replace `BUNNY_API_KEY` in
-   `backend/.env` with the real Video Library API Key (Bunny dashboard → Stream → select the
-   library → API), then re-verify upload creation end-to-end. This is an environment/credential
-   fix, not something fixable by a code change.
+9. ~~**🔴 `BUNNY_API_KEY` in `backend/.env` is malformed**~~ **RESOLVED / false positive (2026-07-17).**
+   The 2026-07-10 finding assumed the key had to be a canonical GUID (`8-4-4-4-12`) and flagged the
+   `8-4-4-12-4-4`-segment value as malformed. It isn't — **Bunny Stream Video Library API keys are
+   not GUIDs.** Verified live: a read-only call to Bunny's library API with the configured key
+   returns **HTTP 200** (owner also independently confirmed uploads work). No action needed; the
+   direct-to-Bunny upload path is credential-good. (Playback tokens use the separate
+   `BUNNY_TOKEN_KEY`, also present and valid-shaped.)
 10. **No frontend listeners for `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` SSE events**
     (`lib/hooks/useNotificationStream.ts` only handles `NOTIFICATION_CREATED`) — confirmed still true
     2026-07-15.

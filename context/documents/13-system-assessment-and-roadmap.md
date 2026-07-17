@@ -1,12 +1,23 @@
 # 13 — System Assessment & Path to Launch
 
-> A whole-system health assessment and a sequenced roadmap toward the project's actual goal:
-> **safely serving ~1,200 real, paying students on one small VPS.** Written 2026-07-17, verified
-> against the code on `dev` at that date (not assumed from the other `context/` docs, which drift —
-> see [06-progress-tracker.md](./06-progress-tracker.md)'s standing note). Where this doc names a
-> file/line, it was checked. This is the strategic layer: it says **what** to do, **in what order**,
-> and **why**. Each significant workstream still gets its own spec → plan per the repo's flow
-> ([04-ai-workflow-rules.md](./04-ai-workflow-rules.md)); this doc is the map those specs hang off.
+> A whole-system health assessment and a sequenced roadmap toward the project's goal. Written
+> 2026-07-17, verified against the code on `dev` at that date (not assumed from the other `context/`
+> docs, which drift — see [06-progress-tracker.md](./06-progress-tracker.md)'s standing note). Where
+> this doc names a file/line, it was checked. This is the strategic layer: it says **what** to do,
+> **in what order**, and **why**. Each significant workstream still gets its own spec → plan per the
+> repo's flow ([04-ai-workflow-rules.md](./04-ai-workflow-rules.md)); this doc is the map those specs
+> hang off.
+>
+> **MVP scope (owner decision, 2026-07-17):** the **first launch targets ~500 students max**, not
+> the full ~1,200. One VPS is comfortably enough at that size, so the capacity concern in §4.2 is
+> **not an MVP launch-blocker** — it becomes a "build-and-measure before scaling past ~500–800" item.
+> **Bunny (video) and R2 (storage) credentials are confirmed working** (Bunny library API returns
+> HTTP 200 with the configured key, verified live 2026-07-17; R2 verified earlier with a real PUT) —
+> so the 2026-07-10 "malformed `BUNNY_API_KEY`" finding was a **false positive** (Bunny Stream keys
+> are not canonical GUIDs; the old GUID-shape heuristic was wrong). **Only Zoom is genuinely
+> deferred** — the owner is obtaining real Zoom credentials, which may take time, so **live classes
+> are a fast-follow, not an MVP-launch dependency**. MVP delivers recorded video + everything else;
+> live classes light up when Zoom lands.
 
 ---
 
@@ -26,10 +37,11 @@ things define the gap:
 1. **The system has never run in production.** Phase 10 (deployment) is 0% started — no VPS
    provisioned, no CI pipeline exists at all (`.github/workflows/` is absent), no real DNS/TLS, no
    restore drill run. Everything has only ever run on one developer's machine.
-2. **Two of the four headline content features cannot work in production today** because their
-   external credentials are placeholders: `BUNNY_API_KEY` is a malformed GUID (blocks all video
-   upload) and every `ZOOM_*` var is a placeholder (blocks live classes). These are the product's
-   marquee features and they are credential-blocked, not code-blocked.
+2. **One of the four headline content features cannot work in production today.** Recorded video
+   (Bunny) and file storage (R2) credentials are **confirmed working** (§verified 2026-07-17). Only
+   **live classes** are blocked, on Zoom credentials the owner is still obtaining — a deferred
+   fast-follow, not an MVP blocker. (This corrects the stale 2026-07-10 "malformed `BUNNY_API_KEY`"
+   claim, now disproven.)
 3. **The security model has demonstrated it fails open.** In a single work session (2026-07-15),
    three separate real authorization leaks surfaced in code that looked finished: teachers could
    read each other's exam content, and markers/front-desk admins can *still* read any exam's answers
@@ -53,8 +65,8 @@ The gap to that goal, stated plainly:
 | Goal pillar | Reality on `dev` today |
 |---|---|
 | **Secure exam delivery** | MCQ answers + paper PDFs are readable by any MARKER or front-desk ADMIN for *any* exam (§3.1) — a real hole in the marquee "secure exams" claim. |
-| **Protected content** | Works in code, but Bunny/Zoom credentials are placeholders — untested against the real CDN/SDK at production scale. The gate itself (`access.service.ts`) has **zero tests**. |
-| **"One VPS is enough because Redis absorbs the spike"** | The Redis caching on result reads that this premise depends on **is not built** (§4.2). At 1,200 simultaneous result-reads, the spike hits Postgres directly on a $5–12 box. |
+| **Protected content** | Recorded video works and Bunny/R2 creds are verified. Live classes wait on Zoom creds (deferred). The content gate itself (`access.service.ts`) has **zero tests** — the real remaining risk here. |
+| **"One VPS is enough"** | **True for MVP (~500).** The Redis result-read cache the *1,200*-scale premise depends on is not built (§4.2), but at 500 one VPS + Postgres is fine — build the cache before scaling past ~500–800, and load-test then. |
 | **Reliable payments** | Online + entrance + bulk all work, but `override` and `bulk-upload` lack the `Idempotency-Key` guard the overview and CLAUDE.md say every payment mutation must have (§3.2). |
 | **Automated attendance** | Live-Zoom + video-watch are wired; entrance scanning only resolves the global LMS QR — the entire per-institute `StudentBarcode` model is registered but consumed nowhere (§5, dead features). |
 | **Low cost / simple to operate** | True in principle, but unproven: never deployed, no CI, no monitoring wired beyond Sentry init, backups built but off-site + restore-drill not done. |
@@ -128,16 +140,18 @@ allowlist is today's *only* default-deny layer — which means safety is coupled
 loosening a `requireRole` without re-checking the service. That coupling is exactly what broke in
 §3.1, where two routes simply had no `requireRole` at all.
 
-### 4.2 The "one VPS is enough" premise depends on caching that isn't built
-The whole cost/simplicity thesis (objectives #1, #2) rests on one sentence in the overview: *"Redis
-caching absorbs the [result-release] spikes, so no auto-scaling is required."* But there is **no Redis
-caching on result reads** — `grep` finds `@/config/redis` used only in `stream.service` (SSE) and
-`live-class.service` (rate-limit/token), never in `exam.service`/`submission.service`. At a result
-release, up to ~1,200 students hit the results endpoints near-simultaneously and every read goes
-straight to Postgres on a $5–12 VPS. Either the caching gets built (making the premise true) or the
-premise is wrong and the capacity plan needs revisiting. This is listed as a "known risk / to
-implement" in the tracker, but it is really a **core-architecture deliverable**, not a nice-to-have —
-it is load-bearing for the entire hosting decision. It must be built *and load-tested* before launch.
+### 4.2 The 1,200-scale "one VPS" premise depends on caching that isn't built — but MVP (500) is fine
+The cost/simplicity thesis (objectives #1, #2) rests on one sentence in the overview: *"Redis caching
+absorbs the [result-release] spikes, so no auto-scaling is required."* There is **no Redis caching on
+result reads** — `grep` finds `@/config/redis` used only in `stream.service` (SSE) and
+`live-class.service` (rate-limit/token), never in `exam.service`/`submission.service`. At the
+full-scale ~1,200 simultaneous result-reads, that spike hits Postgres directly on a $5–12 VPS.
+**For the ~500-student MVP this is not a blocker** — a single warm Postgres on a modest VPS handles
+500 concurrent indexed reads without a cache. But the premise is still *false as written* at 1,200,
+so: (a) treat the Redis result-cache + a load test as a **pre-scale gate**, to be built and measured
+**before student count grows past ~500–800**, not before the MVP launch; (b) correct the overview so
+it doesn't claim a caching layer that doesn't exist. Load-bearing for the *scaling* decision, not the
+MVP one.
 
 ### 4.3 The `Permission` model is documented-but-dead
 [01-project-overview.md](./01-project-overview.md) §3 and §7 repeatedly present per-user `Permission`
@@ -210,7 +224,11 @@ noted for completeness, not action.
 - **Deployment (Phase 10) is 0%**: no VPS, no DNS/TLS, real `.env` never assembled, backups built but
   off-site (`rclone`) + healthcheck + a restore drill not done. The backup *engine* is validated; the
   off-site + drill are the parts that make it real.
-- **No load test.** The premise of §4.2 (one VPS survives the result spike) has never been measured.
+- **No load test.** Not needed for the ~500 MVP; required as the pre-scale gate before growing toward
+  1,200 (§4.2).
+- **Credentials status (verified 2026-07-17):** Bunny (video) ✓ working (library API → HTTP 200), R2
+  (storage) ✓ working (real PUT verified earlier). Zoom ✗ deferred — owner obtaining real creds;
+  live classes are a fast-follow, not MVP-blocking.
 
 ---
 
@@ -237,26 +255,27 @@ students costs more than any missing screen.
    or exhaustive gates; retrofit the existing checks. *Backend, medium, prevents the next leak.*
 3. **Idempotency on override / bulk-upload / user mutations** (§3.2). *Backend, small.*
 4. **Soft-delete the timetable slot; timing-safe the PayHere webhook** (§3.3, §3.4). *Backend, small.*
-5. **Real external credentials + end-to-end verification** — replace `BUNNY_API_KEY` and `ZOOM_*`,
-   then verify upload→webhook→DRM playback and schedule→join live, against the real services. *Owner
-   dashboard work + code verification; blocks two headline features.*
-6. **Stand up CI** (§6) — fix the backend ESLint flat-config, then a `.github/workflows/ci.yml`
-   running `tsc` + `vitest run` + lint for both apps on every PR. *Highest leverage; do this early in
-   P0 so the rest of P0 lands under a green gate.*
-7. **`access.service` tests** (§3.5) — the security core, before it guards real paid content.
+5. **Stand up CI** (§6) — fix the backend ESLint flat-config (or defer lint and run `tsc` +
+   `vitest run` for both apps first), then a `.github/workflows/ci.yml` on every PR. *Highest
+   leverage; do early in P0 so the rest of P0 lands under a green gate.*
+6. **`access.service` tests** (§3.5) — the security core, before it guards real paid content.
+7. ~~Real external credentials~~ **Bunny + R2 done** (verified 2026-07-17). **Zoom deferred** — live
+   classes are a post-MVP fast-follow; when the owner's Zoom creds land, verify schedule→join live
+   end-to-end. MVP launches without live classes.
 
-### P1 — Make the hosting premise true and prove it
-*Goal: the "one VPS + Redis" plan is real, measured, and recoverable.*
-1. **Build Redis caching on result reads** (§4.2) — with explicit invalidation on publish. Then
-   **load-test** the result-release spike against a prod-like single VPS. This validates the entire
-   cost model.
-2. **Provision production** (Phase 10): VPS + Docker Compose, DNS + Let's Encrypt TLS, assemble the
-   real `.env`, wire Sentry projects.
-3. **Finish the backup story**: off-site `rclone` target + healthcheck + one full restore drill
+### P1 — Deploy the MVP and make it recoverable
+*Goal: the ~500-student MVP is live on a real VPS, monitored, and restorable.*
+1. **Provision production** (Phase 10): VPS + Docker Compose, DNS + Let's Encrypt TLS, assemble the
+   real `.env` (Bunny/R2 creds already in hand), wire Sentry projects.
+2. **Finish the backup story**: off-site `rclone` target + healthcheck + one full restore drill
    ([12](./12-data-backup-and-recovery.md)) before cutover.
-4. **Backfill the remaining service tests** (§6) and decide the `Permission` model's fate (§4.3).
-5. **Attendance reconciliation** ("Sync" button, §5) — needed the first time a webhook is missed in
+3. **Backfill the remaining service tests** (§6) and decide the `Permission` model's fate (§4.3).
+4. **Attendance reconciliation** ("Sync" button, §5) — needed the first time a webhook is missed in
    prod.
+
+> **Pre-scale gate (not P1, do before growing past ~500–800 students):** build the Redis result-read
+> cache with publish-invalidation and load-test the result-release spike (§4.2). MVP at 500 doesn't
+> need it; 1,200 does.
 
 ### P2 — Feature completeness
 *Goal: every documented flow actually works end-to-end.*
@@ -266,6 +285,9 @@ students costs more than any missing screen.
 3. **Frontend SSE listeners** for results/timetable/exam-control; **TEACHER/MARKER attendance view**;
    **in-site timetable Zoom** (§5).
 4. **Upload resilience + proactive token refresh** (§5).
+5. **Live classes go live** — when the owner's Zoom credentials arrive, verify the existing embedded
+   Zoom SDK flow end-to-end against real Zoom (the code is built; only creds are missing) and flip it
+   on. Deferred out of MVP, tracked here so it isn't forgotten.
 
 ### P3 — Polish (parallelizable, post-soft-launch acceptable)
 Toasts, dark mode, error boundaries, full loading-skeleton coverage, SEO, Lighthouse + a11y passes
@@ -275,14 +297,14 @@ Toasts, dark mode, error boundaries, full loading-skeleton coverage, SEO, Lighth
 
 ## 9. Recommended immediate next step
 
-Start P0 with **CI (P0.6) + the exam-read authz fix (P0.1)** in that order: CI first so it guards
-everything after it, then the sharpest open leak. Both are small, both are pure backend, and both
-directly protect goal pillar #3. Take each through the repo's spec → plan → subagent-driven-execution
-flow, exactly as the two features shipped this session were.
+Start P0 with **CI (P0.5) + the exam-read authz fix (P0.1)**: CI first so it guards everything after
+it, then the sharpest open leak. Both are small, both are pure backend, and both directly protect
+goal pillar #3. Take each through the repo's spec → plan → subagent-driven-execution flow, exactly as
+the two features shipped this session were.
 
-Two things are *not* code and should be handed to the owner in parallel, because they gate headline
-features and have long lead times: **obtaining the real Bunny + Zoom production credentials** (P0.5),
-and **choosing/provisioning the VPS** (P1.2).
+Long-lead owner items to run in parallel (not code): **obtaining real Zoom credentials** (unblocks
+live classes as a P2 fast-follow) and **choosing/provisioning the VPS** (P1.1). Bunny + R2 are already
+in hand and verified, so nothing else is credential-blocked for the MVP.
 
 > This document is a snapshot. As P0/P1 items close, update
 > [06-progress-tracker.md](./06-progress-tracker.md) (the living status) and revise the tables here
