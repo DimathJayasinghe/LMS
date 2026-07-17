@@ -17,7 +17,7 @@ task, two-stage review between tasks.
 | 2. `video.service.ts` — listVideosByClass/getVideoById/generateStreamUrl | **done** (commit `c64f47e`, review clean) |
 | 3. `submission.service.ts` — listSubmissions | **done** (commits `075230c..3e094c4`, 1 fix round, review clean) |
 | 4. `class-session.service.ts` — listClassSessions/getClassSessionById | **done** (commit `60de74c`, review clean) |
-| 5. Endpoint docs + architecture.md + CLAUDE.md | not started |
+| 5. Endpoint docs + architecture.md + CLAUDE.md | **done** (commit `378768f` + comment-fix `1700efc`, review clean) |
 | 6. Live-stack verification + progress-tracker update + PR | not started |
 
 ## How to resume
@@ -46,12 +46,11 @@ task, two-stage review between tasks.
   `video.service.ts`, and `class-session.service.ts` — no import changes needed there. Only
   `submission.service.ts` needs both added (Task 3, Step 3).
 - Never delete `feature/teacher-marker-visibility-scoping` after merge (repo convention).
-- Minor findings logged for the final whole-branch review (Task 6, before opening the PR): (1)
-  stale comment at `submission.service.ts:397` ("Admins see all submissions...") no longer accurate
-  after Task 3's fix; (2) the TEACHER regression test added during Task 3's fix round has a
-  misleading inline comment — the real if/else regression guard is the SUPER_ADMIN test's
-  `assertCourseAccess` not-called assertion, not the TEACHER test. Both are cosmetic, not
-  functional — fix opportunistically during Task 6 or the final review, not urgent.
+- Both Task 3-review comment nits are now resolved (fixed during Task 5): the stale
+  `submission.service.ts:397` comment and the misleading/inconsistent test comments in
+  `submission.service.test.ts` (fixed twice — Task 5's implementer introduced a new inaccuracy on
+  its first pass, corrected directly by the controller in commit `1700efc`). Nothing outstanding
+  here for the final review.
 - A background automated security scanner flagged the Task 3 two-`if` gate (MARKER/TEACHER) as
   "fail-open" for unrecognized roles and suggested a default-deny switch. Deliberately NOT applied:
   the route already restricts this endpoint to SUPER_ADMIN/TEACHER/MARKER only, and SUPER_ADMIN's

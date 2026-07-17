@@ -948,7 +948,7 @@ git commit -m "fix(class-sessions): scope listClassSessions/getClassSessionById 
 - Modify: `context/documents/02-architecture.md`
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: `exams.endpoints.md`.** In the `### GET `/`` section (line 170), change:
+- [x] **Step 1: `exams.endpoints.md`.** In the `### GET `/`` section (line 170), change:
 
 ```markdown
 List exams. Non-admin users only see non-deleted exams.
@@ -968,7 +968,7 @@ In the `### GET `/:id`` section (line 195-212), add a new line to the **Errors**
 - 403 `FORBIDDEN_COURSE` (a `TEACHER` calling for an exam whose course they don't teach)
 ```
 
-- [ ] **Step 2: `video.endpoints.md`.** In both the `### `GET /class/:classId`` (line 200) and
+- [x] **Step 2: `video.endpoints.md`.** In both the `### `GET /class/:classId`` (line 200) and
 `### `GET /:id`` (line 240) sections, add a line right after each section's intro sentence:
 
 ```markdown
@@ -978,7 +978,7 @@ A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one t
 In the `### `GET /:id/stream`` section (line 264), add the same line — a non-owning `TEACHER` is
 rejected before a signed embed URL is ever minted.
 
-- [ ] **Step 3: `submissions.endpoints.md`.** In the "List Submissions" section (around line 195),
+- [x] **Step 3: `submissions.endpoints.md`.** In the "List Submissions" section (around line 195),
 add a line right after its intro sentence:
 
 ```markdown
@@ -986,7 +986,7 @@ A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the exam's course isn't one th
 from a `MARKER`'s `403 MARKER_NOT_ASSIGNED`, which checks assignment rather than course ownership.
 ```
 
-- [ ] **Step 4: `classes.endpoints.md`.** In both the `### GET `/:classId/sessions`` (line 316) and
+- [x] **Step 4: `classes.endpoints.md`.** In both the `### GET `/:classId/sessions`` (line 316) and
 `### GET `/:classId/sessions/:sessionId`` (line 339) sections, add a line right after each
 section's intro sentence:
 
@@ -994,7 +994,7 @@ section's intro sentence:
 A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the class isn't one they teach.
 ```
 
-- [ ] **Step 5: `context/documents/02-architecture.md`.** In the §7 "Security Model" table
+- [x] **Step 5: `context/documents/02-architecture.md`.** In the §7 "Security Model" table
 (currently lines 227-240), change the `Authorization` row from:
 
 ```markdown
@@ -1007,7 +1007,7 @@ to:
 | Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`) gates by the **caller's** role only; course-scoped content (exams/videos/submissions/sessions) additionally requires `assertCourseAccess` in the service layer so a `TEACHER` is scoped to courses they actually teach — see CLAUDE.md's "Auth & authorization" section. Optional per-user `Permission` overrides also exist (see 08) |
 ```
 
-- [ ] **Step 6: `CLAUDE.md`.** In the "Auth & authorization" section, add a new paragraph right
+- [x] **Step 6: `CLAUDE.md`.** In the "Auth & authorization" section, add a new paragraph right
 after the existing actor-vs-target paragraph (currently ending "...check whether it needs the same
 guard.") and before the "Role enum:" paragraph:
 
@@ -1024,7 +1024,7 @@ adding a new course-scoped read (not just a mutation), call `assertCourseAccess`
 easy to forget since they don't "feel" as dangerous as a mutation, but they leak the same content.
 ```
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add context/api_endpoints/exams.endpoints.md context/api_endpoints/video.endpoints.md context/api_endpoints/submissions.endpoints.md context/api_endpoints/classes.endpoints.md context/documents/02-architecture.md CLAUDE.md
