@@ -1,7 +1,7 @@
 # Teacher/marker visibility scoping — Design
 
 **Date:** 2026-07-15
-**Status:** Design — awaiting review
+**Status:** Implemented — all 6 plan tasks done, unit + live-stack smoke verified (2026-07-15)
 **Type:** Bugfix (behavioral change, closes a privilege-scoping gap)
 
 ## Problem
