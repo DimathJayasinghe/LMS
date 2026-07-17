@@ -18,7 +18,7 @@ task, two-stage review between tasks.
 | 3. `submission.service.ts` — listSubmissions | **done** (commits `075230c..3e094c4`, 1 fix round, review clean) |
 | 4. `class-session.service.ts` — listClassSessions/getClassSessionById | **done** (commit `60de74c`, review clean) |
 | 5. Endpoint docs + architecture.md + CLAUDE.md | **done** (commit `378768f` + comment-fix `1700efc`, review clean) |
-| 6. Live-stack verification + progress-tracker update + PR | not started |
+| 6. Live-stack verification + progress-tracker update + PR | in progress — suite/tsc/live-smoke/docs done (commit `1b92641`), final whole-branch review running, PR not yet opened |
 
 ## How to resume
 
@@ -51,6 +51,15 @@ task, two-stage review between tasks.
   `submission.service.test.ts` (fixed twice — Task 5's implementer introduced a new inaccuracy on
   its first pass, corrected directly by the controller in commit `1700efc`). Nothing outstanding
   here for the final review.
+- **Important:** this branch was cut from `dev` right after PR #69 merged but BEFORE PR #70 (the
+  docs reality-check pass) merged — it was missing `06-progress-tracker.md`/frontend-roadmap
+  updates until `origin/dev` was explicitly merged in during Task 6 (merge commit, then
+  `1b92641`). If resuming and `git merge-base origin/dev feature/teacher-marker-visibility-scoping`
+  doesn't equal `origin/dev`'s tip, merge `origin/dev` in again before touching those two files.
+- Live-stack smoke (Task 6) overwrote the password hash for two demo TEACHER accounts
+  (`k.perera@lms.demo`, `s.fernando@lms.demo`) to a known test password to log in via curl — this
+  is throwaway local-Docker demo data, not production; no action needed, just flagging in case
+  those accounts' original passwords mattered for something else.
 - A background automated security scanner flagged the Task 3 two-`if` gate (MARKER/TEACHER) as
   "fail-open" for unrecognized roles and suggested a default-deny switch. Deliberately NOT applied:
   the route already restricts this endpoint to SUPER_ADMIN/TEACHER/MARKER only, and SUPER_ADMIN's

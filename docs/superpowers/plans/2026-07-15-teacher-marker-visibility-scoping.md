@@ -1039,12 +1039,12 @@ git commit -m "docs: TEACHER course-ownership scoping on exam/video/submission/s
 - Modify: `context/documents/06-progress-tracker.md`
 - Modify: `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`
 
-- [ ] **Step 1: Full backend suite one more time, clean.**
+- [x] **Step 1: Full backend suite one more time, clean.**
 
 Run: `cd backend && npx tsc --noEmit && npm run test`
 Expected: PASS — all suites, including the 4 new files from Tasks 1-4 (23 new test cases total).
 
-- [ ] **Step 2: Rebuild and bring up the live stack.**
+- [x] **Step 2: Rebuild and bring up the live stack.**
 
 ```bash
 docker compose build backend
@@ -1056,7 +1056,7 @@ Expected: backend starts clean, no crash from the env/schema validation at boot 
 no schema or env changes, so this should be a non-event — treat any crash as a signal something
 in Tasks 1-4 broke an import, not a pre-existing issue).
 
-- [ ] **Step 3: Live smoke — set up two teachers with different courses.** Using the running
+- [x] **Step 3: Live smoke — set up two teachers with different courses.** Using the running
 stack's API (or `docker compose exec backend` + a one-off script/psql, matching how earlier
 sessions in this repo seeded fixture data), create or identify two `TEACHER` accounts each owning
 at least one course with an exam, a video recording, a submission, and a class session. Log in as
@@ -1073,7 +1073,7 @@ Teacher A and confirm:
 - Log in as `SUPER_ADMIN` and confirm all six calls against Teacher B's resources still succeed
   unaffected.
 
-- [ ] **Step 4: Update the spec's status.** In
+- [x] **Step 4: Update the spec's status.** In
 `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`, change:
 
 ```markdown
@@ -1086,7 +1086,7 @@ to:
 **Status:** Implemented — all 6 plan tasks done, unit + live-stack smoke verified (2026-07-15)
 ```
 
-- [ ] **Step 5: Update the progress tracker.** In `context/documents/06-progress-tracker.md`, find
+- [x] **Step 5: Update the progress tracker.** In `context/documents/06-progress-tracker.md`, find
 the line (added during the 2026-07-15 gap-audit pass):
 
 ```markdown
@@ -1095,7 +1095,7 @@ the line (added during the 2026-07-15 gap-audit pass):
 
 and change `**implementation not yet started**` to `**implemented 2026-07-15**`.
 
-- [ ] **Step 6: Commit the doc updates.**
+- [x] **Step 6: Commit the doc updates.**
 
 ```bash
 git add docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md context/documents/06-progress-tracker.md
