@@ -29,12 +29,26 @@ teacher's course content in full, not just metadata:
   — any TEACHER can list/read another course's session schedule.
 
 **Investigated and confirmed non-issues, out of scope:**
-- `MARKER` scoping is already correct (`ensureMarkerAssigned` in
-  `submission.service.ts:404-408`, checked against the `MarkerAssignment` table).
-- Front-desk `ADMIN` cannot reach exam/submission endpoints at all — those routes
-  only grant `SUPER_ADMIN`/`TEACHER`(/`MARKER`), never bare `ADMIN`.
+- `MARKER` scoping on **submission** endpoints is already correct (`ensureMarkerAssigned` in
+  `submission.service.ts:404-408`, checked against the `MarkerAssignment` table), and front-desk
+  `ADMIN` cannot reach submission endpoints at all — `submission.routes.ts` only grants
+  `SUPER_ADMIN`/`TEACHER`/`MARKER`, never bare `ADMIN`.
 - `timetable.service.ts` `listSlots` is intentionally institute-wide (any role sees
   the full schedule) — left untouched, not a content-exposure concern.
+
+**Correction (found during final review, 2026-07-15):** the claim in an earlier version of this
+section — "front-desk ADMIN cannot reach exam endpoints at all" — was **wrong** and is corrected
+here rather than left to mislead a future reader. `exam.routes.ts`'s `GET /` (`listExams`) and
+`GET /:id` (`getExamById`) carry only `verifyToken`, **no `requireRole` at all** — unlike every
+other route in that file. This means **any** authenticated role, including `MARKER` and front-desk
+`ADMIN`, can already list every exam and fetch any exam's detail — including the paper PDF
+presigned URL and the full MCQ payload with answers — with zero scoping. This is a real,
+**pre-existing** gap, **not introduced by this branch** and **not fixed by it** (this branch's
+scope is TEACHER-ownership scoping, which is orthogonal — a `MARKER`/`ADMIN` fix would need either
+a route-level `requireRole` restricting these two endpoints, or an explicit `MarkerAssignment`-style
+scoping check inside the service, mirroring how `listSubmissions` already handles `MARKER`). Tracked
+as a follow-up in `context/documents/06-progress-tracker.md`'s Known Risks table — not addressed in
+this branch.
 
 ## Design
 
