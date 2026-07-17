@@ -84,9 +84,11 @@ describe('listSubmissions — TEACHER course-ownership scoping', () => {
 		await listSubmissions('exam-1', query, superAdmin);
 
 		// This test would have caught the old if/else bug: if the code was
-		// if (MARKER) { check } else if (TEACHER) { check }, then SUPER_ADMIN
-		// (being "not MARKER") would incorrectly trigger the TEACHER check.
-		// With independent if-blocks, both checks are correctly skipped.
+		// if (MARKER) { check } else { assertCourseAccess(...) } (no explicit
+		// TEACHER role check), a SUPER_ADMIN actor — being "not MARKER" — would
+		// incorrectly fall into the else and trigger assertCourseAccess. With
+		// two independent if-blocks gated on exact roles, SUPER_ADMIN matches
+		// neither and this call is correctly skipped.
 		expect(assertCourseAccess).not.toHaveBeenCalled();
 		expect(submissionFindMany).toHaveBeenCalled();
 	});
@@ -120,8 +122,10 @@ describe('listSubmissions — MARKER assignment gate is unaffected by the new TE
 
 		await listSubmissions('exam-1', query, teacher);
 
-		// This test verifies that a TEACHER caller never triggers the MARKER-only code path,
-		// confirming the two checks are independent (both callers can have their own scoping gates).
+		// This test verifies a TEACHER caller never triggers the MARKER-only code path.
+		// It does not by itself prove the if-blocks are independent (a TEACHER actor
+		// behaves the same under either an if/else or two independent ifs) — see the
+		// SUPER_ADMIN test above for the assertion that actually distinguishes the two.
 		expect(markerAssignmentFindUnique).not.toHaveBeenCalled();
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', teacher);
 	});
