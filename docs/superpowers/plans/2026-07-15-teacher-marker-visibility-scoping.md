@@ -1102,7 +1102,7 @@ git add docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-desi
 git commit -m "docs: mark teacher-marker-visibility-scoping implemented"
 ```
 
-- [ ] **Step 7: Push and open the PR into `dev`.**
+- [x] **Step 7: Push and open the PR into `dev`.**
 
 ```bash
 git push -u origin feature/teacher-marker-visibility-scoping

@@ -18,7 +18,9 @@ task, two-stage review between tasks.
 | 3. `submission.service.ts` — listSubmissions | **done** (commits `075230c..3e094c4`, 1 fix round, review clean) |
 | 4. `class-session.service.ts` — listClassSessions/getClassSessionById | **done** (commit `60de74c`, review clean) |
 | 5. Endpoint docs + architecture.md + CLAUDE.md | **done** (commit `378768f` + comment-fix `1700efc`, review clean) |
-| 6. Live-stack verification + progress-tracker update + PR | in progress — suite/tsc/live-smoke/docs done (commit `1b92641`), final whole-branch review running, PR not yet opened |
+| 6. Live-stack verification + progress-tracker update + PR | **done** — final whole-branch review: "Ready to merge: Yes with minor follow-ups" (commit `4d8ec3d`). PR next. |
+
+## ALL 6 TASKS COMPLETE. Only remaining step: open + merge the PR (see below).
 
 ## How to resume
 
