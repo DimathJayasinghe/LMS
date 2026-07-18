@@ -6,6 +6,7 @@ import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/const
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import { assertCourseAccess } from '@/services/class.service';
+import { assertMarkerAssignedToExam } from '@/services/access.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -171,20 +172,6 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
   }
 
   return exam;
-};
-
-const ensureMarkerAssigned = async (markerId: string, examId: string): Promise<void> => {
-  const assignment = await prisma.markerAssignment.findUnique({
-    where: { markerId_examId: { markerId, examId } },
-  });
-
-  if (!assignment) {
-    throw new AppError(
-      'MARKER_NOT_ASSIGNED',
-      403,
-      'You are not assigned to mark this exam.',
-    );
-  }
 };
 
 // ─── Start Submission ─────────────────────────────────────
@@ -405,7 +392,7 @@ export const listSubmissions = async (
 
   // Markers can only view submissions for exams they're assigned to
   if (actor.role === Role.MARKER) {
-    await ensureMarkerAssigned(actor.userId, examId);
+    await assertMarkerAssignedToExam(actor.userId, examId);
   }
 
   // Teachers can only view submissions for their own courses' exams
@@ -523,7 +510,7 @@ export const submitMarks = async (
   }
 
   // Verify the marker is assigned to this exam
-  await ensureMarkerAssigned(markerId, submission.exam.id);
+  await assertMarkerAssignedToExam(markerId, submission.exam.id);
 
   if (submission.status !== SubmissionStatus.COMPLETED) {
     throw new AppError(

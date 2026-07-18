@@ -2,8 +2,9 @@
 // see or stream a course's content. Enforces the architecture §7.1 rule:
 // "no signed URL / stream token is ever handed out without passing the gate."
 //
-// Privileged roles (SUPER_ADMIN, TEACHER, ADMIN, MARKER) bypass — they manage
-// or oversee content. Only STUDENT access is gated on enrollment (+ payment).
+// assertStudentContentAccess gates STUDENT on enrollment (+ payment); privileged
+// roles bypass it. This module also hosts assertMarkerAssignedToExam — the gate
+// that scopes a MARKER to the exams they are actually assigned to.
 
 import { PaymentStatus, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
@@ -59,5 +60,23 @@ export const assertStudentContentAccess = async (
         `Please pay the ${month} fee for this course to access its content.`,
       );
     }
+  }
+};
+
+/**
+ * Authorization gate: a MARKER may only act on an exam they are assigned to
+ * (grade its submissions, read its detail). Extracted here — the authz-gate
+ * module — so submission.service and exam.service share one definition instead
+ * of each carrying its own copy. Throws 403 MARKER_NOT_ASSIGNED if unassigned.
+ */
+export const assertMarkerAssignedToExam = async (
+  markerId: string,
+  examId: string,
+): Promise<void> => {
+  const assignment = await prisma.markerAssignment.findUnique({
+    where: { markerId_examId: { markerId, examId } },
+  });
+  if (!assignment) {
+    throw new AppError('MARKER_NOT_ASSIGNED', 403, 'You are not assigned to mark this exam.');
   }
 };
