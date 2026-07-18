@@ -3,7 +3,7 @@ import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import { assertCourseAccess } from '@/services/class.service';
-import { assertStudentContentAccess } from '@/services/access.service';
+import { assertStudentContentAccess, assertMarkerAssignedToExam } from '@/services/access.service';
 import { EXAM_PDF_KEY_PREFIX, EXAM_PDF_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import {
@@ -228,11 +228,24 @@ export const createExam = async (
 	return normalizeExamDetail(created);
 };
 
+// Roles permitted to read exams at all. Front-desk ADMIN is intentionally
+// excluded (non-academic role). A service-level default-deny so the check does
+// not depend solely on the route's requireRole (13-system-assessment §4.1).
+const EXAM_READER_ROLES: ReadonlySet<Role> = new Set([
+	Role.SUPER_ADMIN,
+	Role.TEACHER,
+	Role.MARKER,
+	Role.STUDENT,
+]);
+
 export const listExams = async (
 	query: ListExamsQuery,
 	actor: AuthenticatedUser,
 ): Promise<ExamListItem[]> => {
 	const role = actor.role;
+	if (!EXAM_READER_ROLES.has(role)) {
+		throw new AppError('FORBIDDEN', 403, 'You do not have access to exam content.');
+	}
 	const now = new Date();
 
 	const timeFilter: Prisma.ExamWhereInput =
@@ -255,6 +268,10 @@ export const listExams = async (
 		// Teachers only see exams for courses they teach — a list filter, not a
 		// throw, mirroring the STUDENT scoping directly above.
 		...(role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
+		// Markers only see exams they are assigned to.
+		...(role === Role.MARKER
+			? { markerAssignments: { some: { markerId: actor.userId } } }
+			: {}),
 		...timeFilter,
 	};
 
@@ -270,10 +287,18 @@ export const getExamById = async (
 	actor: AuthenticatedUser,
 ): Promise<ExamDetail> => {
 	const role = actor.role;
+	if (!EXAM_READER_ROLES.has(role)) {
+		throw new AppError('FORBIDDEN', 403, 'You do not have access to exam content.');
+	}
 	const exam = await ensureExamExists(examId);
 
 	if (exam.deletedAt && role !== Role.SUPER_ADMIN) {
 		throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+	}
+
+	// Markers may only read exams they are assigned to.
+	if (role === Role.MARKER) {
+		await assertMarkerAssignedToExam(actor.userId, examId);
 	}
 
 	// Teachers may only read exams for courses they teach.
@@ -297,7 +322,9 @@ export const getExamById = async (
 		if (role === Role.STUDENT && !isWithinWindow) {
 			mcqPayload = null;
 		} else {
-			mcqPayload = role === Role.STUDENT ? stripMcqAnswers(parsed) : parsed;
+			mcqPayload = (role === Role.STUDENT || role === Role.MARKER)
+				? stripMcqAnswers(parsed)
+				: parsed;
 		}
 	}
 

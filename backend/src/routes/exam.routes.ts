@@ -29,6 +29,7 @@ examRoutes.post(
 examRoutes.get(
 	'/',
 	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT),
 	validateQuery(listExamsQuerySchema),
 	ExamController.listExams,
 );
@@ -67,6 +68,7 @@ examRoutes.post(
 examRoutes.get(
 	'/:id',
 	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT),
 	validateParams(examIdParamSchema),
 	ExamController.getExamById,
 );
