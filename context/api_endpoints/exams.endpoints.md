@@ -17,7 +17,7 @@ All exam endpoints require the `access_token` cookie.
 Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 - **Manage exams** (create/update/delete/upload-url/assign-markers) — `SUPER_ADMIN` or the course's `TEACHER` (own courses only).
-- **Read** — students see exams for **enrolled** courses only; the paper/MCQ is returned only within the exam window.
+- **Read** — `SUPER_ADMIN` sees all; `TEACHER` own courses; `MARKER` only assigned exams (paper yes, MCQ answers stripped); `STUDENT` enrolled courses only, paper/MCQ returned only within the exam window and answers stripped. Front-desk `ADMIN` has no read access at all.
 
 > **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**; course-content routes now also allow the owning **`TEACHER`**.
 
