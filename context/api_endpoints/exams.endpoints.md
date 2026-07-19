@@ -17,7 +17,7 @@ All exam endpoints require the `access_token` cookie.
 Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 - **Manage exams** (create/update/delete/upload-url/assign-markers) — `SUPER_ADMIN` or the course's `TEACHER` (own courses only).
-- **Read** — students see exams for **enrolled** courses only; the paper/MCQ is returned only within the exam window.
+- **Read** — `SUPER_ADMIN` sees all; `TEACHER` own courses; `MARKER` only assigned exams (paper yes, MCQ answers stripped); `STUDENT` enrolled courses only, paper/MCQ returned only within the exam window and answers stripped. Front-desk `ADMIN` has no read access at all.
 
 > **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**; course-content routes now also allow the owning **`TEACHER`**.
 
@@ -96,21 +96,21 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 ### Notes
 
 - `allowTypedAnswers` / `allowPdfUpload` are returned on both list and detail reads (2026-07-10) so the client knows which written-answer channels the exam accepts.
-- `paperPdfUrl` is returned as a presigned URL for students only within the exam time window.
+- `paperPdfUrl` is returned as a presigned URL for `STUDENT` only within the exam time window (`SUPER_ADMIN`/`TEACHER`/`MARKER` receive it at any time — see line below).
 - `mcqPayload` for students excludes `isCorrect` and is returned only inside the exam window.
-- Admins always receive full MCQ payloads and can access paper URLs at any time.
+- `SUPER_ADMIN`/`TEACHER` always receive full MCQ payloads and can access paper URLs at any time (`MARKER` receives the paper but has `isCorrect` stripped; front-desk `ADMIN` has no exam access — see GET `/`/`/:id` below).
 
 ## Endpoint Summary
 
 | Method | Path | Roles | Description |
 | --- | --- | --- | --- |
-| POST | `/` | ADMIN | Create a new exam. |
-| GET | `/` | Any authenticated | List exams (filterable). |
-| GET | `/:id` | Any authenticated | Get exam details (time-gated for students). |
-| PATCH | `/:id` | ADMIN | Update an exam. |
-| DELETE | `/:id` | ADMIN | Soft delete an exam. |
-| POST | `/:id/upload-url` | ADMIN | Generate presigned upload URL for paper PDF. |
-| POST | `/:id/assign-markers` | ADMIN | Assign markers to an exam. |
+| POST | `/` | SUPER_ADMIN, TEACHER (own) | Create a new exam. |
+| GET | `/` | SUPER_ADMIN, TEACHER, MARKER, STUDENT | List exams (filterable). |
+| GET | `/:id` | SUPER_ADMIN, TEACHER, MARKER, STUDENT | Get exam details (time-gated for students). |
+| PATCH | `/:id` | SUPER_ADMIN, TEACHER (own) | Update an exam. |
+| DELETE | `/:id` | SUPER_ADMIN, TEACHER (own) | Soft delete an exam. |
+| POST | `/:id/upload-url` | SUPER_ADMIN, TEACHER (own) | Generate presigned upload URL for paper PDF. |
+| POST | `/:id/assign-markers` | SUPER_ADMIN, TEACHER (own) | Assign markers to an exam. |
 
 ## Endpoint Details
 
@@ -169,9 +169,10 @@ Create a new exam.
 
 ### GET `/`
 
-List exams. Non-admin users only see non-deleted exams. A `TEACHER` caller only ever sees exams
-for courses they teach — other teachers' courses are silently excluded from the list (not a 403,
-since this is a list filter, not a single-resource fetch).
+List exams, scoped by the caller's role: `SUPER_ADMIN` sees all; `TEACHER` sees only their own
+courses' exams; `MARKER` sees only exams they are assigned to; `STUDENT` sees only exams for courses
+they are actively enrolled in. Front-desk `ADMIN` has **no exam access** (`403`). Non-`SUPER_ADMIN`
+callers never see soft-deleted exams.
 
 **Query params**
 
@@ -193,10 +194,11 @@ since this is a list filter, not a single-resource fetch).
 
 - 400 validation error
 - 401 auth middleware error
+- 403 `FORBIDDEN` (front-desk `ADMIN`, or any role without exam-read access)
 
 ### GET `/:id`
 
-Get a single exam. Student responses are time-gated.
+Get a single exam. Student responses are time-gated. A `MARKER` assigned to the exam receives the question paper but **not** the MCQ answer key (the `isCorrect` flags are stripped, as they are for students). `TEACHER`/`SUPER_ADMIN` receive the full payload.
 
 **Success (200)**
 
@@ -211,7 +213,9 @@ Get a single exam. Student responses are time-gated.
 
 - 400 validation error
 - 401 auth middleware error
+- 403 `FORBIDDEN` (front-desk `ADMIN`, or any role without exam-read access)
 - 403 `FORBIDDEN_COURSE` (a `TEACHER` calling for an exam whose course they don't teach)
+- 403 `MARKER_NOT_ASSIGNED` (a `MARKER` requesting an exam they are not assigned to)
 - 404 `EXAM_NOT_FOUND`
 
 ### PATCH `/:id`

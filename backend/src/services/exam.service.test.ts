@@ -6,12 +6,14 @@ const {
 	examFindMany,
 	examFindUnique,
 	assertStudentContentAccess,
+	assertMarkerAssignedToExam,
 	assertCourseAccess,
 	createR2PresignedGetUrl,
 } = vi.hoisted(() => ({
 	examFindMany: vi.fn(),
 	examFindUnique: vi.fn(),
 	assertStudentContentAccess: vi.fn(),
+	assertMarkerAssignedToExam: vi.fn(),
 	assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
 	createR2PresignedGetUrl: vi.fn().mockResolvedValue('https://signed.example/paper.pdf'),
 }));
@@ -22,7 +24,7 @@ vi.mock('@/config/database', () => ({
 	},
 }));
 
-vi.mock('@/services/access.service', () => ({ assertStudentContentAccess }));
+vi.mock('@/services/access.service', () => ({ assertStudentContentAccess, assertMarkerAssignedToExam }));
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
 vi.mock('@/services/stream.service', () => ({}));
 vi.mock('@/utils/r2', () => ({
@@ -118,5 +120,83 @@ describe('getExamById — TEACHER course-ownership scoping', () => {
 
 		expect(result.id).toBe('exam-1');
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', superAdmin);
+	});
+});
+
+describe('listExams — MARKER + ADMIN authorization', () => {
+	it("scopes the query to the marker's assigned exams", async () => {
+		examFindMany.mockResolvedValueOnce([]);
+
+		await listExams({ status: 'all' }, { userId: 'm1', role: Role.MARKER });
+
+		const call = examFindMany.mock.calls[0]![0];
+		expect(call.where.markerAssignments).toEqual({ some: { markerId: 'm1' } });
+	});
+
+	it('denies front-desk ADMIN with 403 FORBIDDEN, never querying', async () => {
+		await expect(
+			listExams({ status: 'all' }, { userId: 'a1', role: Role.ADMIN }),
+		).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+		expect(examFindMany).not.toHaveBeenCalled();
+	});
+});
+
+describe('getExamById — MARKER + ADMIN authorization', () => {
+	const mcqExamRow = {
+		...examRow,
+		paperPdfUrl: 'exam-papers/exam-1/paper.pdf',
+		mcqPayload: {
+			questions: [
+				{
+					id: 'q1',
+					text: 'Q1',
+					order: 1,
+					marks: 2,
+					options: [
+						{ id: 'o1', text: 'A', isCorrect: true },
+						{ id: 'o2', text: 'B', isCorrect: false },
+					],
+				},
+			],
+		},
+	};
+
+	it('lets an assigned MARKER read the exam but strips the MCQ answer key', async () => {
+		examFindUnique.mockResolvedValueOnce(mcqExamRow);
+		assertMarkerAssignedToExam.mockResolvedValueOnce(undefined);
+
+		const result = await getExamById('exam-1', { userId: 'm1', role: Role.MARKER });
+
+		expect(assertMarkerAssignedToExam).toHaveBeenCalledWith('m1', 'exam-1');
+		const opts = (result.mcqPayload as { questions: { options: Record<string, unknown>[] }[] }).questions[0]!.options;
+		expect(opts[0]).not.toHaveProperty('isCorrect');
+		expect(result.paperPdfUrl).toBe('https://signed.example/paper.pdf'); // marker still gets the paper
+	});
+
+	it('rejects a MARKER not assigned to the exam with 403 MARKER_NOT_ASSIGNED', async () => {
+		examFindUnique.mockResolvedValueOnce(mcqExamRow);
+		assertMarkerAssignedToExam.mockRejectedValueOnce(
+			new AppError('MARKER_NOT_ASSIGNED', 403, 'You are not assigned to mark this exam.'),
+		);
+
+		await expect(
+			getExamById('exam-1', { userId: 'm2', role: Role.MARKER }),
+		).rejects.toMatchObject({ code: 'MARKER_NOT_ASSIGNED', statusCode: 403 });
+	});
+
+	it('denies front-desk ADMIN with 403 FORBIDDEN before fetching the exam', async () => {
+		await expect(
+			getExamById('exam-1', { userId: 'a1', role: Role.ADMIN }),
+		).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+		expect(examFindUnique).not.toHaveBeenCalled();
+	});
+
+	it('SUPER_ADMIN still gets the full MCQ payload with answers', async () => {
+		examFindUnique.mockResolvedValueOnce(mcqExamRow);
+
+		const result = await getExamById('exam-1', superAdmin);
+
+		const opts = (result.mcqPayload as { questions: { options: Record<string, unknown>[] }[] }).questions[0]!.options;
+		expect(opts[0]).toHaveProperty('isCorrect', true);
 	});
 });
