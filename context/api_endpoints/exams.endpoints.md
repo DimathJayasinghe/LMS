@@ -169,9 +169,10 @@ Create a new exam.
 
 ### GET `/`
 
-List exams. Non-admin users only see non-deleted exams. A `TEACHER` caller only ever sees exams
-for courses they teach — other teachers' courses are silently excluded from the list (not a 403,
-since this is a list filter, not a single-resource fetch).
+List exams, scoped by the caller's role: `SUPER_ADMIN` sees all; `TEACHER` sees only their own
+courses' exams; `MARKER` sees only exams they are assigned to; `STUDENT` sees only exams for courses
+they are actively enrolled in. Front-desk `ADMIN` has **no exam access** (`403`). Non-`SUPER_ADMIN`
+callers never see soft-deleted exams.
 
 **Query params**
 
@@ -196,7 +197,7 @@ since this is a list filter, not a single-resource fetch).
 
 ### GET `/:id`
 
-Get a single exam. Student responses are time-gated.
+Get a single exam. Student responses are time-gated. A `MARKER` assigned to the exam receives the question paper but **not** the MCQ answer key (the `isCorrect` flags are stripped, as they are for students). `TEACHER`/`SUPER_ADMIN` receive the full payload.
 
 **Success (200)**
 
@@ -211,7 +212,9 @@ Get a single exam. Student responses are time-gated.
 
 - 400 validation error
 - 401 auth middleware error
+- 403 `FORBIDDEN` (front-desk `ADMIN`, or any role without exam-read access)
 - 403 `FORBIDDEN_COURSE` (a `TEACHER` calling for an exam whose course they don't teach)
+- 403 `MARKER_NOT_ASSIGNED` (a `MARKER` requesting an exam they are not assigned to)
 - 404 `EXAM_NOT_FOUND`
 
 ### PATCH `/:id`
