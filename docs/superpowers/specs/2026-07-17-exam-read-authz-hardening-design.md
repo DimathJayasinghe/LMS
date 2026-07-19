@@ -1,7 +1,7 @@
 # Exam-read authorization hardening — Design
 
 **Date:** 2026-07-17
-**Status:** Design — awaiting review
+**Status:** Implemented — all 4 plan tasks done, unit + live-stack smoke verified (2026-07-19)
 **Type:** Bugfix (P0 launch-blocking security — see `context/documents/13-system-assessment-and-roadmap.md` §3.1)
 
 ## Problem
