@@ -98,7 +98,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 - `allowTypedAnswers` / `allowPdfUpload` are returned on both list and detail reads (2026-07-10) so the client knows which written-answer channels the exam accepts.
 - `paperPdfUrl` is returned as a presigned URL for students only within the exam time window.
 - `mcqPayload` for students excludes `isCorrect` and is returned only inside the exam window.
-- Admins always receive full MCQ payloads and can access paper URLs at any time.
+- `SUPER_ADMIN`/`TEACHER` always receive full MCQ payloads and can access paper URLs at any time (`MARKER` receives the paper but has `isCorrect` stripped; front-desk `ADMIN` has no exam access — see GET `/`/`/:id` below).
 
 ## Endpoint Summary
 
