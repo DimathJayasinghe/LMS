@@ -96,7 +96,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 ### Notes
 
 - `allowTypedAnswers` / `allowPdfUpload` are returned on both list and detail reads (2026-07-10) so the client knows which written-answer channels the exam accepts.
-- `paperPdfUrl` is returned as a presigned URL for students only within the exam time window.
+- `paperPdfUrl` is returned as a presigned URL for `STUDENT` only within the exam time window (`SUPER_ADMIN`/`TEACHER`/`MARKER` receive it at any time — see line below).
 - `mcqPayload` for students excludes `isCorrect` and is returned only inside the exam window.
 - `SUPER_ADMIN`/`TEACHER` always receive full MCQ payloads and can access paper URLs at any time (`MARKER` receives the paper but has `isCorrect` stripped; front-desk `ADMIN` has no exam access — see GET `/`/`/:id` below).
 
@@ -104,13 +104,13 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 | Method | Path | Roles | Description |
 | --- | --- | --- | --- |
-| POST | `/` | ADMIN | Create a new exam. |
+| POST | `/` | SUPER_ADMIN, TEACHER (own) | Create a new exam. |
 | GET | `/` | SUPER_ADMIN, TEACHER, MARKER, STUDENT | List exams (filterable). |
 | GET | `/:id` | SUPER_ADMIN, TEACHER, MARKER, STUDENT | Get exam details (time-gated for students). |
-| PATCH | `/:id` | ADMIN | Update an exam. |
-| DELETE | `/:id` | ADMIN | Soft delete an exam. |
-| POST | `/:id/upload-url` | ADMIN | Generate presigned upload URL for paper PDF. |
-| POST | `/:id/assign-markers` | ADMIN | Assign markers to an exam. |
+| PATCH | `/:id` | SUPER_ADMIN, TEACHER (own) | Update an exam. |
+| DELETE | `/:id` | SUPER_ADMIN, TEACHER (own) | Soft delete an exam. |
+| POST | `/:id/upload-url` | SUPER_ADMIN, TEACHER (own) | Generate presigned upload URL for paper PDF. |
+| POST | `/:id/assign-markers` | SUPER_ADMIN, TEACHER (own) | Assign markers to an exam. |
 
 ## Endpoint Details
 
