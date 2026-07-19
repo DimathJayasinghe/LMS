@@ -105,8 +105,8 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | Method | Path | Roles | Description |
 | --- | --- | --- | --- |
 | POST | `/` | ADMIN | Create a new exam. |
-| GET | `/` | Any authenticated | List exams (filterable). |
-| GET | `/:id` | Any authenticated | Get exam details (time-gated for students). |
+| GET | `/` | SUPER_ADMIN, TEACHER, MARKER, STUDENT | List exams (filterable). |
+| GET | `/:id` | SUPER_ADMIN, TEACHER, MARKER, STUDENT | Get exam details (time-gated for students). |
 | PATCH | `/:id` | ADMIN | Update an exam. |
 | DELETE | `/:id` | ADMIN | Soft delete an exam. |
 | POST | `/:id/upload-url` | ADMIN | Generate presigned upload URL for paper PDF. |
@@ -194,6 +194,7 @@ callers never see soft-deleted exams.
 
 - 400 validation error
 - 401 auth middleware error
+- 403 `FORBIDDEN` (front-desk `ADMIN`, or any role without exam-read access)
 
 ### GET `/:id`
 
