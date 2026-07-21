@@ -37,25 +37,31 @@ describe('payment routes — idempotency wiring', () => {
     expect(handlesFor(paymentRoutes, 'patch', '/:id/override')).toContain(checkIdempotency);
   });
 
-  it('PATCH /:id/override runs checkIdempotency before the controller', () => {
+  it('PATCH /:id/override runs checkIdempotency immediately before the controller', () => {
     const stack = handlesFor(paymentRoutes, 'patch', '/:id/override');
     const idempotencyIndex = stack.indexOf(checkIdempotency);
     const controllerIndex = stack.indexOf(PaymentController.overridePayment);
     expect(idempotencyIndex).toBeGreaterThanOrEqual(0);
     expect(controllerIndex).toBeGreaterThanOrEqual(0);
-    expect(idempotencyIndex).toBeLessThan(controllerIndex);
+    // Stack is: verifyToken, requireRole, validateParams, validateBody, checkIdempotency, controller.
+    // Pin checkIdempotency to the entry immediately before the controller.
+    expect(idempotencyIndex).toBe(controllerIndex - 1);
   });
 
   it('POST /bulk-upload carries checkIdempotency', () => {
     expect(handlesFor(paymentRoutes, 'post', '/bulk-upload')).toContain(checkIdempotency);
   });
 
-  it('POST /bulk-upload runs checkIdempotency before the controller (and thus before multer)', () => {
+  it('POST /bulk-upload runs checkIdempotency before multer (not merely before the controller)', () => {
     const stack = handlesFor(paymentRoutes, 'post', '/bulk-upload');
     const idempotencyIndex = stack.indexOf(checkIdempotency);
     const controllerIndex = stack.indexOf(PaymentController.bulkUploadPayments);
     expect(idempotencyIndex).toBeGreaterThanOrEqual(0);
     expect(controllerIndex).toBeGreaterThanOrEqual(0);
-    expect(idempotencyIndex).toBeLessThan(controllerIndex);
+    // The stack is: verifyToken, requireRole(...), checkIdempotency, upload.single('file'), controller.
+    // Multer's handler isn't independently importable, so pin checkIdempotency two slots
+    // before the controller (multer is between idempotency and controller) — this fails if
+    // checkIdempotency and multer are swapped.
+    expect(idempotencyIndex).toBe(controllerIndex - 2);
   });
 });
