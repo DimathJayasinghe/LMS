@@ -21,6 +21,7 @@ vi.mock('@/controllers/payment.controller', () => ({
 
 import { paymentRoutes } from './payment.routes';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import * as PaymentController from '@/controllers/payment.controller';
 
 // Returns the ordered handler stack registered for a given method+path on a router.
 function handlesFor(router: any, method: string, path: string): unknown[] {
@@ -36,7 +37,25 @@ describe('payment routes — idempotency wiring', () => {
     expect(handlesFor(paymentRoutes, 'patch', '/:id/override')).toContain(checkIdempotency);
   });
 
+  it('PATCH /:id/override runs checkIdempotency before the controller', () => {
+    const stack = handlesFor(paymentRoutes, 'patch', '/:id/override');
+    const idempotencyIndex = stack.indexOf(checkIdempotency);
+    const controllerIndex = stack.indexOf(PaymentController.overridePayment);
+    expect(idempotencyIndex).toBeGreaterThanOrEqual(0);
+    expect(controllerIndex).toBeGreaterThanOrEqual(0);
+    expect(idempotencyIndex).toBeLessThan(controllerIndex);
+  });
+
   it('POST /bulk-upload carries checkIdempotency', () => {
     expect(handlesFor(paymentRoutes, 'post', '/bulk-upload')).toContain(checkIdempotency);
+  });
+
+  it('POST /bulk-upload runs checkIdempotency before the controller (and thus before multer)', () => {
+    const stack = handlesFor(paymentRoutes, 'post', '/bulk-upload');
+    const idempotencyIndex = stack.indexOf(checkIdempotency);
+    const controllerIndex = stack.indexOf(PaymentController.bulkUploadPayments);
+    expect(idempotencyIndex).toBeGreaterThanOrEqual(0);
+    expect(controllerIndex).toBeGreaterThanOrEqual(0);
+    expect(idempotencyIndex).toBeLessThan(controllerIndex);
   });
 });
