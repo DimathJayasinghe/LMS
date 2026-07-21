@@ -120,6 +120,7 @@ paymentRoutes.patch(
 	requireRole(Role.SUPER_ADMIN),
 	validateParams(paymentIdParamSchema),
 	validateBody(overridePaymentSchema),
+	checkIdempotency,
 	PaymentController.overridePayment,
 );
 
@@ -128,6 +129,7 @@ paymentRoutes.post(
 	'/bulk-upload',
 	verifyToken,
 	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	checkIdempotency,
 	upload.single('file'),
 	PaymentController.bulkUploadPayments,
 );
