@@ -65,7 +65,9 @@ export function AdminPayments({
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.upload<ApiSuccess<BulkUploadResult>>("/payments/bulk-upload", form);
+      const res = await api.upload<ApiSuccess<BulkUploadResult>>("/payments/bulk-upload", form, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
       setResult(res.data);
       router.refresh();
     } catch (e) {
