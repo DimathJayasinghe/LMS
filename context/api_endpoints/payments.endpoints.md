@@ -203,6 +203,9 @@ Sets `method: MANUAL` and `collectedById` to the acting admin's id.
 - **URL:** `/:id/override`
 - **Method:** `PATCH`
 - **Auth:** Required (Role: `ADMIN`)
+- **Headers:** `Idempotency-Key: <uuid>` **required** — a fresh v4 UUID per request. Missing or
+  malformed keys return 400; replaying the same key returns the original stored response. The
+  override UI is not built yet, but must send one key per override action when added.
 - **Body:**
   ```json
   {
@@ -219,6 +222,8 @@ written or updated.
 - **URL:** `/bulk-upload`
 - **Method:** `POST`
 - **Auth:** Required (Role: `ADMIN`, `STAFF`)
+- **Headers:** `Idempotency-Key: <uuid>` **required** — a fresh v4 UUID per request. Missing or
+  malformed keys return 400; replaying the same key returns the original stored response.
 - **Body:** `multipart/form-data` with `file` field.
 
 ### 8. Collect Entrance Payment (Admin/Staff)
