@@ -37,7 +37,7 @@ These are prerequisites for calling the platform production-ready.
 
 | Capability | Current state | Next deliverable |
 |---|---|---|
-| CI quality gate | No GitHub Actions workflow | Backend/frontend lint, test, build, Prisma validation, dependency audit, required PR checks |
+| CI quality gate | Backend/frontend test, type/build and Prisma validation workflow added 2026-08-13 | Require `Quality Gate` in branch protection; establish a green lint baseline, then add lint/audit checks |
 | Timetable data integrity | Slot deletion hard-deletes despite session FK | Soft-disable slots, idempotent restore, service tests, UI state |
 | Environment/secret readiness | Known malformed Bunny key and manual provider setup | Startup validation, staging checklist, webhook/provider health page |
 | Database migrations | Compose entrypoint still uses `prisma db push` | Versioned migration deploy in staging/production plus rollback/runbook |

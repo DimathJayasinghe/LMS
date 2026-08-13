@@ -52,9 +52,9 @@ Release: PR `dev → main` when a batch is tested. Tag `main` for notable releas
 > commits that shouldn't have happened): never commit straight to `dev`, even for a small fix.**
 > Always: branch → do the work → run the test suite (`cd backend && npm run test` + `npx tsc
 > --noEmit` in both `backend/` and `frontend/`) → push the branch → open a PR (`gh pr create`) →
-> merge only once everything is green. There is no GitHub Actions CI configured yet (see Phase 10
-> in `06-progress-tracker.md`), so "tests green" means the agent ran them locally and confirmed
-> before merging — it is standing in for CI, not skipping the gate. **Never delete a branch after
+> merge only once everything is green. GitHub Actions runs backend/frontend tests and builds on
+> every PR into `dev`/`main`; local verification is still required before pushing so CI is a
+> confirmation, not the first feedback loop. **Never delete a branch after
 > merging** — this repo's owner continues work on branches post-merge, which overrides the
 > "delete branch" line in §5 below.
 
@@ -92,9 +92,11 @@ docs(architecture): switch topology to single-VPS Compose
 
 - **One feature per PR.** Small PRs review faster and revert cleanly.
 - **Squash-merge** into `dev`/`main` so history stays one-commit-per-feature.
-- Merge requires: **tests green** (`npm run build` + lint + `npm run test`; run locally by the
-  agent/contributor until GitHub Actions CI is wired up — see Phase 10) and **one review** where a
+- Merge requires: **tests green** (`npm run build` + `npm run test`, locally and in GitHub Actions)
+  and **one review** where a
   human reviewer is available.
+- Lint is temporarily outside the required check: backend ESLint has no config and frontend has a
+  five-error baseline. Fix that debt before adding lint to CI; do not treat it as silently passing.
 - PR description states: what changed, why, how tested, and any migration/ops step (e.g. "run `prisma migrate deploy`").
 - Never merge red CI or a partial migration. If blocked, keep the PR in draft.
 

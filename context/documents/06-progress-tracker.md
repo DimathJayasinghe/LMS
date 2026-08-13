@@ -10,8 +10,8 @@
 |-------|-------|
 | **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
 | **Last Updated** | 2026-08-13 |
-| **Last Completed Task** | Full-stack attendance scans are institute-aware and distinguish keyboard-wedge `BARCODE` from camera `QR`, with backend and frontend coverage. |
-| **Next Task** | CI quality gate, then timetable-slot soft-delete integrity; see `13-product-roadmap.md` for the prioritized full backlog. |
+| **Last Completed Task** | GitHub Actions CI now runs Prisma validation plus backend/frontend tests, typechecks, and production builds with an aggregate branch-protection gate. |
+| **Next Task** | Timetable-slot soft-delete integrity, followed by the CI lint baseline; see `13-product-roadmap.md` for the prioritized full backlog. |
 | **Blockers** | None |
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
@@ -98,7 +98,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
   - ✅ Fixed 2026-07-22: `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` now carry `checkIdempotency`, and the live frontend callers send per-action `Idempotency-Key` UUIDs. `POST /users/me/nic/confirm` remains consciously excluded because it is already idempotent by object-key upsert.
   - ✅ Fixed 2026-08-13: PayHere webhook signature checks now use `crypto.timingSafeEqual`, matching Zoom/Bunny webhook verification.
 - [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** the teacher-marker-visibility-scoping fix (below) added dedicated test files for `exam.service.ts`, `video.service.ts`, `submission.service.ts`, and `class-session.service.ts` (24 new cases total) — those four are no longer gaps. Still zero coverage: `access.service.ts` (the core enrolled+paid content gate — the most important remaining one), `enrollment.service.ts`, `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, `subject.service.ts`, `stream.service.ts`.
-- [ ] **No CI pipeline** (found in the 2026-07-15 gap audit): `.github/workflows/` doesn't exist. The dev-side Docker Compose stack (postgres/nginx/backend/worker/redis/backup) is fully built and has run real backups — this is specifically about automated build/test-on-PR, which is genuinely not started (Phase 10 task).
+- [x] **CI quality gate** (2026-08-13): `.github/workflows/ci.yml` runs locked installs, Prisma validation/generation, backend/frontend tests, frontend typecheck, and both production builds on PRs into `dev`/`main`, with one aggregate `Quality Gate` check. Lint remains a recorded follow-up because backend has no ESLint config and frontend has five pre-existing findings.
 - [ ] **MARKER/front-desk ADMIN can read any exam, unscoped** (found during teacher-marker-visibility-scoping's final review, 2026-07-15): `exam.routes.ts`'s `GET /` and `GET /:id` carry only `verifyToken`, no `requireRole` at all — unlike every other route in that file. Any authenticated role, including `MARKER` and front-desk `ADMIN`, can list every exam and fetch any exam's detail (paper PDF presigned URL + full MCQ payload with answers) with zero scoping. Pre-existing, not introduced or fixed by the TEACHER-scoping work above — needs its own spec (likely: route-level `requireRole` restricting these two endpoints to roles that should see exam content, or a `MarkerAssignment`-style check inside the service, mirroring `submission.service.ts`'s existing `listSubmissions` MARKER handling).
 
 ---
@@ -331,7 +331,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Run `docker compose up -d --build` (postgres + nginx + API + worker + Redis + backup); then `prisma migrate deploy` in-container
 - [ ] Run one restore drill ([12 §8](./12-data-backup-and-recovery.md)) before cutover
 - [ ] Set up Sentry projects (frontend + backend, free tier)
-- [ ] GitHub Actions: build/test on PR; on merge to `main`, SSH deploy (`git pull && docker compose up -d --build`) — **confirmed genuinely not started 2026-07-15**: `.github/workflows/` doesn't exist. Distinct from the dev-side Compose stack, which IS fully built (postgres/nginx/backend/worker/redis/backup all running, real backups have executed) — don't confuse the two when re-checking this phase.
+- [x] GitHub Actions quality gate: Prisma validate/generate + backend/frontend test/type/build on PRs to `dev`/`main` (2026-08-13). Branch-protection setting and SSH deploy-on-merge remain external/production follow-ups.
 - [ ] Smoke test full system
 - [ ] Production cutover + monitoring
 - [ ] See [09-cost-and-hosting.md](./09-cost-and-hosting.md) for the full runbook + cost table
@@ -400,4 +400,4 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ✅ Done (2026-08-13) |
 | **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ✅ Done (2026-07-22) |
 | **New 2026-07-15:** 10/21 backend services have zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | ⬜ To implement |
-| **New 2026-07-15:** No CI pipeline — nothing runs tests/build on PR | Add `.github/workflows/ci.yml` (lint + `tsc` + `vitest run` for both apps) | ⬜ To implement |
+| **New 2026-07-15:** No CI pipeline — nothing runs tests/build on PR | Add `.github/workflows/ci.yml`; establish lint baseline separately | ✅ Done (2026-08-13; lint follow-up recorded) |
