@@ -12,12 +12,13 @@ http://localhost:5000/api/attendance
 
 The attendance endpoints require authentication (except for the Zoom webhook). They use the standard `access_token` HTTP-only cookie.
 
-## Roles & recent changes (2026-07-09)
+## Roles & recent changes (2026-08-13)
 
 Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk scans at the entrance).
 
-- `AttendanceSource` now includes **`QR`** (default) alongside `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`.
-- Institute-scoped scanning (`(instituteId, barcode) → student`, per-institute barcodes) is a follow-up.
+- `AttendanceSource` includes **`QR`** alongside `BARCODE`, `ZOOM_WEBHOOK`, and `MANUAL`.
+- Entrance scanning is institute-aware: `(instituteId, barcode)` resolves a per-institute
+  `StudentBarcode`, with the globally unique LMS `User.barcode` as fallback.
 - **`TEACHER` can now read attendance for their own courses (2026-07-10)** — `GET /session/:sessionId`
   and `GET /class/:classId` were `SUPER_ADMIN`+`ADMIN` only; added `TEACHER`, scoped via
   `assertCourseAccess` (same ownership gate as session/exam/video mutations).
@@ -27,21 +28,16 @@ Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` =
 There are three intended ways attendance gets marked; here's exactly what's real today for each,
 since the schema anticipates more than the code currently does:
 
-1. **Entrance scan (`POST /scan`).** Today this is the **only** scan path, and it resolves purely
-   via `User.barcode` (the LMS QR — see `account-setup.endpoints.md`). It always writes
-   `source: BARCODE` regardless of whether the front-desk device read a QR code or a plain
-   barcode — **`AttendanceSource.QR` is defined in the schema but no code path currently produces
-   it.** It does **not** use `StudentBarcode`/`instituteId` at all — an institute's own barcode
-   reader scanning a student's institute-issued card has no way to resolve through our system
-   yet. Wiring `/scan` (or a new institute-scoped variant) to also check `(instituteId, barcode) →
-   student` via `StudentBarcode` is the real follow-up here, not just a docs note.
-   - **Frontend (2026-07-11):** the staff `/attendance` scanner is now built (`StaffScanner`) —
-     pick class → session, then check students in by **keyboard-wedge** (a focused field a scan-gun
-     types into + Enter) **or camera QR** (`@zxing/browser`), with a live deduped roster and a
+1. **Entrance scan (`POST /scan`).** The request carries an institute and a device source. The
+   service checks the institute-specific `StudentBarcode` first and then the global LMS QR. A
+   timetable-generated session can only be scanned at its configured institute. Keyboard-wedge
+   input records `BARCODE`; camera input records `QR`.
+   - **Frontend (updated 2026-08-13):** the staff `/attendance` scanner (`StaffScanner`) supports
+     institute → class → session selection, then check-in by **keyboard-wedge** (a focused field a
+     scan-gun types into + Enter) **or camera QR** (`@zxing/browser`), with a live source-labelled roster and a
      **manual mark-by-name** fallback (`GET /users?search` → `POST /manual`). ⚠️ **Camera mode needs
      a secure context** — `getUserMedia` only works over **HTTPS or `localhost`**; on a plain-HTTP
-     LAN IP the camera is hidden and staff use the wedge field. Both input paths still send the same
-     `barcode` string to `POST /scan`.
+     LAN IP the camera is hidden and staff use the wedge field.
 2. **Live Zoom join (`POST /zoom-webhook`).** Fully automatic — Zoom's `meeting.participant_joined`
    webhook fires on join, matched by `classSession.zoomMeetingId`. This is real and working
    (subject to real Zoom credentials being configured — see `live-class.endpoints.md`).
@@ -90,7 +86,7 @@ Returned in most endpoints:
 
 | Method | Path | Auth Roles | Description |
 | --- | --- | --- | --- |
-| POST | `/scan` | `ADMIN`, `STAFF` | Scan barcode to log attendance (upsert). |
+| POST | `/scan` | `ADMIN`, `STAFF` | Institute-aware QR/barcode check-in (upsert). |
 | POST | `/zoom-webhook` | None | Webhook from Zoom for `participant.joined`. |
 | POST | `/manual` | `ADMIN`, `STAFF` | Manually mark attendance (reconciliation). |
 | POST | `/video` | `STUDENT` | Log attendance on video playback. |
@@ -102,16 +98,22 @@ Returned in most endpoints:
 
 ### POST `/scan`
 
-Admin scans a student's barcode at the physical entrance. Uses upsert to prevent duplicate records from rapid scans.
+Admin scans a student's code at a physical institute. Uses upsert to prevent duplicate records
+from rapid scans. Resolution order is the selected institute's `StudentBarcode`, then the global
+LMS `User.barcode`. If the session came from a timetable slot, its configured institute must match.
 
 **Request body**
 
 ```json
 {
 	"barcode": "ABC-12345",
-	"classSessionId": "uuid"
+	"classSessionId": "uuid",
+	"instituteId": "uuid",
+	"source": "BARCODE"
 }
 ```
+
+`source` accepts `BARCODE` or `QR` and defaults to `BARCODE` for older clients.
 
 **Success (200)**
 
@@ -129,7 +131,9 @@ Admin scans a student's barcode at the physical entrance. Uses upsert to prevent
 - 400 `INVALID_ROLE_FOR_ATTENDANCE` (user is not a student)
 - 403 `STUDENT_DEACTIVATED`
 - 404 `CLASS_SESSION_NOT_FOUND`
+- 404 `INSTITUTE_NOT_FOUND`
 - 404 `BARCODE_NOT_FOUND`
+- 409 `SESSION_INSTITUTE_MISMATCH`
 
 ### POST `/zoom-webhook`
 

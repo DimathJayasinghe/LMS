@@ -139,7 +139,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 
 ## Working with `context/`
 
-`context/documents/` (numbered `01`–`12`) is the source of truth for architecture, code standards,
+`context/documents/` (numbered `01`-`13`) is the source of truth for architecture, code standards,
 DB design, and AI workflow rules — read the relevant one before a non-trivial change.
 `context/api_endpoints/*.md` documents the actual current API surface per domain.
 `context/plan/` is historical brainstorming only; where it conflicts with `documents/`, `documents/`

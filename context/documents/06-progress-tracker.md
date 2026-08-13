@@ -10,8 +10,8 @@
 |-------|-------|
 | **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
 | **Last Updated** | 2026-08-13 |
-| **Last Completed Task** | PayHere webhook signature comparison hardened to use `crypto.timingSafeEqual`, with utility coverage for matching, mismatch, and length-mismatch paths. |
-| **Next Task** | See "Remaining follow-ups" below and the new "2026-07-15 gap-audit pass" — no single blocker, pick by priority |
+| **Last Completed Task** | Full-stack attendance scans are institute-aware and distinguish keyboard-wedge `BARCODE` from camera `QR`, with backend and frontend coverage. |
+| **Next Task** | CI quality gate, then timetable-slot soft-delete integrity; see `13-product-roadmap.md` for the prioritized full backlog. |
 | **Blockers** | None |
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
@@ -28,7 +28,8 @@
 > secure Bunny playback (DRM/token/webhook fixes), recorded-video watch-attendance, financial
 > reports, upload-integrity confirm-step, profile edit + credential management, and pay-at-entrance
 > + receipts. **Confirmed still-open** (verbatim from 07-10, re-checked against code, not just this
-> doc): QR-vs-wedge attendance `source` tagging, institute-context barcode resolution in the
+> doc): QR-vs-wedge attendance `source` tagging and institute-context barcode resolution (both
+> fixed 2026-08-13) in the
 > *attendance* scan endpoint specifically (the new payments barcode-resolver exists but attendance
 > scanning doesn't call it), payment override UI, `BUNNY_API_KEY` still a malformed GUID in `.env`,
 > no attendance-sync/reconciliation button, no Redis caching on result reads, only reactive (not
@@ -78,12 +79,12 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Apply the schema to the self-hosted Postgres in-container: `docker compose exec backend npx prisma migrate deploy` (dev DB is on `localhost:5433` for host tooling) — entrypoint currently uses `prisma db push`
 - [x] Submission flow: `writtenAnswers` accepted/stored server-side (`submission.service.ts`) + frontend `WrittenAnswerPanel`/`ExamSit` wired
 - [x] Payment flow: pay-at-entrance (2026-07-14/15) — `POST /payments/collect-entrance` (`collectEntrancePayment`), `GET /users/resolve-barcode` (`resolveStudentByBarcode`, institute-scoped `StudentBarcode` then global `User.barcode` fallback), `CollectPayment`/`PaymentReceipt` frontend + `/payments/[id]` printable receipt with QR. See `payments.endpoints.md` §8.
-- [ ] Attendance scan: accept `source=QR` on the entrance-scan endpoint (still always writes `BARCODE` — `attendance.service.ts:92` hardcodes it; confirmed still true 2026-07-15 — see `attendance.endpoints.md`)
+- [x] Attendance scan source tagging (2026-08-13): `/attendance/scan` accepts `BARCODE | QR`; the staff scanner sends `BARCODE` for wedge input and `QR` for camera decoding and displays the source in the live roster.
 - [x] Live classes: server-signed Zoom SDK join endpoint (2026-07-10, same content gate) + per-student watermark overlay (frontend) — see `02-architecture.md §7.1`
 - [x] **Enrollment endpoints** (2026-07-10) — `POST /api/enrollments` (STUDENT self-enroll; ADMIN/SUPER_ADMIN enroll a `userId`; re-enroll reactivates a cancelled row), `GET /my`, `GET /` (admin, paginated), `GET /:id`, `DELETE /:id` (soft-cancel). Feeds the content-access gate and unblocks `POST /payments/initiate`. Files: `schemas/enrollment.schema.ts`, `services/enrollment.service.ts`, `controllers/enrollment.controller.ts`, `routes/enrollment.routes.ts`; `AUDIT_ACTION.ENROLLMENT_{CREATED,CANCELLED}`; `context/api_endpoints/enrollments.endpoints.md`. No migration (existing `Enrollment` table).
 - [x] Teacher-scoped **reads** for attendance (2026-07-10) — `GET /session/:sessionId` and `GET /class/:classId` now allow `TEACHER`, scoped via the existing `assertCourseAccess` ownership gate (reused from `class.service.ts`, not duplicated). See `attendance.endpoints.md`.
 - [x] **Student account-setup flow** (2026-07-10) — NIC front/back R2 upload, register/list/delete `StudentBarcode` per institute, `setupCompleted` auto-flip (no approval gate, explicit product decision), LMS-QR auto-generated at registration. `/auth/account-setup` page + `(app)` layout redirect gate. See `account-setup.endpoints.md`.
-- [ ] Physical attendance scan by **institute context**: resolve `(instituteId, barcode)` → student (add institute to the scan endpoint + optionally `Attendance.instituteId`) — **confirmed still separate from the payments fix** (2026-07-15): `resolveStudentByBarcode` exists and is wired into `GET /users/resolve-barcode` for payments, but `attendance.service.ts`'s `scanBarcode` still does a plain `User.barcode` lookup and never calls it
+- [x] Physical attendance scan by **institute context** (2026-08-13): staff select an active institute; `/attendance/scan` resolves the exact `(instituteId, barcode)` `StudentBarcode` first and falls back to global `User.barcode`. Timetable-generated sessions reject a mismatched institute. No `Attendance.instituteId` migration was needed because timetable/session data remains location truth and audit metadata captures scan context.
 - [x] Recorded-video attendance (2026-07-12, PR #57): `VideoPlayer.tsx` wires `POST /attendance/video` via player.js `timeupdate`/`ended` events (marks after ~30s forward-watched, seek-proof), plus the missing enrollment gate on the endpoint itself.
 - [x] **Audit log viewer** (2026-07-10) — `/admin/audit` (SUPER_ADMIN-gated), action + date-range filters, expandable rows for IP/user-agent/metadata. Also fixed a real bug found while building it: the route was gated to `Role.ADMIN` (front-desk) instead of `Role.SUPER_ADMIN` — a leftover from before the 2026-07-09 role-enum remap that locked the actual super-admin out and let front-desk read the full trail. See `audit.endpoints.md`.
 - [x] **Notification bell + settings** (2026-07-10) — new `Notification`/`NotificationSetting` models, `NotificationService.dispatch()` single entry point (in-app + settings-gated SMS, fires SSE `NOTIFICATION_CREATED`), wired into results-published and payment confirmed/overridden. `/admin/notification-settings` (SUPER_ADMIN) toggles per (scenario, channel); the bell in `TopBar` is the **first frontend SSE consumer** in the codebase — `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` still have no frontend listener, a separate pre-existing gap. See `notifications.endpoints.md`.
@@ -211,7 +212,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
 - [x] Implement Bunny.net video token generation (IP-bound)
 - [x] Build class schedule page (student view) — `(app)/timetable/page.tsx`
-- [x] Build attendance scanner page (admin/front-desk view) — `(app)/attendance/page.tsx` staff branch (SUPER_ADMIN/ADMIN) is a working entrance scanner (2026-07-11): class→session picker, keyboard-wedge + camera-QR (`@zxing/browser`) scanning → `POST /attendance/scan`, live deduped roster (`GET /attendance/session/:id`), and manual mark-by-name (`GET /users?search` → `POST /attendance/manual`). TEACHER/MARKER still `ComingSoon`
+- [x] Build attendance scanner page (admin/front-desk view) — `(app)/attendance/page.tsx` staff branch (SUPER_ADMIN/ADMIN) is a working entrance scanner (updated 2026-08-13): institute→class→session picker, institute-scoped keyboard-wedge + camera-QR (`@zxing/browser`) scanning → `POST /attendance/scan`, live deduped/source-labelled roster (`GET /attendance/session/:id`), and manual mark-by-name (`GET /users?search` → `POST /attendance/manual`). TEACHER/MARKER still `ComingSoon`
 - [ ] Build video player component with DRM black-screen detection — `components/features/VideoPlayer.tsx` (187 lines) plays video but has **no watermark overlay and no black-screen detection**; `02-architecture.md §7.1` describes these as if built for VOD — that description is aspirational/stale for the watermark specifically, don't trust it without checking the component
 
 ---

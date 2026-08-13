@@ -40,10 +40,22 @@ const attendanceWithRelationsSelect = {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-const ensureClassSessionExists = async (sessionId: string): Promise<{ id: string; courseId: string; deletedAt: Date | null }> => {
+const ensureClassSessionExists = async (
+  sessionId: string,
+): Promise<{
+  id: string;
+  courseId: string;
+  deletedAt: Date | null;
+  timetableSlot: { instituteId: string | null } | null;
+}> => {
   const session = await prisma.classSession.findUnique({
     where: { id: sessionId },
-    select: { id: true, courseId: true, deletedAt: true },
+    select: {
+      id: true,
+      courseId: true,
+      deletedAt: true,
+      timetableSlot: { select: { instituteId: true } },
+    },
   });
 
   if (!session || session.deletedAt) {
@@ -58,13 +70,48 @@ const ensureClassSessionExists = async (sessionId: string): Promise<{ id: string
 // Uses upsert to prevent duplicate records from rapid scans.
 
 export const scanBarcode = async (input: ScanBarcodeInput): Promise<AttendanceRecord> => {
-  await ensureClassSessionExists(input.classSessionId);
+  const session = await ensureClassSessionExists(input.classSessionId);
 
-  // Look up the student by barcode
-  const student = await prisma.user.findUnique({
-    where: { barcode: input.barcode },
-    select: { id: true, deletedAt: true, role: true },
+  const institute = await prisma.institute.findUnique({
+    where: { id: input.instituteId },
+    select: { id: true, isActive: true },
   });
+
+  if (!institute || !institute.isActive) {
+    throw new AppError('INSTITUTE_NOT_FOUND', 404, 'Institute not found or inactive.');
+  }
+
+  if (
+    session.timetableSlot?.instituteId &&
+    session.timetableSlot.instituteId !== input.instituteId
+  ) {
+    throw new AppError(
+      'SESSION_INSTITUTE_MISMATCH',
+      409,
+      'This class session is scheduled at a different institute.',
+    );
+  }
+
+  // Institute barcodes are only unique within an institute. The globally unique
+  // LMS code remains a fallback so a student's LMS QR works at every location.
+  const instituteBarcode = await prisma.studentBarcode.findUnique({
+    where: {
+      instituteId_barcode: {
+        instituteId: input.instituteId,
+        barcode: input.barcode,
+      },
+    },
+    select: {
+      user: { select: { id: true, deletedAt: true, role: true } },
+    },
+  });
+
+  const student =
+    instituteBarcode?.user ??
+    (await prisma.user.findUnique({
+      where: { barcode: input.barcode },
+      select: { id: true, deletedAt: true, role: true },
+    }));
 
   if (!student) {
     throw new AppError('BARCODE_NOT_FOUND', 404, 'No student found with this barcode. Please verify the barcode is assigned.');
@@ -89,7 +136,7 @@ export const scanBarcode = async (input: ScanBarcodeInput): Promise<AttendanceRe
     create: {
       userId: student.id,
       classSessionId: input.classSessionId,
-      source: AttendanceSource.BARCODE,
+      source: input.source,
       scannedAt: new Date(),
       lastSeenAt: new Date(),
     },
