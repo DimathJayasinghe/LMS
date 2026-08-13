@@ -289,7 +289,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 
 | Method | Path                                | Roles                           | Description                       |
 | ------ | ----------------------------------- | ------------------------------- | --------------------------------- |
-| POST   | `/api/attendance/scan`            | ADMIN                           | Barcode scan → upsert attendance |
+| POST   | `/api/attendance/scan`            | SUPER_ADMIN, ADMIN              | Institute-aware QR/barcode scan → upsert attendance |
 | POST   | `/api/attendance/zoom-webhook`    | None (webhook secret)           | Zoom event → upsert attendance   |
 | GET    | `/api/attendance/class/:classId`  | SUPER_ADMIN, ADMIN              | Get attendance for a class        |
 | GET    | `/api/attendance/student/:userId` | SUPER_ADMIN, ADMIN, own STUDENT | Get student's attendance history  |

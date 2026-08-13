@@ -18,7 +18,7 @@ import {
 export const attendanceRoutes = Router();
 
 // ─── Barcode Scan ────────────────────────────────────────────
-// POST /api/attendance/scan — Admin scans student barcode at entrance
+// POST /api/attendance/scan — Admin scans a student code in institute context
 attendanceRoutes.post(
   '/scan',
   verifyToken,

@@ -8,7 +8,7 @@ import { AttendanceQr } from "./_components/AttendanceQr";
 import { StaffScanner } from "./_components/StaffScanner";
 import { api } from "@/lib/api";
 import { attendanceSourceLabel } from "@/lib/attendance";
-import type { ApiList, ApiSuccess, AttendanceRecord, Course, User } from "@/lib/types";
+import type { ApiList, ApiSuccess, AttendanceRecord, Course, Institute, User } from "@/lib/types";
 
 export const metadata = { title: "Attendance · LMS" };
 
@@ -30,14 +30,20 @@ export default async function AttendancePage() {
 
   // Front-desk (SUPER_ADMIN/ADMIN) get the entrance scanner.
   if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
-    const classes = await api
-      .get<ApiList<Course>>("/classes", { cookie })
-      .then((r) => r.data)
-      .catch(() => [] as Course[]);
+    const [classes, institutes] = await Promise.all([
+      api
+        .get<ApiList<Course>>("/classes", { cookie })
+        .then((r) => r.data)
+        .catch(() => [] as Course[]),
+      api
+        .get<ApiList<Institute>>("/institutes", { cookie })
+        .then((r) => r.data.filter((institute) => institute.isActive))
+        .catch(() => [] as Institute[]),
+    ]);
     return (
       <div className="mx-auto max-w-5xl">
         <PageHeader title="Attendance" description="Scan students in at the entrance." />
-        <StaffScanner classes={classes} />
+        <StaffScanner classes={classes} institutes={institutes} />
       </div>
     );
   }
