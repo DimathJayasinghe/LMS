@@ -21,8 +21,9 @@ Add `.github/workflows/ci.yml` with independent backend and frontend jobs plus o
 - Use Node.js 22 and locked `npm ci` installs with per-app npm caches.
 - Backend: Prisma validate/generate, full Vitest suite, TypeScript production build.
 - Frontend: full Vitest suite, explicit TypeScript check, Next.js production build.
-- Use only non-secret placeholder build-time environment values; no database service is required
-  because current tests mock persistence and Prisma validation/generation does not connect.
+- Use only non-secret placeholder build-time environment values, including the required Redis URL
+  and JWT test secrets; no database/Redis service is required because current tests mock persistence
+  and Prisma validation/generation does not connect.
 
 The action versions follow the current official action documentation: `actions/checkout@v5` and
 `actions/setup-node@v6`.
