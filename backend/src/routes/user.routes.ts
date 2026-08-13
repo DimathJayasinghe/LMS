@@ -5,6 +5,7 @@ import * as ProfileController from '@/controllers/profile.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
     assignBarcodeSchema,
     createStudentBarcodeSchema,
@@ -155,6 +156,7 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateRoleSchema),
+    checkIdempotency,
     UserController.updateRole,
 );
 
@@ -165,6 +167,7 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateStatusSchema),
+    checkIdempotency,
     UserController.updateStatus,
 );
 
@@ -175,5 +178,6 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(assignBarcodeSchema),
+    checkIdempotency,
     UserController.assignBarcode,
 );

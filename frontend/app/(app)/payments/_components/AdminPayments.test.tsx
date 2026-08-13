@@ -100,7 +100,13 @@ describe("AdminPayments — bulk upload", () => {
     });
     await user.upload(screen.getByLabelText("Bulk payment file"), file);
 
-    expect(upload).toHaveBeenCalledWith("/payments/bulk-upload", expect.any(FormData));
+    expect(upload).toHaveBeenCalledWith(
+      "/payments/bulk-upload",
+      expect.any(FormData),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
     expect(await screen.findByText(/1 created/)).toBeInTheDocument();
     expect(screen.getByText(/Row 3: Unknown index\./)).toBeInTheDocument();
     expect(refresh).toHaveBeenCalled();

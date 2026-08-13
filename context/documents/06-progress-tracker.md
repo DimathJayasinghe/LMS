@@ -9,8 +9,8 @@
 | Field | Value |
 |-------|-------|
 | **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
-| **Last Updated** | 2026-07-15 |
-| **Last Completed Task** | Pay-at-entrance collection + printable receipts (`collectEntrancePayment`, `resolveStudentByBarcode`, `CollectPayment`/`PaymentReceipt` UI) — merged. `teacher-marker-visibility-scoping` spec written, implementation not yet started (see `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`). |
+| **Last Updated** | 2026-08-13 |
+| **Last Completed Task** | PayHere webhook signature comparison hardened to use `crypto.timingSafeEqual`, with utility coverage for matching, mismatch, and length-mismatch paths. |
 | **Next Task** | See "Remaining follow-ups" below and the new "2026-07-15 gap-audit pass" — no single blocker, pick by priority |
 | **Blockers** | None |
 
@@ -94,8 +94,8 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Teacher-scoped read gaps found and fixed (2026-07-15, **implemented**): `assertCourseAccess` was missing from `exam.service.ts` (`listExams`/`getExamById`), `video.service.ts` (`listVideosByClass`/`getVideoById`/`generateStreamUrl`), `submission.service.ts` (`listSubmissions`), and `class-session.service.ts` (`listClassSessions`/`getClassSessionById`) — any TEACHER could view another teacher's exam content (incl. answers), recordings, submissions, and session schedule. `MARKER` scoping (`ensureMarkerAssigned`) and front-desk `ADMIN` route-gating were both independently verified correct — not part of the gap. Fixed via subagent-driven-development (23 new Vitest cases across 4 new test files, one review-cycle fix on `submission.service.ts` — an `if/else` had to be corrected to two independent `if`s), then live-stack verified with two real teacher accounts on different courses. See `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`.
 - [ ] **Security/correctness hardening found in the 2026-07-15 gap audit** (not yet fixed):
   - `timetable.service.ts` hard-deletes a `TimetableSlot` (`prisma.timetableSlot.delete(...)`) despite an inbound FK from `ClassSession.timetableSlotId` and an existing-but-unused `isActive` column that looks built for exactly this soft-disable — violates the repo's soft-delete-only invariant.
-  - `Idempotency-Key` missing on `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` — CLAUDE.md names payments and account activation explicitly as requiring it; only `/initiate`, `/payhere/checkout`, `/collect-entrance`, and mark finalization currently have the check.
-  - PayHere webhook signature check (`payment.service.ts`) compares with `!==` instead of `crypto.timingSafeEqual` — Zoom and Bunny webhook verification both already do this correctly; inconsistent, low-real-world-risk but worth matching.
+  - ✅ Fixed 2026-07-22: `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` now carry `checkIdempotency`, and the live frontend callers send per-action `Idempotency-Key` UUIDs. `POST /users/me/nic/confirm` remains consciously excluded because it is already idempotent by object-key upsert.
+  - ✅ Fixed 2026-08-13: PayHere webhook signature checks now use `crypto.timingSafeEqual`, matching Zoom/Bunny webhook verification.
 - [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** the teacher-marker-visibility-scoping fix (below) added dedicated test files for `exam.service.ts`, `video.service.ts`, `submission.service.ts`, and `class-session.service.ts` (24 new cases total) — those four are no longer gaps. Still zero coverage: `access.service.ts` (the core enrolled+paid content gate — the most important remaining one), `enrollment.service.ts`, `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, `subject.service.ts`, `stream.service.ts`.
 - [ ] **No CI pipeline** (found in the 2026-07-15 gap audit): `.github/workflows/` doesn't exist. The dev-side Docker Compose stack (postgres/nginx/backend/worker/redis/backup) is fully built and has run real backups — this is specifically about automated build/test-on-PR, which is genuinely not started (Phase 10 task).
 - [ ] **MARKER/front-desk ADMIN can read any exam, unscoped** (found during teacher-marker-visibility-scoping's final review, 2026-07-15): `exam.routes.ts`'s `GET /` and `GET /:id` carry only `verifyToken`, no `requireRole` at all — unlike every other route in that file. Any authenticated role, including `MARKER` and front-desk `ADMIN`, can list every exam and fetch any exam's detail (paper PDF presigned URL + full MCQ payload with answers) with zero scoping. Pre-existing, not introduced or fixed by the TEACHER-scoping work above — needs its own spec (likely: route-level `requireRole` restricting these two endpoints to roles that should see exam content, or a `MarkerAssignment`-style check inside the service, mirroring `submission.service.ts`'s existing `listSubmissions` MARKER handling).
@@ -252,7 +252,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 
 - [x] Create `payment.routes.ts`, `payment.controller.ts`, `payment.service.ts`
 - [x] Implement PayHere payment initiation + webhook handler
-- [x] Implement idempotency middleware for payment routes — present on `/initiate`, `/payhere/checkout`, `/collect-entrance`; **not** on `/override` or `/bulk-upload` (gap found 2026-07-15, see Phase S follow-ups)
+- [x] Implement idempotency middleware for payment routes — present on `/initiate`, `/payhere/checkout`, `/collect-entrance`, `/override`, and `/bulk-upload` (override + bulk-upload hardened 2026-07-21; frontend callers completed 2026-07-22)
 - [x] Implement Excel bulk payment upload (Admin)
 - [x] Build payment page (student view) — `(app)/payments/page.tsx` role-aware: STUDENT sees per-course this-month Pay/Paid cards (reuses the initiate→PayHere flow) + filterable history (2026-07-11)
 - [x] Build payment dashboard (admin view) — SUPER_ADMIN/ADMIN: month summary (`GET /payments/summary`), status/month-filtered records table, and Excel bulk upload with per-row results (2026-07-11)
@@ -396,7 +396,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Database cascade delete via FK | Soft deletes + `onDelete: Restrict`/`SetNull` (no `Cascade` anywhere in `schema.prisma`, confirmed 2026-07-15) | ✅ Done |
 | Multi-worker cron job collision | BullMQ distributed queue | ✅ Done |
 | **New 2026-07-15:** `timetable.service.ts` hard-deletes a `TimetableSlot` row despite an inbound FK and an unused `isActive` column | Switch to soft-delete (`isActive: false`) matching every other model | ⬜ To implement |
-| **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ⬜ To implement |
-| **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ⬜ To implement |
+| **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ✅ Done (2026-08-13) |
+| **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ✅ Done (2026-07-22) |
 | **New 2026-07-15:** 10/21 backend services have zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | ⬜ To implement |
 | **New 2026-07-15:** No CI pipeline — nothing runs tests/build on PR | Add `.github/workflows/ci.yml` (lint + `tsc` + `vitest run` for both apps) | ⬜ To implement |

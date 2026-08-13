@@ -15,7 +15,12 @@ import {
 	PAYHERE_STATUS_PENDING,
 	PAYHERE_STATUS_SUCCESS,
 } from '@/utils/constants';
-import { formatPayhereAmount, generatePayhereHash, generatePayhereSignature } from '@/utils/payhere';
+import {
+	formatPayhereAmount,
+	generatePayhereHash,
+	generatePayhereSignature,
+	isPayhereSignatureValid,
+} from '@/utils/payhere';
 import { getCurrentPaymentMonth } from '@/services/access.service';
 import {
 	bulkPaymentRowSchema,
@@ -342,7 +347,7 @@ export const handlePayhereNotify = async (
 		merchantSecret: config.merchantSecret,
 	});
 
-	if (expectedSignature !== input.md5sig.toUpperCase()) {
+	if (!isPayhereSignatureValid(expectedSignature, input.md5sig)) {
 		throw new AppError('PAYHERE_SIGNATURE_INVALID', 400, 'Invalid PayHere signature.');
 	}
 
