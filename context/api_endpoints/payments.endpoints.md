@@ -56,7 +56,7 @@ Callback endpoint for PayHere to notify the system of payment status changes.
 
 - **URL:** `/payhere/notify`
 - **Method:** `POST`
-- **Auth:** None (Public, verified via PayHere MD5 signature)
+- **Auth:** None (Public, verified via PayHere MD5 signature using a constant-time comparison)
 - **Body:** (PayHere Notification POST Data)
   ```json
   {
