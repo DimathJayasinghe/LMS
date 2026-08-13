@@ -1,5 +1,7 @@
 # Academic LMS
 
+[![CI](https://github.com/DimathJayasinghe/LMS/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/DimathJayasinghe/LMS/actions/workflows/ci.yml)
+
 Learning Management System for a **single tuition institution** (~1,200 students) with several teachers across multiple subjects. Built to run **cheaply on one small VPS** — no Kubernetes, no auto-scaling.
 
 ## Features
