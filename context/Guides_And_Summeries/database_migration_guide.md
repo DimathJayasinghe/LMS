@@ -226,10 +226,15 @@ The repository's original migration was older than the schema that `db push` had
 Migration `20260819150000_reconcile_schema_baseline` repairs fresh installs, but must **not** be executed
 against a populated db-push database. Adopt that database once before starting the new API image:
 
+If the API restart-loops with Prisma error `P3005`, stop the API and worker and complete this procedure
+exactly once. Do **not** delete the PostgreSQL volume, run `db push`, or mark every migration as applied.
+
 1. Take and verify a database backup.
 2. Keep the existing PostgreSQL container running and build the new backend image.
-3. Prove that the existing schema already matches `schema.prisma`. A non-zero result means **stop** and
-   reconcile the drift in staging first.
+3. Print and review the live-to-current schema diff. For the pre-2026-08-20 legacy database, the expected
+   diff is **only** the additive payment-adjustment objects and the `SubjectTeacher` /
+   `CourseContentProgress` objects. Any drop, rename, unrelated column change, or missing legacy table means
+   **stop** and reconcile the drift in staging first. A zero diff is not expected until step 5 completes.
 4. Mark only the historical initial and schema-reconciliation migrations as applied.
 5. Deploy all still-pending additive migrations. This includes the payment ledger (which installs the
    append-only trigger Prisma cannot express) and the teacher-subject/content-progress migration.
@@ -240,7 +245,7 @@ docker compose run --rm backup backup
 docker compose build backend
 
 docker compose run --rm --no-deps --entrypoint npx backend prisma migrate diff \
-  --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+  --from-config-datasource --to-schema prisma/schema.prisma --script
 
 docker compose run --rm --no-deps --entrypoint npx backend prisma migrate resolve \
   --applied 20260510075330_init

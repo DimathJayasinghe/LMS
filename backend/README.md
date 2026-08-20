@@ -31,7 +31,8 @@ npx prisma migrate deploy
 
 The production API container performs this step automatically and fails fast on migration errors.
 Never use `prisma db push` for persistent environments. For the one-time adoption of an older db-push
-database, follow `context/Guides_And_Summeries/database_migration_guide.md` before deploying the new image.
+database—or if startup reports Prisma `P3005`—preserve the volume and follow
+`context/Guides_And_Summeries/database_migration_guide.md` before deploying the new image.
 
 ## Docker
 
