@@ -27,6 +27,10 @@ export const listMyEnrollmentsQuerySchema = z.object({
 
 export type ListMyEnrollmentsQuery = z.infer<typeof listMyEnrollmentsQuerySchema>;
 
+export const learningCourseParamSchema = z.object({
+	courseId: z.string().uuid(),
+});
+
 export const listEnrollmentsQuerySchema = z.object({
 	page: z.coerce.number().int().min(1).default(1),
 	limit: z.coerce.number().int().min(1).max(100).default(20),

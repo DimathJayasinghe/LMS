@@ -98,8 +98,12 @@ export const deleteSlot = async (id: string, actor: AuthenticatedUser): Promise<
   const existing = await prisma.timetableSlot.findUnique({ where: { id }, select: { id: true, courseId: true } });
   if (!existing) throw new AppError('SLOT_NOT_FOUND', 404, 'Timetable slot not found.');
   await assertCourseAccess(existing.courseId, actor);
-  // Generated sessions keep (onDelete: SetNull nulls their timetableSlotId).
-  await prisma.timetableSlot.delete({ where: { id } });
+  // Keep the template and its generated-session links so disabling/restoring is
+  // safe and repeatable. Session generation already ignores inactive slots.
+  await prisma.timetableSlot.update({
+    where: { id },
+    data: { isActive: false },
+  });
 };
 
 // ─── Public upcoming timetable (marketing page, unauthenticated) ───────

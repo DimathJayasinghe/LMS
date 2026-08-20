@@ -98,6 +98,23 @@ const assertSubjectExists = async (subjectId: string): Promise<void> => {
 	}
 };
 
+const assertTeacherAssignedToSubject = async (
+	subjectId: string,
+	teacherId: string,
+): Promise<void> => {
+	const assignment = await prisma.subjectTeacher.findUnique({
+		where: { subjectId_teacherId: { subjectId, teacherId } },
+		select: { id: true },
+	});
+	if (!assignment) {
+		throw new AppError(
+			'TEACHER_NOT_ASSIGNED_TO_SUBJECT',
+			403,
+			'The super admin must assign this teacher to the subject first.',
+		);
+	}
+};
+
 export const createClass = async (
 	input: CreateClassInput,
 	actor: AuthenticatedUser,
@@ -110,6 +127,7 @@ export const createClass = async (
 
 	await assertSubjectExists(input.subjectId);
 	await assertTeacherExists(teacherId);
+	await assertTeacherAssignedToSubject(input.subjectId, teacherId);
 
 	const existing = await prisma.course.findUnique({
 		where: {
@@ -199,6 +217,7 @@ export const listClasses = async (
 		...(query.year ? { year: query.year } : {}),
 		// Only the owner sees inactive courses; everyone else sees active only.
 		...(actor.role === Role.SUPER_ADMIN ? {} : { isActive: true }),
+		...(actor.role === Role.TEACHER ? { teacherId: actor.userId } : {}),
 	};
 
 	return prisma.course.findMany({
@@ -224,6 +243,9 @@ export const getClassById = async (
 
 	if (!course) {
 		throw new AppError('CLASS_NOT_FOUND', 404, 'Class not found.');
+	}
+	if (actor.role === Role.TEACHER && course.teacherId !== actor.userId) {
+		throw new AppError('FORBIDDEN_COURSE', 403, 'You can only view your own courses.');
 	}
 
 	return course;
@@ -257,6 +279,10 @@ export const updateClass = async (
 			await assertSubjectExists(input.subjectId);
 			nextSubjectId = input.subjectId;
 		}
+	}
+
+	if (nextTeacherId !== existing.teacherId || nextSubjectId !== existing.subjectId) {
+		await assertTeacherAssignedToSubject(nextSubjectId, nextTeacherId);
 	}
 
 	const nextName = input.name ?? existing.name;

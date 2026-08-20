@@ -74,7 +74,7 @@ export const deleteSlot = asyncHandler(async (req: Request, res: Response): Prom
     context: extractAuditContext(req),
   });
 
-  res.status(200).json({ status: 'success', data: null, message: 'Timetable slot deleted.' });
+  res.status(200).json({ status: 'success', data: null, message: 'Timetable slot disabled.' });
 });
 
 export const generateSessions = asyncHandler(async (req: Request, res: Response): Promise<void> => {

@@ -33,6 +33,10 @@ erDiagram
     USER ||--o| PERMISSION : "may have overrides"
     USER ||--o{ ENROLLMENT : "enrolls in"
     USER ||--o{ COURSE : "teaches (as TEACHER)"
+    USER ||--o{ SUBJECT_TEACHER : "approved for subject"
+    SUBJECT ||--o{ SUBJECT_TEACHER : "has approved teachers"
+    USER ||--o{ COURSE_CONTENT_PROGRESS : "tracks seen content"
+    COURSE ||--o{ COURSE_CONTENT_PROGRESS : "tracks learner progress"
     USER ||--o{ AUDIT_LOG : "acts in"
     USER |o--o{ SMS_LOG : "receives"
 
@@ -82,6 +86,13 @@ erDiagram
         boolean isActive "default true"
     }
 
+    SUBJECT_TEACHER {
+        uuid id PK
+        uuid subjectId FK
+        uuid teacherId FK
+        datetime assignedAt
+    }
+
     COURSE {
         uuid id PK
         uuid subjectId FK "references Subject"
@@ -99,6 +110,14 @@ erDiagram
         uuid courseId FK
         enum classType "ONLINE PHYSICAL"
         boolean isActive "default true"
+    }
+
+    COURSE_CONTENT_PROGRESS {
+        uuid id PK
+        uuid userId FK
+        uuid courseId FK
+        datetime lastSeenAt
+        datetime updatedAt
     }
 
     PAYMENT {
@@ -429,12 +448,15 @@ model Payment {
   payhereId    String?       @unique
   paymentMonth String                          // "2026-05"
   note         String?
+  refundedAmount Decimal       @default(0) @db.Decimal(10, 2)
 
   enrollmentId String
   enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
 
   collectedById String?                        // staff who took an ENTRANCE/MANUAL payment
   collectedBy   User?         @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
+
+  adjustments PaymentAdjustment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -450,6 +472,16 @@ model Payment {
 - **`enrollmentId`, not `userId`** — payment is tied to a specific enrollment (student + course + mode).
 - **`method`** — records the channel. `ENTRANCE` payments are taken at the front desk; `collectedById` records which staff member took the cash. `ONLINE` = PayHere; `BULK` = Excel import; `MANUAL` = owner/admin adjustment.
 - **`@@unique([enrollmentId, paymentMonth])`** — prevents double-paying the same month for the same enrollment (whether online or at the entrance).
+- **`amount` stays gross; `refundedAmount` is the net-reporting projection.** Partial refunds keep
+  `SUCCESS`; a full refund sets `REFUNDED`, so content gates stop accepting the payment.
+
+### 4.8.1 PaymentAdjustment
+
+`PaymentAdjustment` is an append-only financial ledger for `OVERRIDE` and `REFUND` events. It stores
+before/after payment status and gross-amount snapshots, refund amount where applicable, a required
+reason, optional external reference, actor, and creation time. It intentionally has no `updatedAt` or
+soft-delete field; the migration installs a PostgreSQL trigger rejecting `UPDATE` and `DELETE`.
+`PaymentAdjustment → Payment` and `PaymentAdjustment → User` both use `onDelete: Restrict`.
 
 ### 4.9 ClassSession
 

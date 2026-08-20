@@ -28,7 +28,11 @@ export function PublishResultsButton({ examId, disabled, disabledHint }: Props) 
     setPublishing(true);
     setError(null);
     try {
-      await api.post<ApiSuccess<PublishResult>>(`/submissions/exam/${examId}/publish`);
+      await api.post<ApiSuccess<PublishResult>>(
+        `/submissions/exam/${examId}/publish`,
+        undefined,
+        { headers: { "Idempotency-Key": crypto.randomUUID() } },
+      );
       router.refresh();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not publish. Try again.");

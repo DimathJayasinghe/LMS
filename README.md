@@ -6,6 +6,11 @@ Learning Management System for a **single tuition institution** (~1,200 students
 
 ## Features
 
+- Super-admin subject-to-teacher assignments and teacher-owned class authoring
+- Teacher session/video management, exact marker assignment, and audited released-result correction
+- Student current-enrollment dashboard with new READY lessons, upcoming sessions, and seen state
+- Role/ownership gates, mutation audit trails, fail-fast migrations, and zero-advisory dependency baseline
+
 - **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — with optional per-user permission overrides
 - **Academic model** — Subject → Course (one teacher) → Class Sessions & Exams; students enrol + pay per course
 - **Classes** — delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes
@@ -47,6 +52,11 @@ optional `ngrok` service tunnels it to a public HTTPS URL so Bunny/Zoom/PayHere 
 ```bash
 docker compose up -d --build      # postgres + redis + backend + worker + nginx + frontend + ngrok
 ```
+
+The backend applies checked-in Prisma migrations before it starts. Migration failure is fatal; do not
+use `prisma db push` against a persistent environment. Existing pre-2026-08-20 development databases
+need the one-time adoption procedure in
+[`database_migration_guide.md`](./context/Guides_And_Summeries/database_migration_guide.md#one-time-adoption-for-a-database-previously-managed-by-db-push).
 
 For ngrok: set `NGROK_AUTHTOKEN` (+ optional reserved `NGROK_DOMAIN`) in `backend/.env`. Webhook
 URLs are `https://<ngrok-domain>/api/{videos/bunny-webhook, attendance/zoom-webhook, payments/payhere/notify}`.

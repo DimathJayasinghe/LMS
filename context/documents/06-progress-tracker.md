@@ -8,11 +8,22 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (core CRUD + UI for all phases now built; hardening/gaps remain) |
-| **Last Updated** | 2026-08-13 |
-| **Last Completed Task** | GitHub Actions CI now runs Prisma validation plus backend/frontend tests, typechecks, and production builds with an aggregate branch-protection gate. |
-| **Next Task** | Timetable-slot soft-delete integrity, followed by the CI lint baseline; see `13-product-roadmap.md` for the prioritized full backlog. |
+| **Current Phase** | Phase 9 — Polish & Hardening (teacher/student academic workspace slice completed; timetable authoring and broader course modules remain) |
+| **Last Updated** | 2026-08-20 |
+| **Last Completed Task** | Teacher/student academic workspace: super-admin subject assignments; teacher-owned class create/edit, sessions and recordings; exact marker assignment; published-result corrections with reasons; student current-enrollment/new-lesson state; comprehensive audits, role tests, real HTTP smoke, production images, and zero-advisory dependency upgrades. |
+| **Next Task** | Complete timetable-slot authoring UI and the `access.service` test gap, then begin course modules/materials as the next P1 vertical slice. |
 | **Blockers** | None |
+
+### 2026-08-20 — Teacher/student academic workspace completed
+
+- [x] `SubjectTeacher` assignments let only SUPER_ADMIN approve teachers per subject; an assignment cannot be removed while that teacher owns a class in the subject.
+- [x] TEACHER class list/detail/create/edit is ownership-scoped; SUPER_ADMIN can reassign a class only to a teacher approved for the selected subject.
+- [x] Teacher session and video workflows are exposed from the owned-class UI and all consequential mutations emit audit events.
+- [x] Teachers/SUPER_ADMIN replace an exam's exact marker set from the marking workspace; MARKER grading locks after publication.
+- [x] Published results can be corrected only by the owning TEACHER or SUPER_ADMIN, require a reason, and log before/after values.
+- [x] STUDENT classes distinguish current enrollments from discovery and show new READY recordings plus upcoming sessions; visiting a course advances a persisted per-course seen marker.
+- [x] Added focused backend/frontend authorization and interaction tests. Full verification: backend 225 tests, frontend 93 tests, lint/type/build green, fresh and upgrade PostgreSQL paths at zero drift, authenticated compiled-stack smoke green.
+- [x] Dependency hardening: Next 16.3.1, Prisma 7.9.1, Sentry 10.70, Multer 2.2, vulnerable `xlsx` replaced, backend/frontend full npm audits at zero known advisories.
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was
@@ -31,8 +42,8 @@
 > doc): QR-vs-wedge attendance `source` tagging and institute-context barcode resolution (both
 > fixed 2026-08-13) in the
 > *attendance* scan endpoint specifically (the new payments barcode-resolver exists but attendance
-> scanning doesn't call it), payment override UI, `BUNNY_API_KEY` still a malformed GUID in `.env`,
-> no attendance-sync/reconciliation button, no Redis caching on result reads, only reactive (not
+> scanning doesn't call it), payment override UI (fixed 2026-08-19), `BUNNY_API_KEY` still a malformed GUID in `.env`,
+> no attendance-sync/reconciliation button (fixed 2026-08-17), no Redis caching on result reads, only reactive (not
 > proactive) token refresh, no multipart/refresh-on-expiry for slow R2 uploads, TEACHER course
 > create/edit + timetable-slot authoring UI, all of Phase 9's frontend polish items, TEACHER/MARKER
 > attendance view (`ComingSoon`), timetable's raw `zoom.us` link, and SSE listeners for
@@ -48,7 +59,8 @@
 > gate) and the three files central to the new visibility-scoping gap (`exam`/`submission`/`video`);
 > and no CI pipeline exists at all (`.github/workflows/` is empty) — Phase 10's "Not Started" is
 > accurate for real deployment/CI even though the dev-side Docker Compose stack (postgres/nginx/
-> backend/worker/redis/backup) is fully built and has run real backups. See the refreshed
+> backend/worker/redis/backup) is fully built and has run real backups. Teacher course create/edit,
+> exact marker assignment, and result correction were subsequently completed on 2026-08-20. See the refreshed
 > "Remaining follow-ups" and "Known Risks" below for the full itemized list.
 
 > **2026-07-09 docs revision.** All `documents/` were revised for **lowest cost / lowest complexity**: backend runs on **one VPS via Docker Compose** (nginx + API + worker + Redis), Postgres on **Neon free tier**, frontend on **Vercel free tier**. Kubernetes (`k8s/`), Sanity CMS, Upstash, and the abandoned `admin_frontend/` + `admin_panel/` folders were **removed**. The institution model was expanded: **multiple teachers** (new `TEACHER` role), **subjects** (new top-level `Subject`), **QR attendance**, **pay-at-entrance**, and **typed online answers**. See the Decisions Log and [09-cost-and-hosting.md](./09-cost-and-hosting.md).
@@ -76,7 +88,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Stale "Render/instances" comment in `rate-limiter.ts` updated to single-VPS wording.
 
 **Remaining follow-ups (columns/enums exist; endpoints not yet wired):**
-- [ ] Apply the schema to the self-hosted Postgres in-container: `docker compose exec backend npx prisma migrate deploy` (dev DB is on `localhost:5433` for host tooling) — entrypoint currently uses `prisma db push`
+- [x] Reconcile and apply versioned migrations (2026-08-20): the API entrypoint runs fail-fast `prisma migrate deploy`; fresh PostgreSQL 16 installs and existing db-push adoption both finish with zero Prisma drift. The one-time existing-database sequence is documented in the migration guide and preserves the ledger trigger.
 - [x] Submission flow: `writtenAnswers` accepted/stored server-side (`submission.service.ts`) + frontend `WrittenAnswerPanel`/`ExamSit` wired
 - [x] Payment flow: pay-at-entrance (2026-07-14/15) — `POST /payments/collect-entrance` (`collectEntrancePayment`), `GET /users/resolve-barcode` (`resolveStudentByBarcode`, institute-scoped `StudentBarcode` then global `User.barcode` fallback), `CollectPayment`/`PaymentReceipt` frontend + `/payments/[id]` printable receipt with QR. See `payments.endpoints.md` §8.
 - [x] Attendance scan source tagging (2026-08-13): `/attendance/scan` accepts `BARCODE | QR`; the staff scanner sends `BARCODE` for wedge input and `QR` for camera decoding and displays the source in the live roster.
@@ -86,6 +98,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] **Student account-setup flow** (2026-07-10) — NIC front/back R2 upload, register/list/delete `StudentBarcode` per institute, `setupCompleted` auto-flip (no approval gate, explicit product decision), LMS-QR auto-generated at registration. `/auth/account-setup` page + `(app)` layout redirect gate. See `account-setup.endpoints.md`.
 - [x] Physical attendance scan by **institute context** (2026-08-13): staff select an active institute; `/attendance/scan` resolves the exact `(instituteId, barcode)` `StudentBarcode` first and falls back to global `User.barcode`. Timetable-generated sessions reject a mismatched institute. No `Attendance.instituteId` migration was needed because timetable/session data remains location truth and audit metadata captures scan context.
 - [x] Recorded-video attendance (2026-07-12, PR #57): `VideoPlayer.tsx` wires `POST /attendance/video` via player.js `timeupdate`/`ended` events (marks after ~30s forward-watched, seek-proof), plus the missing enrollment gate on the endpoint itself.
+- [x] Zoom attendance reconciliation + teacher reporting (2026-08-17): `GET/POST /attendance/session/:sessionId/reconciliation` fetches Zoom's completed-meeting participant rows, aggregates reconnects, matches server-controlled index suffix/email without guessing, excludes inactive/non-course enrollments, previews before applying, and inserts missing rows idempotently with an audit event. The `/attendance` UI exposes session rosters + Sync to SUPER_ADMIN and owning TEACHER; front-desk ADMIN keeps the entrance scanner only.
 - [x] **Audit log viewer** (2026-07-10) — `/admin/audit` (SUPER_ADMIN-gated), action + date-range filters, expandable rows for IP/user-agent/metadata. Also fixed a real bug found while building it: the route was gated to `Role.ADMIN` (front-desk) instead of `Role.SUPER_ADMIN` — a leftover from before the 2026-07-09 role-enum remap that locked the actual super-admin out and let front-desk read the full trail. See `audit.endpoints.md`.
 - [x] **Notification bell + settings** (2026-07-10) — new `Notification`/`NotificationSetting` models, `NotificationService.dispatch()` single entry point (in-app + settings-gated SMS, fires SSE `NOTIFICATION_CREATED`), wired into results-published and payment confirmed/overridden. `/admin/notification-settings` (SUPER_ADMIN) toggles per (scenario, channel); the bell in `TopBar` is the **first frontend SSE consumer** in the codebase — `RESULTS_PUBLISHED`/`TIMETABLE_UPDATED`/`EXAM_CONTROL` still have no frontend listener, a separate pre-existing gap. See `notifications.endpoints.md`.
 - [ ] Actor-vs-target privilege guard audit: `assertCanManagePrivilegedTarget` now covers `PATCH /:id/status` and `PATCH /:id/barcode` (2026-07-10 fix, see Decisions Log) — `PATCH /:id/role` is separately SUPER_ADMIN-only at the route level so needs no change, but re-check any *new* admin-on-user mutation for the same actor/target gap before shipping it
@@ -94,12 +107,12 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Profile edit + credential management (2026-07-13, PR #66) — see `docs/superpowers/specs/2026-07-13-profile-edit-credential-management-design.md`.
 - [x] Teacher-scoped read gaps found and fixed (2026-07-15, **implemented**): `assertCourseAccess` was missing from `exam.service.ts` (`listExams`/`getExamById`), `video.service.ts` (`listVideosByClass`/`getVideoById`/`generateStreamUrl`), `submission.service.ts` (`listSubmissions`), and `class-session.service.ts` (`listClassSessions`/`getClassSessionById`) — any TEACHER could view another teacher's exam content (incl. answers), recordings, submissions, and session schedule. `MARKER` scoping (`ensureMarkerAssigned`) and front-desk `ADMIN` route-gating were both independently verified correct — not part of the gap. Fixed via subagent-driven-development (23 new Vitest cases across 4 new test files, one review-cycle fix on `submission.service.ts` — an `if/else` had to be corrected to two independent `if`s), then live-stack verified with two real teacher accounts on different courses. See `docs/superpowers/specs/2026-07-15-teacher-marker-visibility-scoping-design.md`.
 - [ ] **Security/correctness hardening found in the 2026-07-15 gap audit** (not yet fixed):
-  - `timetable.service.ts` hard-deletes a `TimetableSlot` (`prisma.timetableSlot.delete(...)`) despite an inbound FK from `ClassSession.timetableSlotId` and an existing-but-unused `isActive` column that looks built for exactly this soft-disable — violates the repo's soft-delete-only invariant.
+  - ✅ Fixed 2026-08-17: `DELETE /timetable/slots/:id` now sets `isActive: false`, preserves generated-session links, and remains safe when repeated. The existing PATCH path restores with `isActive: true`; service tests cover missing, unauthorized, repeated-disable, and repeated-restore cases, and the SUPER_ADMIN timetable view labels inactive slots.
   - ✅ Fixed 2026-07-22: `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` now carry `checkIdempotency`, and the live frontend callers send per-action `Idempotency-Key` UUIDs. `POST /users/me/nic/confirm` remains consciously excluded because it is already idempotent by object-key upsert.
   - ✅ Fixed 2026-08-13: PayHere webhook signature checks now use `crypto.timingSafeEqual`, matching Zoom/Bunny webhook verification.
-- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** the teacher-marker-visibility-scoping fix (below) added dedicated test files for `exam.service.ts`, `video.service.ts`, `submission.service.ts`, and `class-session.service.ts` (24 new cases total) — those four are no longer gaps. Still zero coverage: `access.service.ts` (the core enrolled+paid content gate — the most important remaining one), `enrollment.service.ts`, `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, `subject.service.ts`, `stream.service.ts`.
-- [x] **CI quality gate** (2026-08-13): `.github/workflows/ci.yml` runs locked installs, Prisma validation/generation, backend/frontend tests, frontend typecheck, and both production builds on PRs into `dev`/`main`, with one aggregate `Quality Gate` check. Lint remains a recorded follow-up because backend has no ESLint config and frontend has five pre-existing findings.
-- [ ] **MARKER/front-desk ADMIN can read any exam, unscoped** (found during teacher-marker-visibility-scoping's final review, 2026-07-15): `exam.routes.ts`'s `GET /` and `GET /:id` carry only `verifyToken`, no `requireRole` at all — unlike every other route in that file. Any authenticated role, including `MARKER` and front-desk `ADMIN`, can list every exam and fetch any exam's detail (paper PDF presigned URL + full MCQ payload with answers) with zero scoping. Pre-existing, not introduced or fixed by the TEACHER-scoping work above — needs its own spec (likely: route-level `requireRole` restricting these two endpoints to roles that should see exam content, or a `MarkerAssignment`-style check inside the service, mirroring `submission.service.ts`'s existing `listSubmissions` MARKER handling).
+- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** dedicated coverage now exists for exam, video, submission, class-session, enrollment learning-state, and subject-teacher assignment services. Still zero direct coverage: `access.service.ts` (the core enrolled+paid content gate — the most important remaining one), `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, and `stream.service.ts`.
+- [x] **CI quality gate** (2026-08-13; lint completed 2026-08-17; migration proof added 2026-08-20): `.github/workflows/ci.yml` runs locked installs, Prisma validation/generation, fresh migration deploy + zero-drift verification, legacy db-push baseline adoption, backend/frontend lint and tests, frontend typecheck, and both production builds on PRs into `dev`/`main`, with one aggregate `Quality Gate` check. The backend now has a locked ESLint/typescript-eslint flat config; application code and unit tests are covered, while legacy live-stack diagnostic scripts already excluded from `tsconfig.json` remain a separate cleanup follow-up. The frontend's five React 19 findings were fixed rather than suppressed, with regression tests for payment search cancellation, route-driven mobile-nav closing, and current SSE callback delivery.
+- [x] **Exam read-role leak fixed**: `GET /` and `GET /:id` explicitly allow only SUPER_ADMIN, TEACHER, MARKER, and STUDENT; service-level scoping limits teachers to owned courses, markers to assigned exams with answer keys stripped, and students to enrolled courses and valid time windows. Front-desk ADMIN is rejected at the route.
 
 ---
 
@@ -111,10 +124,10 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 1 | Auth & User Management | 🟡 In Progress | JWT auth, role-based access, user CRUD, barcode assignment |
 | 2 | Class Management | 🟡 In Progress | Class sessions, attendance (barcode + Zoom webhook), video recordings |
 | 3 | Exam System | 🟡 In Progress | Exam CRUD, paper PDF upload, MCQ engine, answer submission, server timers |
-| 4 | Marking & Results | 🟡 In Progress | Marker assignment + grading API done; UI pending |
-| 5 | Payments | 🟡 In Progress | PayHere + bulk upload API done; role-aware `/payments` UI ✅ (2026-07-11) — student overview/history + admin summary/records/bulk-upload; new `GET /payments/summary` aggregate. PayHere live charge works end-to-end. **Pay-at-entrance + printable receipts ✅ (2026-07-14/15)** — `collectEntrancePayment`, barcode resolution, `CollectPayment`/`PaymentReceipt` + `/payments/[id]`. **Payment override UI still absent** (backend `PAYMENT_OVERRIDDEN` audit action + `PATCH /:id/override` exist; no frontend) — genuine remaining gap. Refunds still absent. |
+| 4 | Marking & Results | 🟡 In Progress | Exact marker assignment, grading, publishing, and audited published-result correction are available in the UI; richer moderation workflows remain. |
+| 5 | Payments | 🟡 In Progress | PayHere, bulk upload, pay-at-entrance, receipts, and payment override UI are built. **Immutable adjustment/refund ledger ✅ (2026-08-19)** — atomic append-only override/refund events, completed-external-refund recording, net reporting, terminal `REFUNDED` protection, migration + DB trigger, and SUPER_ADMIN ledger UI. Provider-initiated refunds, voids, compensating/re-payment flows, discounts, and installments remain. |
 | 6 | Notifications & Real-Time | 🟡 In Progress | Notification bell + settings ✅ (2026-07-10); RESULTS_PUBLISHED/TIMETABLE_UPDATED/EXAM_CONTROL SSE events still have no frontend listener (confirmed still true 2026-07-15) |
-| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — verified: 18 Vitest+RTL unit tests, `tsc`+`build` green, and a headless-Chromium UI smoke on the live Docker stack: create/edit/deactivate/filter/duplicate-409 for both + ADMIN bounced by the SSR gate); audit log viewer ✅ (2026-07-10); financial reports ✅ (2026-07-12, SUPER_ADMIN-only `/admin/reports` — revenue trend / by-course / by-method / outstanding, new `GET /payments/reports` aggregate, Recharts). Payment-override UI (see Phase 5) and the "Sync Attendance" reconciliation button (see Known Risks) are this phase's two remaining concrete gaps. |
+| 7 | Admin Dashboard | 🟡 In Progress | User management UI ✅ (incl. reactivate/list-inactive); subjects + institutes management pages ✅ (2026-07-11, SUPER_ADMIN-only, wired to existing `/subjects` + `/institutes` CRUD — verified: 18 Vitest+RTL unit tests, `tsc`+`build` green, and a headless-Chromium UI smoke on the live Docker stack: create/edit/deactivate/filter/duplicate-409 for both + ADMIN bounced by the SSR gate); audit log viewer ✅ (2026-07-10); financial reports ✅ (2026-07-12); Zoom attendance reconciliation + teacher reporting ✅ (2026-08-17); payment override UI ✅ (2026-08-19). |
 | 8 | Student Dashboard | 🟡 In Progress | Home/dashboard, classes, timetable, exams (incl. taking), submissions, payments, attendance, video player, live classes — all built |
 | 9 | Polish & Hardening | 🟡 In Progress | Backend hardening in progress; frontend polish pending |
 | 10 | Deployment | ⬜ Not Started | Vercel + EC2 + Upstash setup, DNS, staging/prod pipeline, monitoring |
@@ -212,7 +225,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
 - [x] Implement Bunny.net video token generation (IP-bound)
 - [x] Build class schedule page (student view) — `(app)/timetable/page.tsx`
-- [x] Build attendance scanner page (admin/front-desk view) — `(app)/attendance/page.tsx` staff branch (SUPER_ADMIN/ADMIN) is a working entrance scanner (updated 2026-08-13): institute→class→session picker, institute-scoped keyboard-wedge + camera-QR (`@zxing/browser`) scanning → `POST /attendance/scan`, live deduped/source-labelled roster (`GET /attendance/session/:id`), and manual mark-by-name (`GET /users?search` → `POST /attendance/manual`). TEACHER/MARKER still `ComingSoon`
+- [x] Build attendance scanner/report page — `(app)/attendance/page.tsx` keeps the working SUPER_ADMIN/ADMIN entrance scanner (institute→class→session, wedge/camera QR, live roster, manual fallback) and now gives SUPER_ADMIN/TEACHER an ownership-scoped session roster + Zoom reconciliation preview/apply view (2026-08-17). MARKER remains intentionally unsupported.
 - [ ] Build video player component with DRM black-screen detection — `components/features/VideoPlayer.tsx` (187 lines) plays video but has **no watermark overlay and no black-screen detection**; `02-architecture.md §7.1` describes these as if built for VOD — that description is aspirational/stale for the watermark specifically, don't trust it without checking the component
 
 ---
@@ -258,7 +271,8 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Build payment page (student view) — `(app)/payments/page.tsx` role-aware: STUDENT sees per-course this-month Pay/Paid cards (reuses the initiate→PayHere flow) + filterable history (2026-07-11)
 - [x] Build payment dashboard (admin view) — SUPER_ADMIN/ADMIN: month summary (`GET /payments/summary`), status/month-filtered records table, and Excel bulk upload with per-row results (2026-07-11)
 - [x] Pay-at-entrance (2026-07-14/15) — `collectEntrancePayment` + barcode resolution + `CollectPayment` UI + printable `PaymentReceipt`/`/payments/[id]`, see Phase S follow-ups above
-- [ ] Build payment override UI (super admin) — backend `PAYMENT_OVERRIDDEN` audit action + `PATCH /:id/override` exist; frontend not built — **confirmed still absent 2026-07-15** (genuine remaining gap)
+- [x] Build payment override UI (super admin) — record-row action opens an explicit review form, sends a fresh `Idempotency-Key`, validates amount/note, preserves failures, refreshes on success, and remains hidden from front-desk ADMIN (2026-08-19)
+- [x] Build immutable payment adjustment/refund ledger (2026-08-19) — `PaymentAdjustment`, `refundedAmount`, terminal `REFUNDED`, database mutation-rejection trigger, atomic service writes, self-scoped reads, completed-refund endpoint/UI, and net summary/report calculations
 
 ---
 
@@ -283,7 +297,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Build audit log viewer — `/admin/audit` (2026-07-10), see Phase S follow-ups above for the role-guard bug fixed alongside it
 - [x] Build financial reports page (2026-07-12) — `/admin/reports` (SUPER_ADMIN-only), `GET /payments/reports` aggregate, Recharts revenue-trend/by-course/by-method/outstanding views
 - [x] Build support tools (password reset, account unlock) — profile/credential management shipped 2026-07-13 (`docs/superpowers/specs/2026-07-13-profile-edit-credential-management-design.md`); "account unlock" remains the existing activate/deactivate toggle
-- [ ] Implement "Sync Attendance" reconciliation button (genuine gap — **confirmed still absent 2026-07-15**, no reconciliation function/route/UI found anywhere)
+- [x] Implement "Sync Attendance" reconciliation workflow (2026-08-17) — completed-meeting Zoom preview, safe identity matching, active-enrollment check, idempotent apply, audit event, and SUPER_ADMIN/TEACHER UI
 
 ---
 
@@ -328,10 +342,10 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [ ] Provision one VPS (Hetzner/DigitalOcean, ~$5–12/mo); install Docker + Compose
 - [ ] Point `api.` DNS (Cloudflare) at the VPS; nginx TLS via Let's Encrypt
 - [ ] Set a strong `POSTGRES_PASSWORD` + `BACKUP_ENCRYPTION_PASSPHRASE` in `backend/.env`; configure `BACKUP_RCLONE_REMOTE` (off-site) + `BACKUP_HEALTHCHECK_URL`
-- [ ] Run `docker compose up -d --build` (postgres + nginx + API + worker + Redis + backup); then `prisma migrate deploy` in-container
+- [ ] Run `docker compose up -d --build` on the VPS (postgres + nginx + API + worker + Redis + backup); verify the API entrypoint's automatic `prisma migrate deploy` and clean migration status
 - [ ] Run one restore drill ([12 §8](./12-data-backup-and-recovery.md)) before cutover
 - [ ] Set up Sentry projects (frontend + backend, free tier)
-- [x] GitHub Actions quality gate: Prisma validate/generate + backend/frontend test/type/build on PRs to `dev`/`main` (2026-08-13). Branch-protection setting and SSH deploy-on-merge remain external/production follow-ups.
+- [x] GitHub Actions quality gate: Prisma validate/generate, fresh/legacy migration proofs, backend/frontend test/type/build on PRs to `dev`/`main` (2026-08-13; migration checks 2026-08-20). Branch-protection setting and SSH deploy-on-merge remain external/production follow-ups.
 - [ ] Smoke test full system
 - [ ] Production cutover + monitoring
 - [ ] See [09-cost-and-hosting.md](./09-cost-and-hosting.md) for the full runbook + cost table
@@ -396,7 +410,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Webhook spam from flaky student connections | Upsert-based webhook handlers (Zoom/Bunny `updateMany`; PayHere `findUnique`+`update` on the pre-existing row) | ✅ Done |
 | Database cascade delete via FK | Soft deletes + `onDelete: Restrict`/`SetNull` (no `Cascade` anywhere in `schema.prisma`, confirmed 2026-07-15) | ✅ Done |
 | Multi-worker cron job collision | BullMQ distributed queue | ✅ Done |
-| **New 2026-07-15:** `timetable.service.ts` hard-deletes a `TimetableSlot` row despite an inbound FK and an unused `isActive` column | Switch to soft-delete (`isActive: false`) matching every other model | ⬜ To implement |
+| **New 2026-07-15:** `timetable.service.ts` hard-deletes a `TimetableSlot` row despite an inbound FK and an unused `isActive` column | Switch to soft-delete (`isActive: false`) matching every other model | ✅ Done (2026-08-17) |
 | **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ✅ Done (2026-08-13) |
 | **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ✅ Done (2026-07-22) |
 | **New 2026-07-15:** 10/21 backend services have zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | ⬜ To implement |

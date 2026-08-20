@@ -28,6 +28,7 @@ enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
+  REFUNDED
 }
 
 enum PaymentMethod {
@@ -35,6 +36,11 @@ enum PaymentMethod {
   ENTRANCE // paid in person at the front desk
   BULK // Excel import
   MANUAL // owner/admin adjustment
+}
+
+enum PaymentAdjustmentType {
+  OVERRIDE
+  REFUND
 }
 
 enum SubmissionStatus {
@@ -111,18 +117,21 @@ model User {
   emailChangedAt    DateTime? // cooldown anchor — self email changes
   passwordChangedAt DateTime? // cooldown anchor — self password changes
 
-  permission        Permission?        @relation("UserPermission")
-  enrollments       Enrollment[]
-  taughtCourses     Course[]           @relation("CourseTeacher") // courses this TEACHER teaches
-  studentBarcodes   StudentBarcode[] // per-institute barcodes
-  attendance        Attendance[]
-  submissions       Submission[]
-  actorAuditLogs    AuditLog[]         @relation("AuditActor")
-  markerAssignments MarkerAssignment[] @relation("AssignedMarker")
-  collectedPayments Payment[]          @relation("PaymentCollector") // ENTRANCE/MANUAL payments taken
-  smsLogs           SmsLog[]
-  notifications     Notification[]
-  refreshTokens     RefreshToken[]
+  permission         Permission?         @relation("UserPermission")
+  enrollments        Enrollment[]
+  taughtCourses      Course[]            @relation("CourseTeacher") // courses this TEACHER teaches
+  subjectAssignments SubjectTeacher[]    @relation("SubjectTeacher")
+  courseProgress     CourseContentProgress[]
+  studentBarcodes    StudentBarcode[] // per-institute barcodes
+  attendance         Attendance[]
+  submissions        Submission[]
+  actorAuditLogs     AuditLog[]          @relation("AuditActor")
+  markerAssignments  MarkerAssignment[]  @relation("AssignedMarker")
+  collectedPayments  Payment[]           @relation("PaymentCollector") // ENTRANCE/MANUAL payments taken
+  paymentAdjustments PaymentAdjustment[] @relation("PaymentAdjustmentActor")
+  smsLogs            SmsLog[]
+  notifications      Notification[]
+  refreshTokens      RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -178,7 +187,8 @@ model Subject {
   description String?
   isActive    Boolean @default(true)
 
-  courses Course[]
+  courses            Course[]
+  teacherAssignments SubjectTeacher[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,12 +197,12 @@ model Subject {
 }
 
 model Course {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   year        Int
   description String?
-  monthlyFee  Decimal  @db.Decimal(10, 2)
-  isActive    Boolean  @default(true)
+  monthlyFee  Decimal @db.Decimal(10, 2)
+  isActive    Boolean @default(true)
 
   // Display assets shown on the course page / dashboard
   bannerUrl   String? // wide banner image URL
@@ -208,6 +218,7 @@ model Course {
   classSessions  ClassSession[]
   exams          Exam[]
   timetableSlots TimetableSlot[]
+  contentProgress CourseContentProgress[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -217,6 +228,44 @@ model Course {
   @@index([teacherId])
   @@index([year])
   @@index([isActive])
+}
+
+// SUPER_ADMIN-controlled teaching scope. A teacher may create courses only
+// inside subjects assigned here; existing Course ownership is backfilled into
+// this table by the additive migration.
+model SubjectTeacher {
+  id String @id @default(uuid())
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  teacherId String
+  teacher   User   @relation("SubjectTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  assignedAt DateTime @default(now())
+
+  @@unique([subjectId, teacherId])
+  @@index([subjectId])
+  @@index([teacherId])
+}
+
+// Student-specific read marker for course content. Absence means the student
+// has not opened the course since enrolling; opening it upserts lastSeenAt.
+model CourseContentProgress {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  lastSeenAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
 }
 
 model Enrollment {
@@ -242,13 +291,14 @@ model Enrollment {
 }
 
 model Payment {
-  id           String        @id @default(uuid())
-  amount       Decimal       @db.Decimal(10, 2)
-  status       PaymentStatus @default(PENDING)
-  method       PaymentMethod @default(ONLINE)
-  payhereId    String?       @unique
-  paymentMonth String
-  note         String?
+  id             String        @id @default(uuid())
+  amount         Decimal       @db.Decimal(10, 2)
+  status         PaymentStatus @default(PENDING)
+  method         PaymentMethod @default(ONLINE)
+  payhereId      String?       @unique
+  paymentMonth   String
+  note           String?
+  refundedAmount Decimal       @default(0) @db.Decimal(10, 2)
 
   enrollmentId String
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
@@ -259,9 +309,11 @@ model Payment {
   collectedAtInstituteId String?
   collectedAtInstitute   Institute? @relation(fields: [collectedAtInstituteId], references: [id], onDelete: SetNull)
   collectedViaBarcode    String? // raw barcode value that identified the student — a
-                                  // point-in-time snapshot, not a live FK, since
-                                  // StudentBarcode rows can be hard-deleted later
-                                  // and this must stay a stable audit fact
+  // point-in-time snapshot, not a live FK, since
+  // StudentBarcode rows can be hard-deleted later
+  // and this must stay a stable audit fact
+
+  adjustments PaymentAdjustment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -272,6 +324,30 @@ model Payment {
   @@index([method])
   @@index([paymentMonth])
   @@index([collectedAtInstituteId])
+}
+
+model PaymentAdjustment {
+  id                  String                @id @default(uuid())
+  type                PaymentAdjustmentType
+  amount              Decimal?              @db.Decimal(10, 2)
+  statusBefore        PaymentStatus
+  statusAfter         PaymentStatus
+  paymentAmountBefore Decimal               @db.Decimal(10, 2)
+  paymentAmountAfter  Decimal               @db.Decimal(10, 2)
+  reason              String
+  externalReference   String?
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  createdById String
+  createdBy   User   @relation("PaymentAdjustmentActor", fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([paymentId, createdAt])
+  @@index([createdById])
+  @@index([type])
 }
 
 model ClassSession {

@@ -38,7 +38,10 @@ export function CollectPayment() {
   const router = useRouter();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searchResponse, setSearchResponse] = useState<{ term: string; results: User[] }>({
+    term: "",
+    results: [],
+  });
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -52,7 +55,7 @@ export function CollectPayment() {
 
   const [history, setHistory] = useState<Payment[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [month, setMonth] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [amount, setAmount] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -62,18 +65,26 @@ export function CollectPayment() {
 
   useEffect(() => {
     const term = searchTerm.trim();
-    if (term.length < 2) {
-      setSearchResults([]);
-      return;
-    }
+    if (term.length < 2) return;
+
+    let cancelled = false;
     const t = setTimeout(() => {
       api
         .get<ApiList<User>>(`/users?search=${encodeURIComponent(term)}&role=STUDENT&limit=8`)
-        .then((r) => setSearchResults(r.data))
-        .catch(() => setSearchResults([]));
+        .then((r) => {
+          if (!cancelled) setSearchResponse({ term, results: r.data });
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResponse({ term, results: [] });
+        });
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [searchTerm]);
+
+  const searchResults = searchResponse.term === searchTerm.trim() ? searchResponse.results : [];
 
   const selectStudent = (
     s: SelectedStudent,
@@ -84,7 +95,7 @@ export function CollectPayment() {
     setInstituteId(resolvedInstituteId);
     setMatchedBarcode(resolvedBarcode);
     setSearchTerm("");
-    setSearchResults([]);
+    setSearchResponse({ term: "", results: [] });
     setScanError(null);
     setEnrollmentId("");
     setEnrollments([]);
@@ -119,9 +130,15 @@ export function CollectPayment() {
     return monthsFrom(start, end).filter((m) => !paid.has(m));
   }, [selectedEnrollment, history]);
 
+  const defaultMonth = outstandingMonths.includes(currentPaymentMonth())
+    ? currentPaymentMonth()
+    : (outstandingMonths[0] ?? "");
+  const month = outstandingMonths.includes(selectedMonth) ? selectedMonth : defaultMonth;
+
   const selectEnrollment = (id: string): void => {
     setEnrollmentId(id);
-    setMonth("");
+    setSelectedMonth("");
+    setAmount(enrollments.find((enrollment) => enrollment.id === id)?.course.monthlyFee ?? "");
     setSubmitError(null);
     setHistoryLoading(true);
     api
@@ -131,20 +148,10 @@ export function CollectPayment() {
       .finally(() => setHistoryLoading(false));
   };
 
-  useEffect(() => {
-    if (outstandingMonths.length === 0) {
-      setMonth("");
-      return;
-    }
-    const current = currentPaymentMonth();
-    setMonth(outstandingMonths.includes(current) ? current : outstandingMonths[0]!);
-  }, [outstandingMonths]);
-
-  useEffect(() => {
-    if (selectedEnrollment && month) {
-      setAmount(selectedEnrollment.course.monthlyFee);
-    }
-  }, [selectedEnrollment, month]);
+  const selectMonth = (nextMonth: string): void => {
+    setSelectedMonth(nextMonth);
+    setAmount(selectedEnrollment?.course.monthlyFee ?? "");
+  };
 
   const submit = async (): Promise<void> => {
     if (!selectedEnrollment || !month) return;
@@ -299,7 +306,7 @@ export function CollectPayment() {
                       <span className="text-xs font-medium text-muted-foreground">Month</span>
                       <select
                         value={month}
-                        onChange={(e) => setMonth(e.target.value)}
+                        onChange={(e) => selectMonth(e.target.value)}
                         aria-label="Select month to collect"
                         className={`${inputClass} w-full`}
                       >

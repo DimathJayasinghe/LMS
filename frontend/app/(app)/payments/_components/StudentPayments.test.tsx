@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StudentPayments } from "./StudentPayments";
 import { ApiError } from "@/lib/api";
@@ -54,6 +54,7 @@ const payment = (
 ): Payment => ({
   id,
   amount,
+  refundedAmount: "0.00",
   status,
   method: "ONLINE",
   paymentMonth: month,
@@ -131,7 +132,7 @@ describe("StudentPayments — this month", () => {
     );
     await user.click(screen.getByRole("button", { name: /Pay/ }));
 
-    lastHandlers().onCompleted("order-1");
+    act(() => lastHandlers().onCompleted("order-1"));
     expect(await screen.findByText(/show as paid once confirmed/i)).toBeInTheDocument();
     expect(refresh).toHaveBeenCalled();
   });
@@ -146,7 +147,7 @@ describe("StudentPayments — this month", () => {
     );
     await user.click(screen.getByRole("button", { name: /Pay/ }));
 
-    lastHandlers().onError("Card declined");
+    act(() => lastHandlers().onError("Card declined"));
     expect(await screen.findByText("Card declined")).toBeInTheDocument();
   });
 

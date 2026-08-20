@@ -13,6 +13,7 @@ import type {
   ListSubmissionsQuery,
   McqAnswersInput,
   CompleteSubmissionInput,
+  CorrectPublishedResultInput,
 } from '@/schemas/submission.schema';
 import * as StreamService from '@/services/stream.service';
 import * as NotificationService from '@/services/notification.service';
@@ -501,7 +502,7 @@ export const submitMarks = async (
     where: { id: submissionId },
     select: {
       ...submissionDetailSelect,
-      exam: { select: { id: true, totalMarks: true, type: true } },
+      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true } },
     },
   });
 
@@ -511,6 +512,14 @@ export const submitMarks = async (
 
   // Verify the marker is assigned to this exam
   await assertMarkerAssignedToExam(markerId, submission.exam.id);
+
+  if (submission.exam.isPublished) {
+    throw new AppError(
+      'RESULTS_ALREADY_PUBLISHED',
+      409,
+      'Markers cannot change marks after results are published. Ask the course teacher to record a correction.',
+    );
+  }
 
   if (submission.status !== SubmissionStatus.COMPLETED) {
     throw new AppError(
@@ -546,8 +555,12 @@ export const submitMarks = async (
 // Super Admin publishes results — sets exam.isPublished = true,
 // making marks visible to students.
 
-export const publishResults = async (examId: string): Promise<PublishResult> => {
+export const publishResults = async (
+  examId: string,
+  actor: AuthenticatedUser,
+): Promise<PublishResult> => {
   const exam = await ensureExamActive(examId);
+  await assertCourseAccess(exam.courseId, actor);
 
   if (exam.isPublished) {
     throw new AppError('ALREADY_PUBLISHED', 400, 'Results for this exam are already published.');
@@ -602,6 +615,70 @@ export const publishResults = async (examId: string): Promise<PublishResult> => 
     totalSubmissions,
     gradedSubmissions,
   };
+};
+
+export const correctPublishedResult = async (
+  submissionId: string,
+  input: CorrectPublishedResultInput,
+  actor: AuthenticatedUser,
+) => {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    select: {
+      ...submissionDetailSelect,
+      exam: {
+        select: {
+          id: true,
+          title: true,
+          totalMarks: true,
+          isPublished: true,
+          courseId: true,
+        },
+      },
+    },
+  });
+  if (!submission) {
+    throw new AppError('SUBMISSION_NOT_FOUND', 404, 'Submission not found.');
+  }
+
+  await assertCourseAccess(submission.exam.courseId, actor);
+  if (!submission.exam.isPublished) {
+    throw new AppError(
+      'RESULTS_NOT_PUBLISHED',
+      409,
+      'Use the assigned marker workflow until results are published.',
+    );
+  }
+  if (submission.status !== SubmissionStatus.COMPLETED) {
+    throw new AppError('SUBMISSION_INCOMPLETE', 400, 'An incomplete submission cannot be corrected.');
+  }
+  if (input.marks > submission.exam.totalMarks) {
+    throw new AppError(
+      'MARKS_EXCEED_TOTAL',
+      400,
+      `Marks cannot exceed the exam total of ${submission.exam.totalMarks}.`,
+    );
+  }
+
+  const before = { marks: submission.marks, feedback: submission.feedback };
+  const updated = await prisma.submission.update({
+    where: { id: submissionId },
+    data: {
+      marks: input.marks,
+      feedback: input.feedback === undefined ? submission.feedback : input.feedback,
+      gradedAt: new Date(),
+    },
+    select: submissionDetailSelect,
+  });
+
+  await StreamService.broadcastResultsPublished({
+    examId: submission.exam.id,
+    courseId: submission.exam.courseId,
+    examTitle: submission.exam.title,
+    publishedAt: new Date().toISOString(),
+  });
+
+  return { submission: updated, before, reason: input.reason };
 };
 
 // ─── Answer Validation Helper ─────────────────────────────

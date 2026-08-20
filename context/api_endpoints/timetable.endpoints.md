@@ -65,7 +65,7 @@ before login).
 | GET | `/api/timetable/slots` | Any | List slots (the timetable) |
 | GET | `/api/timetable/slots/:id` | Any | Get a slot |
 | PATCH | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Update a slot |
-| DELETE | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Delete a slot |
+| DELETE | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Soft-disable a slot |
 | POST | `/api/timetable/generate` | SUPER_ADMIN, ADMIN | Materialize sessions for a date range |
 
 ### GET `/api/timetable/public/upcoming`
@@ -118,11 +118,15 @@ Query (all optional): `courseId`, `instituteId`, `dayOfWeek`. `200` → `{ statu
 
 ### PATCH `/api/timetable/slots/:id`
 
-Body: any subset of the create fields. `200` → updated slot.
+Body: any subset of the create fields. `200` → updated slot. Send
+`{ "isActive": true }` to restore a disabled slot; repeating the restore is safe.
 
 ### DELETE `/api/timetable/slots/:id`
 
-`200` → `{ status, data: null, message }`. Already-generated sessions are **kept** (their `timetableSlotId` is nulled).
+`200` → `{ status, data: null, message }`. The row is retained with
+`isActive: false`, so repeating the request is safe. Already-generated sessions
+and their `timetableSlotId` links are **kept**. Future generation ignores the
+disabled slot until it is restored through `PATCH`.
 
 ### POST `/api/timetable/generate`
 

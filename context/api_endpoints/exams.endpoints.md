@@ -111,6 +111,8 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | DELETE | `/:id` | SUPER_ADMIN, TEACHER (own) | Soft delete an exam. |
 | POST | `/:id/upload-url` | SUPER_ADMIN, TEACHER (own) | Generate presigned upload URL for paper PDF. |
 | POST | `/:id/assign-markers` | SUPER_ADMIN, TEACHER (own) | Assign markers to an exam. |
+| GET | `/:id/markers` | SUPER_ADMIN, TEACHER (own) | List the exact marker assignment set. |
+| PUT | `/:id/markers` | SUPER_ADMIN, TEACHER (own) | Replace the exact marker assignment set; idempotency key required. |
 
 ## Endpoint Details
 
@@ -313,6 +315,13 @@ Generate a presigned upload URL for a PDF exam paper.
 Confirms the paper PDF reached R2 (HeadObject) and persists `paperPdfUrl`. Same role + MCQ/deleted
 guards as the presign. Body: `{ "key": "exams/<examId>/paper.pdf" }` (must match this exam's key
 prefix → `403 FORBIDDEN_KEY`). Errors: `409 UPLOAD_NOT_FOUND` if the object never landed. Idempotent.
+
+### GET/PUT `/:id/markers` (2026-08-20)
+
+Owning TEACHER or SUPER_ADMIN may list and replace the exact marker set. PUT accepts
+`{ "markerIds": ["uuid"] }`, allows an empty set, requires `Idempotency-Key`, rejects inactive or
+non-MARKER accounts, and emits `MARKERS_ASSIGNED`. The older additive `/assign-markers` route remains
+for compatibility; new clients use the exact-set endpoint.
 
 ### POST `/:id/assign-markers`
 

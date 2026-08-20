@@ -6,6 +6,7 @@ import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	assignMarkersSchema,
+	replaceMarkersSchema,
 	createExamSchema,
 	examIdParamSchema,
 	examUploadUrlSchema,
@@ -119,6 +120,13 @@ export const confirmPaperUpload = asyncHandler(
 		const input = examPaperConfirmSchema.parse(req.body);
 		const result = await ExamService.confirmExamPaper(id, input, req.user!);
 
+		void AuditService.log({
+			action: AUDIT_ACTION.EXAM_PAPER_ATTACHED,
+			targetType: 'Exam',
+			targetId: id,
+			context: extractAuditContext(req),
+		});
+
 		res.status(200).json({
 			status: 'success',
 			data: result,
@@ -150,3 +158,30 @@ export const assignMarkers = asyncHandler(
 	},
 );
 
+export const listMarkers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { id } = examIdParamSchema.parse(req.params);
+	const markers = await ExamService.listExamMarkers(id, req.user!);
+	res.status(200).json({ status: 'success', data: markers, count: markers.length });
+});
+
+export const replaceMarkers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { id } = examIdParamSchema.parse(req.params);
+	const input = replaceMarkersSchema.parse(req.body);
+	const markers = await ExamService.replaceExamMarkers(id, input, req.user!);
+
+	void AuditService.log({
+		action: AUDIT_ACTION.MARKERS_ASSIGNED,
+		description: `${markers.length} marker(s) assigned`,
+		targetType: 'Exam',
+		targetId: id,
+		metadata: { markerIds: markers.map((assignment) => assignment.markerId) },
+		context: extractAuditContext(req),
+	});
+
+	res.status(200).json({
+		status: 'success',
+		data: markers,
+		count: markers.length,
+		message: 'Exam markers updated.',
+	});
+});

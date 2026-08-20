@@ -106,6 +106,18 @@ export interface Subject {
   updatedAt: string;
 }
 
+export interface AcademicStaff {
+  id: string;
+  name: string;
+  role: "TEACHER" | "MARKER";
+}
+
+export interface SubjectTeacherAssignment {
+  teacherId: string;
+  assignedAt: string;
+  teacher: AcademicStaff;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -165,6 +177,16 @@ export interface Enrollment {
   createdAt: string;
   updatedAt: string;
   course: EnrollmentCourse;
+}
+
+export interface LearningEnrollment extends Enrollment {
+  learning: {
+    newLessonCount: number;
+    latestLessonAt: string | null;
+    upcomingSessionCount: number;
+    nextSessionAt: string | null;
+    lastSeenAt: string;
+  };
 }
 
 export interface TimetableSlot {
@@ -240,6 +262,12 @@ export interface Exam {
 export interface ExamDetail extends Exam {
   paperPdfUrl: string | null;
   mcqPayload: McqPayload | null;
+}
+
+export interface ExamMarkerAssignment {
+  markerId: string;
+  assignedAt: string;
+  marker: AcademicStaff;
 }
 
 /** Map of question ID → selected option IDs (MCQ). */
@@ -407,13 +435,15 @@ export interface LiveClassToken {
 
 // ── Payments & attendance ────────────────────────────────────────────────────
 export type PaymentMethod = "ONLINE" | "ENTRANCE" | "BULK" | "MANUAL";
-export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED";
+export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
 export type AttendanceSource = "QR" | "BARCODE" | "ZOOM_WEBHOOK" | "MANUAL";
+export type PaymentAdjustmentType = "OVERRIDE" | "REFUND";
 
 /** A payment row (see payments.endpoints.md). Matches the service's `paymentSelect`. */
 export interface Payment {
   id: string;
   amount: string; // decimal as string
+  refundedAmount: string; // completed external refunds, decimal as string
   status: PaymentStatus;
   method: PaymentMethod;
   payhereId?: string | null;
@@ -448,6 +478,27 @@ export interface PaymentSummary {
   paidCount: number;
   pendingCount: number;
   failedCount: number;
+  refundedCount: number;
+}
+
+export interface PaymentAdjustment {
+  id: string;
+  type: PaymentAdjustmentType;
+  amount: string | null;
+  statusBefore: PaymentStatus;
+  statusAfter: PaymentStatus;
+  paymentAmountBefore: string;
+  paymentAmountAfter: string;
+  reason: string;
+  externalReference: string | null;
+  createdAt: string;
+  createdBy: { id: string; name: string };
+}
+
+export interface RefundPaymentResult {
+  payment: Pick<Payment, "id" | "amount" | "refundedAmount" | "status">;
+  adjustment: PaymentAdjustment;
+  remainingRefundable: string;
 }
 
 /** GET /payments/reports?month= — super-admin financial report (see payments.endpoints.md). */
@@ -494,6 +545,40 @@ export interface AttendanceRecord {
     date: string;
     courseId: string;
   };
+}
+
+export interface AttendanceReconciliation {
+  sessionId: string;
+  zoomMeetingId: string;
+  summary: {
+    zoomRows: number;
+    matchedStudents: number;
+    alreadyRecorded: number;
+    missing: number;
+    unmatched: number;
+    ignored: number;
+  };
+  participants: {
+    userId: string;
+    name: string;
+    email: string;
+    indexNumber: number;
+    firstJoinAt: string;
+    lastLeaveAt: string;
+    durationSeconds: number;
+    occurrences: number;
+    status: "MISSING" | "RECORDED";
+  }[];
+  unmatched: {
+    name: string;
+    email: string | null;
+    reason: "NO_MATCH" | "AMBIGUOUS" | "NOT_ENROLLED";
+    occurrences: number;
+  }[];
+}
+
+export interface AppliedAttendanceReconciliation extends AttendanceReconciliation {
+  applied: number;
 }
 
 // ── Audit log (see audit.endpoints.md) ───────────────────────────────────────

@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { Role } from '@prisma/client';
 import * as AttendanceController from '@/controllers/attendance.controller';
+import * as ReconciliationController from '@/controllers/attendance-reconciliation.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
 import { verifyZoomWebhook } from '@/middleware/zoom-webhook.middleware';
 import {
@@ -25,6 +27,26 @@ attendanceRoutes.post(
   requireRole(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(scanBarcodeSchema),
   AttendanceController.scanBarcode,
+);
+
+// ─── Zoom Attendance Reconciliation ─────────────────────────
+// Teachers may recover missed webhooks only for courses they own. Front-desk
+// ADMIN remains read-only for online attendance; SUPER_ADMIN bypasses ownership.
+attendanceRoutes.get(
+  '/session/:sessionId/reconciliation',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+  validateParams(attendanceSessionParamsSchema),
+  ReconciliationController.previewZoomAttendance,
+);
+
+attendanceRoutes.post(
+  '/session/:sessionId/reconciliation',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+  validateParams(attendanceSessionParamsSchema),
+  checkIdempotency,
+  ReconciliationController.reconcileZoomAttendance,
 );
 
 // ─── Zoom Webhook ────────────────────────────────────────────

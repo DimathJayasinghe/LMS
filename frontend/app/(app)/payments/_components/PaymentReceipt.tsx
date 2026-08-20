@@ -57,6 +57,12 @@ export function PaymentReceipt({ payment }: { payment: Payment }) {
           </Row>
           <Row label="Month">{payment.paymentMonth}</Row>
           <Row label="Amount">{formatCurrency(payment.amount)}</Row>
+          {Number(payment.refundedAmount) > 0 && (
+            <>
+              <Row label="Refunded">−{formatCurrency(payment.refundedAmount)}</Row>
+              <Row label="Net paid">{formatCurrency(Number(payment.amount) - Number(payment.refundedAmount))}</Row>
+            </>
+          )}
           <Row label="Method">{METHOD_LABELS[payment.method]}</Row>
           {payment.method !== "ONLINE" && payment.collectedBy && (
             <Row label="Collected by">{payment.collectedBy.name}</Row>

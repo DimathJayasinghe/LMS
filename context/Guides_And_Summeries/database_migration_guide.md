@@ -1,6 +1,6 @@
 # Database Migration Guide — Safe, Zero-Data-Loss Workflow
 
-> **Goal**: Apply Prisma schema changes to the production (Neon) database without ever losing existing data.
+> **Goal**: Apply Prisma schema changes to the self-hosted PostgreSQL database without losing existing data.
 
 ---
 
@@ -22,9 +22,11 @@
 | Command | Purpose | Data Safety |
 |---|---|---|
 | `prisma db push` | Prototyping — syncs schema to DB directly | ⚠️ Can silently drop columns/tables if `--accept-data-loss` is used |
-| `prisma migrate dev` | Production — generates versioned SQL migrations | ✅ You review the SQL **before** it touches the DB |
+| `prisma migrate dev` | Development — generates versioned SQL migrations | ✅ You review the SQL **before** deployment |
 
-**Current setup**: The Docker entrypoint runs `prisma db push` on startup. This is fine for additive changes (new tables, new columns with defaults), but **dangerous for destructive changes** (renaming columns, removing fields, changing types).
+**Current setup (since 2026-08-20)**: the API container runs `prisma migrate deploy` on startup and
+stops if migration deployment fails. `prisma db push` is reserved for disposable prototyping and the
+CI-only legacy-adoption simulation.
 
 > [!IMPORTANT]
 > For production, always prefer `prisma migrate` over `prisma db push`. Migrations give you a reviewable SQL file and full rollback history.
@@ -200,7 +202,8 @@ Prisma cannot detect renames — it treats them as a drop + create. Instead:
 
 ### Current Entrypoint (`docker-entrypoint.sh`)
 
-The entrypoint currently runs `prisma db push` on startup. For a migration-based workflow, switch to `prisma migrate deploy`:
+The API container applies reviewed migrations before serving traffic. The worker does not run migrations,
+so concurrent API/worker startup cannot duplicate the deploy:
 
 ```sh
 #!/bin/sh
@@ -208,10 +211,7 @@ set -e
 
 if [ "$1" = "npm" ] && [ "$2" = "run" ] && [ "$3" = "start" ]; then
   echo "Applying pending migrations..."
-  npx prisma migrate deploy 2>&1 | grep -v "Datasource" || {
-    echo "ERROR: prisma migrate deploy failed — container will NOT start"
-    exit 1
-  }
+  npx --no-install prisma migrate deploy
 fi
 
 exec "$@"
@@ -220,6 +220,46 @@ exec "$@"
 > [!WARNING]
 > Unlike `db push`, `migrate deploy` will **fail and stop the container** if there's a conflict — this is intentional. You should fix the migration before deploying rather than silently corrupting data.
 
+### One-time adoption for a database previously managed by `db push`
+
+The repository's original migration was older than the schema that `db push` had already installed.
+Migration `20260819150000_reconcile_schema_baseline` repairs fresh installs, but must **not** be executed
+against a populated db-push database. Adopt that database once before starting the new API image:
+
+1. Take and verify a database backup.
+2. Keep the existing PostgreSQL container running and build the new backend image.
+3. Prove that the existing schema already matches `schema.prisma`. A non-zero result means **stop** and
+   reconcile the drift in staging first.
+4. Mark only the historical initial and schema-reconciliation migrations as applied.
+5. Deploy all still-pending additive migrations. This includes the payment ledger (which installs the
+   append-only trigger Prisma cannot express) and the teacher-subject/content-progress migration.
+6. Require clean migration status and zero schema drift, then start the stack.
+
+```bash
+docker compose run --rm backup backup
+docker compose build backend
+
+docker compose run --rm --no-deps --entrypoint npx backend prisma migrate diff \
+  --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+docker compose run --rm --no-deps --entrypoint npx backend prisma migrate resolve \
+  --applied 20260510075330_init
+docker compose run --rm --no-deps --entrypoint npx backend prisma migrate resolve \
+  --applied 20260819150000_reconcile_schema_baseline
+docker compose run --rm --no-deps --entrypoint npx backend prisma migrate deploy
+
+docker compose run --rm --no-deps --entrypoint npx backend prisma migrate status
+docker compose run --rm --no-deps --entrypoint npx backend prisma migrate diff \
+  --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+docker compose up -d
+```
+
+Do not mark `20260819090000_payment_adjustment_ledger` or
+`20260820090000_teacher_subject_and_content_progress` as applied manually. Deploying the former
+installs the database trigger; deploying the latter creates the assignment/progress tables and
+backfills every existing course owner into its subject. Fresh databases need no adoption procedure;
+normal container startup applies all migrations in order.
+
 ### Deployment Checklist
 
 1. ☐ Edit `schema.prisma` locally
@@ -227,8 +267,9 @@ exec "$@"
 3. ☐ Review the generated SQL in `prisma/migrations/`
 4. ☐ Test locally with a copy of production data (or a staging DB)
 5. ☐ Commit the migration files + schema to git
-6. ☐ Deploy — the Docker entrypoint will run `prisma migrate deploy` automatically
-7. ☐ Verify the deployment logs show "All migrations applied"
+6. ☐ For the one legacy db-push database, complete the adoption procedure above exactly once
+7. ☐ Deploy — the Docker entrypoint will run `prisma migrate deploy` automatically
+8. ☐ Verify the deployment logs and `prisma migrate status`
 
 ---
 
@@ -252,7 +293,7 @@ npx prisma migrate dev --name revert_bad_change
 Connect to the DB and manually undo the change:
 
 ```bash
-# Connect to Neon via psql or any SQL client
+# Connect via psql or another PostgreSQL client
 psql "$DATABASE_URL"
 
 # Undo the change manually
@@ -269,14 +310,10 @@ rm -rf prisma/migrations/20260525_add_user_avatar
 npx prisma migrate dev
 ```
 
-### Option C — Neon Branch Restore
+### Option C — Restore the verified backup
 
-Since you're using Neon, you can restore from a branch/point-in-time:
-
-1. Go to the [Neon Dashboard](https://console.neon.tech)
-2. Navigate to your project → **Branches**
-3. Create a new branch from a point-in-time **before** the bad migration
-4. Point your `DATABASE_URL` to the new branch
+Use the backup/restore procedure in `context/documents/12-data-backup-and-recovery.md`. Restore into a
+scratch database first, verify it, and only then follow the explicitly confirmed live-restore path.
 
 ---
 
@@ -297,8 +334,9 @@ npx prisma migrate status
 
 # View current DB vs schema diff (dry-run, no changes)
 npx prisma migrate diff \
-  --from-schema-datasource prisma/schema.prisma \
-  --to-schema-datamodel prisma/schema.prisma
+  --from-config-datasource \
+  --to-schema prisma/schema.prisma \
+  --exit-code
 
 # Reset dev DB (DESTROYS ALL DATA — dev only!)
 npx prisma migrate reset

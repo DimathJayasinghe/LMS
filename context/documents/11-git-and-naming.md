@@ -95,8 +95,9 @@ docs(architecture): switch topology to single-VPS Compose
 - Merge requires: **tests green** (`npm run build` + `npm run test`, locally and in GitHub Actions)
   and **one review** where a
   human reviewer is available.
-- Lint is temporarily outside the required check: backend ESLint has no config and frontend has a
-  five-error baseline. Fix that debt before adding lint to CI; do not treat it as silently passing.
+- Backend and frontend lint are required CI checks. The backend baseline covers application code
+  and unit tests; legacy live-stack diagnostic scripts excluded from `tsconfig.json` remain a
+  documented follow-up rather than being silently treated as lint-clean.
 - PR description states: what changed, why, how tested, and any migration/ops step (e.g. "run `prisma migrate deploy`").
 - Never merge red CI or a partial migration. If blocked, keep the PR in draft.
 

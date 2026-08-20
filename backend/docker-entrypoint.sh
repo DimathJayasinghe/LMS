@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
-# Only run prisma db push for the main backend (not the worker).
+# Only apply migrations from the main backend (not the worker).
 # Check if the CMD is the default "npm run start" (i.e., NOT "npm run worker").
-# This avoids duplicate migration runs and prevents leaking the datasource URL.
+# Migration failure is fatal: serving code against an unknown schema is unsafe.
 if [ "$1" = "npm" ] && [ "$2" = "run" ] && [ "$3" = "start" ]; then
-  echo "Running prisma db push..."
-  npx prisma db push 2>&1 | grep -v "Datasource" || echo "Warning: prisma db push failed — DB may be out of sync"
+  echo "Applying pending Prisma migrations..."
+  npx --no-install prisma migrate deploy
 
   if [ -n "$LMS_ADMIN_EMAIL" ] && [ -n "$LMS_ADMIN_PASSWORD" ]; then
     echo "Seeding super admin account from LMS_ADMIN_EMAIL / LMS_ADMIN_PASSWORD..."

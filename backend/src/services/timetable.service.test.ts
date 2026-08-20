@@ -1,19 +1,99 @@
+import { Role } from '@prisma/client';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { classSessionFindMany } = vi.hoisted(() => ({
+const { assertCourseAccess, classSessionFindMany, timetableSlotFindUnique, timetableSlotUpdate } = vi.hoisted(() => ({
+	assertCourseAccess: vi.fn(),
 	classSessionFindMany: vi.fn(),
+	timetableSlotFindUnique: vi.fn(),
+	timetableSlotUpdate: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		classSession: { findMany: classSessionFindMany },
+		timetableSlot: {
+			findUnique: timetableSlotFindUnique,
+			update: timetableSlotUpdate,
+		},
 	},
 }));
 
-import { listPublicUpcoming } from './timetable.service';
+vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
+
+import { deleteSlot, listPublicUpcoming, updateSlot } from './timetable.service';
+
+const teacher = { userId: 'teacher-1', role: Role.TEACHER };
 
 beforeEach(() => {
+	assertCourseAccess.mockReset().mockResolvedValue(undefined);
 	classSessionFindMany.mockReset().mockResolvedValue([]);
+	timetableSlotFindUnique.mockReset();
+	timetableSlotUpdate.mockReset();
+});
+
+describe('timetable slot lifecycle', () => {
+	it('soft-disables a slot without deleting its generated-session relationship', async () => {
+		timetableSlotFindUnique.mockResolvedValue({ id: 'slot-1', courseId: 'course-1' });
+		timetableSlotUpdate.mockResolvedValue({ id: 'slot-1', isActive: false });
+
+		await deleteSlot('slot-1', teacher);
+
+		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', teacher);
+		expect(timetableSlotUpdate).toHaveBeenCalledWith({
+			where: { id: 'slot-1' },
+			data: { isActive: false },
+		});
+	});
+
+	it('allows repeated disable requests with the same final state', async () => {
+		timetableSlotFindUnique.mockResolvedValue({ id: 'slot-1', courseId: 'course-1' });
+		timetableSlotUpdate.mockResolvedValue({ id: 'slot-1', isActive: false });
+
+		await deleteSlot('slot-1', teacher);
+		await deleteSlot('slot-1', teacher);
+
+		expect(timetableSlotUpdate).toHaveBeenCalledTimes(2);
+		expect(timetableSlotUpdate).toHaveBeenNthCalledWith(2, {
+			where: { id: 'slot-1' },
+			data: { isActive: false },
+		});
+	});
+
+	it('rejects a missing slot before checking course ownership', async () => {
+		timetableSlotFindUnique.mockResolvedValue(null);
+
+		await expect(deleteSlot('missing-slot', teacher)).rejects.toMatchObject({
+			code: 'SLOT_NOT_FOUND',
+			statusCode: 404,
+		});
+		expect(assertCourseAccess).not.toHaveBeenCalled();
+		expect(timetableSlotUpdate).not.toHaveBeenCalled();
+	});
+
+	it('does not disable a slot when course access is denied', async () => {
+		timetableSlotFindUnique.mockResolvedValue({ id: 'slot-1', courseId: 'course-1' });
+		assertCourseAccess.mockRejectedValue({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
+
+		await expect(deleteSlot('slot-1', teacher)).rejects.toMatchObject({
+			code: 'FORBIDDEN_COURSE',
+			statusCode: 403,
+		});
+		expect(timetableSlotUpdate).not.toHaveBeenCalled();
+	});
+
+	it('restores an inactive slot idempotently through the existing update path', async () => {
+		timetableSlotFindUnique.mockResolvedValue({ id: 'slot-1', courseId: 'course-1' });
+		timetableSlotUpdate.mockResolvedValue({ id: 'slot-1', isActive: true });
+
+		await updateSlot('slot-1', { isActive: true }, teacher);
+		await updateSlot('slot-1', { isActive: true }, teacher);
+
+		expect(timetableSlotUpdate).toHaveBeenCalledTimes(2);
+		expect(timetableSlotUpdate).toHaveBeenNthCalledWith(2, expect.objectContaining({
+			where: { id: 'slot-1' },
+			data: expect.objectContaining({ isActive: true }),
+		}));
+	});
 });
 
 describe('listPublicUpcoming — public marketing-page timetable', () => {

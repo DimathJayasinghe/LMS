@@ -22,3 +22,9 @@ export const listSubjectsQuerySchema = z.object({
 });
 
 export type ListSubjectsQuery = z.infer<typeof listSubjectsQuerySchema>;
+
+export const replaceSubjectTeachersSchema = z.object({
+  teacherIds: z.array(z.string().uuid()).max(50),
+});
+
+export type ReplaceSubjectTeachersInput = z.infer<typeof replaceSubjectTeachersSchema>;

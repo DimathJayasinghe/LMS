@@ -41,9 +41,9 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}"
 `backend/src/config/env.ts` validates all env vars via Zod at boot and **crashes immediately** if
 anything required is missing — check there before assuming an env var exists.
 
-`npm run lint` is wired in `package.json` for both apps but the backend currently has no
-`eslint.config.js` (ESLint v9 flat-config migration never happened) — it will error, not just warn.
-Don't assume it runs clean without checking first.
+`npm run lint` is wired and enforced in CI for both apps. The backend uses an ESLint flat config
+with typescript-eslint; legacy live-stack diagnostic scripts excluded from `tsconfig.json` are also
+excluded from this initial lint baseline, while application code and unit tests are linted.
 
 ## Architecture
 

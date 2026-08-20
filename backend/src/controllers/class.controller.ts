@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Role } from '@prisma/client';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as ClassService from '@/services/class.service';
@@ -21,6 +22,7 @@ export const createClass = asyncHandler(async (req: Request, res: Response): Pro
 		description: `Class "${classData.name} ${classData.year}" created`,
 		targetType: 'Course',
 		targetId: classData.id,
+		metadata: { subjectId: classData.subjectId, teacherId: classData.teacherId },
 		context: extractAuditContext(req),
 	});
 
@@ -69,9 +71,21 @@ export const updateClass = asyncHandler(async (req: Request, res: Response): Pro
 	const classData = await ClassService.updateClass(classId, input, req.user!);
 
 	void AuditService.log({
-		action: AUDIT_ACTION.CLASS_UPDATED,
+		action:
+			req.user!.role === Role.SUPER_ADMIN && input.teacherId
+				? AUDIT_ACTION.COURSE_TEACHER_ASSIGNED
+				: AUDIT_ACTION.CLASS_UPDATED,
+		description:
+			req.user!.role === Role.SUPER_ADMIN && input.teacherId
+				? `Teacher assigned to class "${classData.name}"`
+				: `Class "${classData.name}" updated`,
 		targetType: 'Course',
 		targetId: classId,
+		metadata: {
+			subjectId: classData.subjectId,
+			teacherId: classData.teacherId,
+			changedFields: Object.keys(input),
+		},
 		context: extractAuditContext(req),
 	});
 
@@ -81,4 +95,3 @@ export const updateClass = asyncHandler(async (req: Request, res: Response): Pro
 		message: 'Class updated successfully.',
 	});
 });
-

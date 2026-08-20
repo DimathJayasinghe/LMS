@@ -13,6 +13,7 @@ import {
 	type ExamUploadUrlInput,
 	type ExamPaperConfirmInput,
 	type ListExamsQuery,
+	type ReplaceMarkersInput,
 	type UpdateExamInput,
 } from '@/schemas/exam.schema';
 import * as StreamService from '@/services/stream.service';
@@ -102,13 +103,6 @@ const normalizeExamDetail = (
 });
 
 // ─── Helpers ───────────────────────────────────────────────
-
-const ensureCourseExists = async (courseId: string): Promise<void> => {
-	const course = await prisma.course.findUnique({ where: { id: courseId } });
-	if (!course) {
-		throw new AppError('CLASS_NOT_FOUND', 404, 'Class (course) not found.');
-	}
-};
 
 const ensureExamExists = async (examId: string): Promise<Prisma.ExamGetPayload<{
 	select: typeof examDetailSelect;
@@ -555,4 +549,63 @@ export const assignMarkersToExam = async (
 		assignedMarkerIds: assignments.map((assignment) => assignment.markerId),
 		assignedCount: assignments.length,
 	};
+};
+
+const markerAssignmentSelect = {
+	markerId: true,
+	assignedAt: true,
+	marker: { select: { id: true, name: true, role: true } },
+} satisfies Prisma.MarkerAssignmentSelect;
+
+export const listExamMarkers = async (examId: string, actor: AuthenticatedUser) => {
+	const exam = await ensureExamExists(examId);
+	await assertCourseAccess(exam.courseId, actor);
+
+	return prisma.markerAssignment.findMany({
+		where: { examId },
+		select: markerAssignmentSelect,
+		orderBy: { marker: { name: 'asc' } },
+	});
+};
+
+export const replaceExamMarkers = async (
+	examId: string,
+	input: ReplaceMarkersInput,
+	actor: AuthenticatedUser,
+) => {
+	const exam = await ensureExamExists(examId);
+	await assertCourseAccess(exam.courseId, actor);
+	if (exam.deletedAt) {
+		throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');
+	}
+
+	const markerIds = Array.from(new Set(input.markerIds));
+	const markers = await prisma.user.findMany({
+		where: { id: { in: markerIds }, role: Role.MARKER, deletedAt: null },
+		select: { id: true },
+	});
+	if (markers.length !== markerIds.length) {
+		throw new AppError(
+			'INVALID_MARKER_IDS',
+			400,
+			'Some markers are missing, inactive, or not assigned the MARKER role.',
+		);
+	}
+
+	await prisma.$transaction(async (tx) => {
+		await tx.markerAssignment.deleteMany({
+			where: {
+				examId,
+				...(markerIds.length > 0 ? { markerId: { notIn: markerIds } } : {}),
+			},
+		});
+		if (markerIds.length > 0) {
+			await tx.markerAssignment.createMany({
+				data: markerIds.map((markerId) => ({ markerId, examId })),
+				skipDuplicates: true,
+			});
+		}
+	});
+
+	return listExamMarkers(examId, actor);
 };

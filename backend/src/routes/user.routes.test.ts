@@ -7,6 +7,7 @@ vi.mock('@/config/logger', () => ({
 }));
 vi.mock('@/controllers/user.controller', () => ({
   listUsers: vi.fn(),
+  listAcademicStaff: vi.fn(),
   getMe: vi.fn(),
   getNicUploadUrl: vi.fn(),
   confirmNicUpload: vi.fn(),
@@ -32,12 +33,21 @@ import { userRoutes } from './user.routes';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import * as UserController from '@/controllers/user.controller';
 
-function handlesFor(router: any, method: string, path: string): unknown[] {
-  const layer = router.stack.find(
-    (l: any) => l.route?.path === path && l.route?.methods?.[method],
+interface RouterLayer {
+  route?: {
+    path: string;
+    methods: Record<string, boolean>;
+    stack: Array<{ handle: unknown }>;
+  };
+}
+
+function handlesFor(router: unknown, method: string, path: string): unknown[] {
+  const stack = (router as { stack: RouterLayer[] }).stack;
+  const layer = stack.find(
+    (candidate) => candidate.route?.path === path && candidate.route.methods[method],
   );
   if (!layer) throw new Error(`route ${method.toUpperCase()} ${path} not found`);
-  return layer.route.stack.map((s: any) => s.handle);
+  return layer.route!.stack.map((entry) => entry.handle);
 }
 
 describe('user routes — idempotency wiring', () => {

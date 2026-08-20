@@ -79,8 +79,9 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
 4. Clone the repo; create `backend/.env` (never commit it) — set a **strong `POSTGRES_PASSWORD`**, a
    `BACKUP_ENCRYPTION_PASSPHRASE`, and (recommended) `BACKUP_RCLONE_REMOTE` for off-site backups.
 5. Issue a Let's Encrypt cert for nginx (certbot or an nginx-companion container); enable auto-renew.
-6. `docker compose up -d --build` — this also brings up Postgres (fresh `pgdata` volume) and the backup service.
-7. Apply the schema: `docker compose exec backend npx prisma migrate deploy` (first boot only / after schema changes).
+6. `docker compose up -d --build` — this brings up Postgres and backups; the API applies checked-in
+   migrations before it starts and fails fast if they cannot be applied.
+7. Verify `docker compose logs backend` and `docker compose exec backend npx prisma migrate status`.
 8. Configure off-site + run one restore drill (see [12 §5, §8](./12-data-backup-and-recovery.md)).
 
 **Each deploy:**
@@ -88,9 +89,12 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
 cd /srv/lms && git pull && docker compose up -d --build && docker compose ps
 ```
 
+Databases created by the pre-2026-08-20 `db push` entrypoint require the one-time baseline-adoption
+sequence in `context/Guides_And_Summeries/database_migration_guide.md` **before** the new API image starts.
+
 **GitHub Actions (recommended):** on merge to `main`, run build + tests, then SSH to the VPS and run the deploy line above. Zero secrets in the repo — use Actions secrets for the SSH key.
 
-**Services in `docker-compose.yml`:** `postgres` (self-hosted DB on the `pgdata` volume, not exposed to the host), `nginx` (TLS + reverse proxy → API), `backend` (Express API), `worker` (BullMQ), `redis`, and `backup` (scheduled encrypted dumps → `./backups` + off-site). Migrations run **in-container** (`docker compose exec backend npx prisma migrate deploy`) since the DB has no host port.
+**Services in `docker-compose.yml`:** `postgres` (self-hosted DB on the `pgdata` volume, not exposed to the host), `nginx` (TLS + reverse proxy → API), `backend` (Express API), `worker` (BullMQ), `redis`, and `backup` (scheduled encrypted dumps → `./backups` + off-site). The backend entrypoint runs migrations in-container before serving traffic; the worker never runs them.
 
 ---
 

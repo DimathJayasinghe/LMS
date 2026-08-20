@@ -96,7 +96,9 @@ export default async function TimetablePage() {
                       {daySlots.map((slot) => (
                         <li
                           key={slot.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3"
+                          className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 ${
+                            slot.isActive ? "" : "opacity-60"
+                          }`}
                         >
                           <div>
                             <p className="text-sm font-medium text-foreground">
@@ -107,6 +109,7 @@ export default async function TimetablePage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
+                            {!slot.isActive && <Badge variant="secondary">Inactive</Badge>}
                             {slot.classType && (
                               <Badge variant="outline">
                                 {slot.classType === "ONLINE" ? "Online" : "Physical"}

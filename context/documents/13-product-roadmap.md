@@ -4,7 +4,7 @@
 > This is an inventory, not a promise to ship every competitor feature. Each item still needs a
 > focused design, acceptance criteria, security review, tests, and a separate PR.
 
-**Last reviewed:** 2026-08-13
+**Last reviewed:** 2026-08-20
 
 ## Product Direction
 
@@ -37,16 +37,17 @@ These are prerequisites for calling the platform production-ready.
 
 | Capability | Current state | Next deliverable |
 |---|---|---|
-| CI quality gate | Backend/frontend test, type/build and Prisma validation workflow added 2026-08-13 | Require `Quality Gate` in branch protection; establish a green lint baseline, then add lint/audit checks |
-| Timetable data integrity | Slot deletion hard-deletes despite session FK | Soft-disable slots, idempotent restore, service tests, UI state |
+| CI quality gate | Backend/frontend lint, test, type/build, Prisma validation, fresh migrations, zero drift, and legacy-baseline adoption are enforced in the aggregate gate (migration proof added 2026-08-20) | Require `Quality Gate` in branch protection; add dependency/security audit policy |
+| Timetable data integrity | Soft-disable, idempotent restore, service tests, and inactive UI state added 2026-08-17 | Verify in staging with generated sessions before release |
 | Environment/secret readiness | Known malformed Bunny key and manual provider setup | Startup validation, staging checklist, webhook/provider health page |
-| Database migrations | Compose entrypoint still uses `prisma db push` | Versioned migration deploy in staging/production plus rollback/runbook |
-| Attendance reconciliation | Webhook retry only; no staff recovery workflow | Zoom reconciliation endpoint/job, preview diff, admin Sync action, audit trail |
+| Database migrations | ✅ Versioned baseline reconciled; fail-fast `migrate deploy`, fresh-install drift check, legacy db-push adoption proof, and runbook completed 2026-08-20 | Execute the documented one-time adoption on the real pre-launch database, then retain migration/drift CI on every change |
+| Attendance reconciliation | Ownership-scoped Zoom preview/apply, active-enrollment matching, idempotent writes, audit trail, and SUPER_ADMIN/TEACHER UI added 2026-08-17 | Verify the OAuth scope and completed-meeting behavior against the staging Zoom account |
 | Upload resilience | Single presigned PUT; no resume/expiry refresh | Multipart/resumable uploads for large papers/answers/NIC media, retry and cancel |
 | Authentication continuity | Reactive refresh after 401 only | Proactive refresh, cross-tab coordination, session-expiry UX, device/session management |
 | Backup/restore readiness | Backup engine exists; production drill pending | Configure off-site target, restore drill, RPO/RTO evidence, alerting |
 | Observability | Logging/Sentry foundations exist | Health dashboard, queue lag, webhook failures, provider status, alert thresholds |
 | Accessibility baseline | Partial component-level accessibility | WCAG 2.2 AA audit, keyboard flows, focus management, contrast, reduced motion, captions |
+| Dependency security | Backend and frontend full npm audits report zero known advisories after the 2026-08-20 Next/Prisma/Sentry/Multer/parser upgrades | Keep audit in CI and review framework/provider advisories on every release |
 
 ## P1 - Complete the Core Teaching Product
 
@@ -54,16 +55,16 @@ Build these in coherent vertical slices after P0.
 
 | Capability group | Required functionality |
 |---|---|
-| Course authoring | Teacher create/edit courses; modules/topics; reorderable lessons; draft/scheduled publishing; files, links, text, audio and video materials; prerequisites |
+| Course authoring | ✅ Teacher-owned course create/edit, subject approval, sessions and video recordings completed 2026-08-20; modules/topics, reorderable lessons, drafts/scheduling, files/links/text/audio, and prerequisites remain |
 | Assignments | Separate assignment model from exams; due dates; attachments; individual/group allocation; drafts; late policy; resubmission; status tracking |
 | Gradebook | Course-wide gradebook; categories and weights; grading scales; manual columns; import/export; moderation; release controls; student grade view |
 | Rubrics and feedback | Reusable rubrics; criteria scoring; inline PDF/image annotation; private comments; comment bank; submission and grade history |
 | Question bank and tests | Reusable/versioned questions; more question types; random pools; shuffling; multiple attempts; negative/partial marking; answer explanations |
 | Exam accommodations | Per-student extra time, attempt count, availability windows, alternative location/channel, interruption recovery, audit visibility |
-| Teacher/marker workspace | Teacher attendance views; marker queues; bulk actions; filters; workload status; timetable-slot authoring; session management |
+| Teacher/marker workspace | ✅ Owned-class scope, session/video actions, exact marker assignment, marker post-release lock, and audited teacher correction completed 2026-08-20; bulk queues, workload filters and timetable-slot authoring remain |
 | Communication | Course announcements; threaded discussions/Q&A; mentions; attachments; moderation; read state; notification preferences |
 | Calendar and tasks | Unified timetable, exam and assignment calendar; due-soon list; reminders; iCal export; conflict detection |
-| Payments operations | Payment override UI; refunds/voids; immutable adjustment ledger; receipt reissue; discounts/scholarships; installments; aging report |
+| Payments operations | Override UI and immutable completed-refund ledger completed 2026-08-19; provider refunds/voids, compensating re-payment flow, receipt reissue, discounts/scholarships, installments, aging report |
 | Guardian access | Guardian-student links; consent/verification; attendance, upcoming/missing work and payment summaries; privacy-limited portal; SMS digest |
 | Student support | Search; bookmarks; notes; progress checklist; downloadable resources; low-bandwidth mode; clear missing/late/upcoming work views |
 
@@ -110,10 +111,10 @@ Every feature slice must include:
 
 ## Recommended Delivery Order
 
-1. CI pipeline and timetable soft-delete integrity.
-2. Attendance reconciliation and teacher attendance reporting.
-3. Payment override/refund ledger and admin UI.
-4. Teacher course/timetable authoring UI.
+1. ✅ CI pipeline and timetable soft-delete integrity.
+2. ✅ Reconcile versioned database migrations and prove fresh/legacy upgrade paths (2026-08-20); the production restore drill remains an operations task.
+3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
+4. **Next:** Timetable-slot authoring UI plus the core `access.service` test gap.
 5. Course modules/materials and assignments.
 6. Gradebook, rubrics, feedback, and expanded question bank.
 7. Calendar, discussions, guardian summaries, and notification preferences.

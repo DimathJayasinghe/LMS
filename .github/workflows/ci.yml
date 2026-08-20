@@ -19,6 +19,20 @@ jobs:
     name: Backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: lms_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d lms_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -49,6 +63,25 @@ jobs:
       - name: Generate Prisma client
         run: npm run prisma
 
+      - name: Apply migrations to a fresh PostgreSQL database
+        run: npx prisma migrate deploy
+
+      - name: Require zero migration drift
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Verify adoption of a legacy db-push schema
+        env:
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/lms_ci?schema=baseline_adoption
+        run: |
+          npx prisma db push
+          npx prisma migrate resolve --applied 20260510075330_init
+          npx prisma migrate resolve --applied 20260819150000_reconcile_schema_baseline
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Lint
+        run: npm run lint
+
       - name: Run tests
         run: npm run test
 
@@ -78,6 +111,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Run tests
         run: npm run test

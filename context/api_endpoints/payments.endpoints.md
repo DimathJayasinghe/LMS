@@ -4,7 +4,9 @@
 
 > **Roles (2026-07-09)**: enum is `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. Below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk). `PATCH /:id/override` is `SUPER_ADMIN` only.
 >
-> **New**: `Payment.method` (`ONLINE` | `ENTRANCE` | `BULK` | `MANUAL`) + `collectedById` (staff who took an `ENTRANCE`/`MANUAL` payment).
+> `Payment.status` is `PENDING | SUCCESS | FAILED | REFUNDED`. `amount` is the original gross
+> amount; `refundedAmount` is the sum of completed refunds. Financial totals report the net retained
+> amount. A fully refunded row is terminal and cannot be reused by PayHere, entrance, bulk, or override flows.
 
 ### 1. Initiate Payment (PayHere Checkout)
 Generates the payload required to redirect a student to PayHere checkout.
@@ -84,7 +86,7 @@ Allows a student to view their own payment history.
 - **Method:** `GET`
 - **Auth:** Required (Role: `STUDENT`)
 - **Query Params:**
-  - `status`: `PENDING` | `SUCCESS` | `FAILED` (optional)
+  - `status`: `PENDING` | `SUCCESS` | `FAILED` | `REFUNDED` (optional)
   - `paymentMonth`: `YYYY-MM` (optional)
   - `enrollmentId`: `uuid` (optional)
 - **Success Response (200 OK):**
@@ -132,11 +134,13 @@ Aggregate one month's payments for the admin dashboard.
       "collectedTotal": "22000.00",
       "paidCount": 7,
       "pendingCount": 1,
-      "failedCount": 0
+      "failedCount": 0,
+      "refundedCount": 1
     }
   }
   ```
-  > `collectedTotal` sums `amount` over `status = SUCCESS` for the month. Route is registered
+  > `collectedTotal` sums `amount - refundedAmount` over `status = SUCCESS` for the month. Fully
+  > refunded rows are excluded and reported by `refundedCount`. Route is registered
   > **before** `GET /:id` so `summary` isn't parsed as a payment id.
 
 ### 4c. Financial Report (Super Admin)
@@ -167,7 +171,8 @@ Institute-wide financial analytics powering the `/admin/reports` page.
   }
   ```
   > `trend` is always exactly **12 entries**, oldest→newest, ending at `month`, zero-filled where a
-  > month has no `SUCCESS` payments. `byCourse`/`byMethod` aggregate `SUCCESS` payments for `month`
+  > month has no `SUCCESS` payments. `trend`/`byCourse`/`byMethod` subtract completed partial refunds
+  > from `SUCCESS` payments for `month`
   > (byCourse sorted by collected desc). `outstanding` counts **active** enrolments with no `SUCCESS`
   > payment for `month`, and sums their course `monthlyFee` as `expected`. All money values are
   > decimal strings (`"N.NN"`). Route is registered **before** `GET /:id` so `reports` isn't parsed
@@ -205,7 +210,7 @@ Sets `method: MANUAL` and `collectedById` to the acting admin's id.
 - **Auth:** Required (Role: `ADMIN`)
 - **Headers:** `Idempotency-Key: <uuid>` **required** — a fresh v4 UUID per request. Missing or
   malformed keys return 400; replaying the same key returns the original stored response. The
-  override UI is not built yet, but must send one key per override action when added.
+  SUPER_ADMIN payment-record UI sends one key per reviewed override action.
 - **Body:**
   ```json
   {
@@ -214,6 +219,41 @@ Sets `method: MANUAL` and `collectedById` to the acting admin's id.
     "note": "Paid cash at center"
   }
   ```
+  `note` is required (3–500 characters) because it becomes the immutable ledger reason. `REFUNDED`
+  cannot be selected through override; only the completed-refund endpoint can produce that status.
+  The `/payments` record table exposes this action only to `SUPER_ADMIN`. The review form starts
+  from the current status and amount, requires a fresh reason, validates positive amounts and the 500-character note
+  limit, preserves values on failure, and refreshes the server-rendered record after success.
+
+### 6b. List Payment Adjustments
+
+- **URL:** `/:id/adjustments`
+- **Method:** `GET`
+- **Auth:** `SUPER_ADMIN`, `ADMIN`, or owning `STUDENT`
+- **Response:** append-only `OVERRIDE`/`REFUND` events with before/after status and amount snapshots,
+  reason, optional external reference, actor, and creation time. Students are self-scoped.
+
+### 6c. Record a Completed Refund
+
+Records money that a SUPER_ADMIN has **already returned outside the LMS**. It does not call PayHere,
+a bank, or a cash-payment provider.
+
+- **URL:** `/:id/refunds`
+- **Method:** `POST`
+- **Auth:** `SUPER_ADMIN` only
+- **Headers:** `Idempotency-Key: <uuid>` required
+- **Body:**
+  ```json
+  {
+    "amount": 500,
+    "reason": "Duplicate collection",
+    "externalReference": "PAYHERE-REF-123"
+  }
+  ```
+- A partial refund keeps `SUCCESS`; refunding the exact remaining balance changes the payment to
+  `REFUNDED`, which removes paid-content access. Total refunds cannot exceed the gross amount.
+- Errors: `PAYMENT_NOT_FOUND` (404), `PAYMENT_NOT_REFUNDABLE` (409),
+  `REFUND_EXCEEDS_REMAINING` (409), `REFUND_CONFLICT` (409).
 
 ### 7. Bulk Upload Payments (Admin)
 Upload an Excel file to process multiple payments at once. Sets `method: BULK` on every row

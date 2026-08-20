@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { UsersTable } from "./UsersTable";
 import type { Role, User } from "@/lib/types";
 
@@ -37,23 +38,27 @@ beforeEach(() => {
 });
 
 describe("UsersTable — Idempotency-Key on mutations", () => {
-  it("sends an Idempotency-Key on role change", () => {
+  it("sends an Idempotency-Key on role change", async () => {
+    const user = userEvent.setup();
     render(<UsersTable {...baseProps} />);
-    fireEvent.change(screen.getByLabelText("Role for Nimal"), { target: { value: "MARKER" } });
-    expect(patch).toHaveBeenCalledWith("/users/u1/role", { role: "MARKER" }, IDEM);
+    await user.selectOptions(screen.getByLabelText("Role for Nimal"), "MARKER");
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/role", { role: "MARKER" }, IDEM));
   });
 
-  it("sends an Idempotency-Key on status toggle", () => {
+  it("sends an Idempotency-Key on status toggle", async () => {
+    const user = userEvent.setup();
     render(<UsersTable {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
-    expect(patch).toHaveBeenCalledWith("/users/u1/status", { isActive: false }, IDEM);
+    await user.click(screen.getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/status", { isActive: false }, IDEM));
   });
 
-  it("sends an Idempotency-Key on barcode save", () => {
+  it("sends an Idempotency-Key on barcode save", async () => {
+    const user = userEvent.setup();
     render(<UsersTable {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: "LMS-0001" })); // enter edit mode
-    fireEvent.change(screen.getByPlaceholderText("LMS-0001"), { target: { value: "LMS-0002" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save code" }));
-    expect(patch).toHaveBeenCalledWith("/users/u1/barcode", { barcode: "LMS-0002" }, IDEM);
+    await user.click(screen.getByRole("button", { name: "LMS-0001" })); // enter edit mode
+    await user.clear(screen.getByPlaceholderText("LMS-0001"));
+    await user.type(screen.getByPlaceholderText("LMS-0001"), "LMS-0002");
+    await user.click(screen.getByRole("button", { name: "Save code" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/barcode", { barcode: "LMS-0002" }, IDEM));
   });
 });

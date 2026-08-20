@@ -5,6 +5,7 @@ import { classSessionRoutes } from '@/routes/class-session.routes';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
 	classIdParamSchema,
 	createClassSchema,
@@ -33,6 +34,7 @@ classRoutes.post(
 	verifyToken,
 	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateBody(createClassSchema),
+	checkIdempotency,
 	ClassController.createClass,
 );
 
@@ -56,5 +58,6 @@ classRoutes.patch(
 	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(classIdParamSchema),
 	validateBody(updateClassSchema),
+	checkIdempotency,
 	ClassController.updateClass,
 );

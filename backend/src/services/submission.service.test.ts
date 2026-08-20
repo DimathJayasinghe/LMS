@@ -2,24 +2,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 import { AppError } from '@/utils/app-error';
 
-const { examFindUnique, markerAssignmentFindUnique, submissionFindMany, assertCourseAccess } =
+const {
+	examFindUnique,
+	markerAssignmentFindUnique,
+	submissionFindMany,
+	submissionFindUnique,
+	submissionUpdate,
+	assertCourseAccess,
+	broadcastResultsPublished,
+} =
 	vi.hoisted(() => ({
 		examFindUnique: vi.fn(),
 		markerAssignmentFindUnique: vi.fn(),
 		submissionFindMany: vi.fn(),
+		submissionFindUnique: vi.fn(),
+		submissionUpdate: vi.fn(),
 		assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
+		broadcastResultsPublished: vi.fn(),
 	}));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		exam: { findUnique: examFindUnique },
 		markerAssignment: { findUnique: markerAssignmentFindUnique },
-		submission: { findMany: submissionFindMany },
+		submission: {
+			findMany: submissionFindMany,
+			findUnique: submissionFindUnique,
+			update: submissionUpdate,
+		},
 	},
 }));
 
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
-vi.mock('@/services/stream.service', () => ({}));
+vi.mock('@/services/stream.service', () => ({ broadcastResultsPublished }));
 vi.mock('@/services/notification.service', () => ({ dispatch: vi.fn() }));
 vi.mock('@/utils/r2', () => ({
 	createR2PresignedGetUrl: vi.fn().mockResolvedValue('https://signed.example/answer.pdf'),
@@ -27,7 +42,7 @@ vi.mock('@/utils/r2', () => ({
 	r2HeadObject: vi.fn(),
 }));
 
-import { listSubmissions } from './submission.service';
+import { correctPublishedResult, listSubmissions, submitMarks } from './submission.service';
 
 const teacher = { userId: 'teacher-1', role: Role.TEACHER } as const;
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER } as const;
@@ -56,6 +71,82 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	assertCourseAccess.mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' });
 	submissionFindMany.mockResolvedValue([]);
+	broadcastResultsPublished.mockResolvedValue(undefined);
+});
+
+const publishedSubmission = {
+	id: 'submission-1',
+	status: 'COMPLETED',
+	answerPdfUrl: null,
+	answers: null,
+	writtenAnswers: null,
+	marks: 72,
+	feedback: 'Initial feedback',
+	examId: 'exam-1',
+	userId: 'student-1',
+	submittedAt: new Date('2026-07-01T01:00:00.000Z'),
+	gradedAt: new Date('2026-07-02T00:00:00.000Z'),
+	updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+	exam: {
+		id: 'exam-1',
+		title: 'Midterm',
+		totalMarks: 100,
+		isPublished: true,
+		courseId: 'course-1',
+		type: 'WRITTEN',
+	},
+};
+
+describe('published-result immutability and correction', () => {
+	it('locks assigned markers out once results are published', async () => {
+		submissionFindUnique.mockResolvedValueOnce(publishedSubmission);
+		markerAssignmentFindUnique.mockResolvedValueOnce({ markerId: 'marker-1', examId: 'exam-1' });
+
+		await expect(
+			submitMarks('submission-1', { marks: 75 }, 'marker-1'),
+		).rejects.toMatchObject({ code: 'RESULTS_ALREADY_PUBLISHED', statusCode: 409 });
+		expect(submissionUpdate).not.toHaveBeenCalled();
+	});
+
+	it('rejects a correction from a teacher who does not own the course', async () => {
+		submissionFindUnique.mockResolvedValueOnce(publishedSubmission);
+		assertCourseAccess.mockRejectedValueOnce(forbidden);
+
+		await expect(
+			correctPublishedResult(
+				'submission-1',
+				{ marks: 75, reason: 'Transcription error' },
+				otherTeacher,
+			),
+		).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
+		expect(submissionUpdate).not.toHaveBeenCalled();
+	});
+
+	it('records a teacher correction and returns the previous value for auditing', async () => {
+		submissionFindUnique.mockResolvedValueOnce(publishedSubmission);
+		submissionUpdate.mockResolvedValueOnce({
+			...publishedSubmission,
+			marks: 75,
+			feedback: 'Corrected feedback',
+		});
+
+		const result = await correctPublishedResult(
+			'submission-1',
+			{ marks: 75, feedback: 'Corrected feedback', reason: 'Transcription error' },
+			teacher,
+		);
+
+		expect(result.before).toEqual({ marks: 72, feedback: 'Initial feedback' });
+		expect(submissionUpdate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { id: 'submission-1' },
+				data: expect.objectContaining({ marks: 75, feedback: 'Corrected feedback' }),
+			}),
+		);
+		expect(broadcastResultsPublished).toHaveBeenCalledWith(
+			expect.objectContaining({ examId: 'exam-1', courseId: 'course-1' }),
+		);
+	});
 });
 
 describe('listSubmissions — TEACHER course-ownership scoping', () => {

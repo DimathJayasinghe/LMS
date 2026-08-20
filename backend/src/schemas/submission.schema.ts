@@ -104,6 +104,14 @@ export const submitMarksSchema = z.object({
 
 export type SubmitMarksInput = z.infer<typeof submitMarksSchema>;
 
+export const correctPublishedResultSchema = z.object({
+  marks: z.coerce.number().int().min(0),
+  feedback: z.string().trim().max(2000).nullable().optional(),
+  reason: z.string().trim().min(5).max(500),
+});
+
+export type CorrectPublishedResultInput = z.infer<typeof correctPublishedResultSchema>;
+
 // ─── Publish Results ────────────────────────────────────────
 
 export const publishResultsParamsSchema = z.object({

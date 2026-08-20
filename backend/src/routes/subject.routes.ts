@@ -4,14 +4,23 @@ import * as SubjectController from '@/controllers/subject.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
   createSubjectSchema,
   listSubjectsQuerySchema,
+  replaceSubjectTeachersSchema,
   subjectIdParamSchema,
   updateSubjectSchema,
 } from '@/schemas/subject.schema';
 
 export const subjectRoutes = Router();
+
+subjectRoutes.get(
+  '/mine',
+  verifyToken,
+  requireRole(Role.TEACHER),
+  SubjectController.listMyAssignedSubjects,
+);
 
 // POST /api/subjects — Create a subject (Super Admin only)
 subjectRoutes.post(
@@ -36,6 +45,24 @@ subjectRoutes.get(
   verifyToken,
   validateParams(subjectIdParamSchema),
   SubjectController.getSubjectById,
+);
+
+subjectRoutes.get(
+  '/:id/teachers',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN),
+  validateParams(subjectIdParamSchema),
+  SubjectController.listSubjectTeachers,
+);
+
+subjectRoutes.put(
+  '/:id/teachers',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN),
+  validateParams(subjectIdParamSchema),
+  validateBody(replaceSubjectTeachersSchema),
+  checkIdempotency,
+  SubjectController.replaceSubjectTeachers,
 );
 
 // PATCH /api/subjects/:id — Update a subject (Super Admin only)

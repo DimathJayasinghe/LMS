@@ -14,8 +14,14 @@
 | GET | `/api/submissions/exam/:examId` | ADMIN, MARKER (assigned) | List submissions for an exam |
 | PATCH | `/api/submissions/:id/marks` | MARKER (assigned) | Submit marks (idempotent) |
 | POST | `/api/submissions/exam/:examId/publish` | ADMIN | Publish results for an exam |
+| PATCH | `/api/submissions/:id/result-correction` | Owning TEACHER, SUPER_ADMIN | Correct a published result with an audited reason |
 
 > **Roles updated (2026-07-09)**: `ADMIN` → **`SUPER_ADMIN`**; list + publish now also allow the exam's **`TEACHER`**; grading stays **`MARKER`** (assigned).
+>
+> **Released-result control (2026-08-20):** assigned markers may grade only before publication.
+> After publication, only the owning TEACHER or SUPER_ADMIN may call `PATCH
+> /:id/result-correction` with `{ marks, feedback?, reason }`. `reason` is required (5–500 chars),
+> marks remain bounded by the exam total, and `RESULT_CORRECTED` records before/after/reason.
 >
 > **Typed answers (2026-07-10)**: alongside `answers` (MCQ) and `answerPdfUrl` (scanned upload), students may submit typed essay/structured answers via **`writtenAnswers`** (JSON, keyed by question/part). The exam's `allowTypedAnswers` / `allowPdfUpload` flags decide which channels are accepted. A typed-only written submission needs no PDF upload, so it finalizes immediately (`status = COMPLETED`, `marks = null` until a marker grades).
 

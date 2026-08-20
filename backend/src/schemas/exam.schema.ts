@@ -98,3 +98,9 @@ export const assignMarkersSchema = z.object({
 });
 
 export type AssignMarkersInput = z.infer<typeof assignMarkersSchema>;
+
+export const replaceMarkersSchema = z.object({
+	markerIds: z.array(z.string().uuid()).max(50),
+});
+
+export type ReplaceMarkersInput = z.infer<typeof replaceMarkersSchema>;

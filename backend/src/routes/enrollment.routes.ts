@@ -9,9 +9,25 @@ import {
 	enrollmentIdParamSchema,
 	listEnrollmentsQuerySchema,
 	listMyEnrollmentsQuerySchema,
+	learningCourseParamSchema,
 } from '@/schemas/enrollment.schema';
 
 export const enrollmentRoutes = Router();
+
+enrollmentRoutes.get(
+	'/learning',
+	verifyToken,
+	requireRole(Role.STUDENT),
+	EnrollmentController.listMyLearningCourses,
+);
+
+enrollmentRoutes.post(
+	'/learning/:courseId/seen',
+	verifyToken,
+	requireRole(Role.STUDENT),
+	validateParams(learningCourseParamSchema),
+	EnrollmentController.markCourseContentSeen,
+);
 
 // POST /api/enrollments — Student self-enrolls; ADMIN/SUPER_ADMIN enroll a student.
 enrollmentRoutes.post(

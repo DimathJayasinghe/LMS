@@ -5,6 +5,7 @@ import * as LiveClassController from '@/controllers/live-class.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import { classIdParamSchema } from '@/schemas/class.schema';
 import {
   classSessionParamsSchema,
@@ -21,6 +22,7 @@ classSessionRoutes.post(
   requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(classIdParamSchema),
   validateBody(createClassSessionSchema),
+  checkIdempotency,
   ClassSessionController.createClassSession,
 );
 

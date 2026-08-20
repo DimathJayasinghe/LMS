@@ -36,7 +36,9 @@ export function SessionForm({ classId }: { classId: string }) {
       if (zoomLink.trim()) body.zoomLink = zoomLink.trim();
       if (description.trim()) body.description = description.trim();
 
-      await api.post<ApiSuccess<ClassSession>>(`/classes/${classId}/sessions`, body);
+      await api.post<ApiSuccess<ClassSession>>(`/classes/${classId}/sessions`, body, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
       router.push(`/classes/${classId}`);
       router.refresh();
     } catch (e) {

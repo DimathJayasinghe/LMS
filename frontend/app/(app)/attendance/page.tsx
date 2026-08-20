@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { ComingSoon } from "@/components/custom/ComingSoon";
 import { Badge } from "@/components/ui/badge";
 import { AttendanceQr } from "./_components/AttendanceQr";
+import { AttendanceReport } from "./_components/AttendanceReport";
 import { StaffScanner } from "./_components/StaffScanner";
 import { api } from "@/lib/api";
 import { attendanceSourceLabel } from "@/lib/attendance";
@@ -28,7 +29,7 @@ export default async function AttendancePage() {
     redirect("/auth/login");
   }
 
-  // Front-desk (SUPER_ADMIN/ADMIN) get the entrance scanner.
+  // Front-desk gets the entrance scanner; SUPER_ADMIN also gets recovery reports.
   if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
     const [classes, institutes] = await Promise.all([
       api
@@ -40,20 +41,54 @@ export default async function AttendancePage() {
         .then((r) => r.data.filter((institute) => institute.isActive))
         .catch(() => [] as Institute[]),
     ]);
-    return (
+    if (user.role === "ADMIN") return (
       <div className="mx-auto max-w-5xl">
         <PageHeader title="Attendance" description="Scan students in at the entrance." />
         <StaffScanner classes={classes} institutes={institutes} />
       </div>
     );
+
+    return (
+      <div className="mx-auto max-w-5xl space-y-10">
+        <div>
+          <PageHeader title="Attendance" description="Scan students in and recover missed online attendance." />
+          <StaffScanner classes={classes} institutes={institutes} />
+        </div>
+        <section className="space-y-4 border-t border-border pt-8">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Attendance reports</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review a session roster and preview Zoom differences before syncing them.
+            </p>
+          </div>
+          <AttendanceReport classes={classes} />
+        </section>
+      </div>
+    );
   }
 
-  // TEACHER/MARKER: read-only roster is a later phase.
-  if (user.role !== "STUDENT") {
+  if (user.role === "TEACHER") {
+    const classes = await api
+      .get<ApiList<Course>>("/classes", { cookie })
+      .then((result) => result.data.filter((course) => course.teacherId === user.id))
+      .catch(() => [] as Course[]);
+
     return (
       <div className="mx-auto max-w-5xl">
-        <PageHeader title="Attendance" description="Scan and review attendance." />
-        <ComingSoon label="The entrance scanner is coming soon" />
+        <PageHeader
+          title="Attendance reports"
+          description="Review your class rosters and recover attendance missed by Zoom webhooks."
+        />
+        <AttendanceReport classes={classes} />
+      </div>
+    );
+  }
+
+  if (user.role === "MARKER") {
+    return (
+      <div className="mx-auto max-w-5xl">
+        <PageHeader title="Attendance" description="Review attendance." />
+        <ComingSoon label="Attendance reporting is not available for markers" />
       </div>
     );
   }

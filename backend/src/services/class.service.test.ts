@@ -1,19 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { courseFindMany } = vi.hoisted(() => ({
+const { courseFindMany, courseFindFirst } = vi.hoisted(() => ({
 	courseFindMany: vi.fn(),
+	courseFindFirst: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
-		course: { findMany: courseFindMany },
+		course: { findMany: courseFindMany, findFirst: courseFindFirst },
 	},
 }));
 
-import { listPublicClasses } from './class.service';
+import { getClassById, listClasses, listPublicClasses } from './class.service';
+import { Role } from '@prisma/client';
 
 beforeEach(() => {
 	courseFindMany.mockReset().mockResolvedValue([]);
+	courseFindFirst.mockReset();
+});
+
+describe('teacher class visibility', () => {
+	it('scopes the class list to the acting teacher', async () => {
+		await listClasses({}, { userId: 'teacher-1', role: Role.TEACHER });
+
+		expect(courseFindMany.mock.calls[0]![0].where).toMatchObject({
+			teacherId: 'teacher-1',
+			isActive: true,
+		});
+	});
+
+	it('rejects direct access to another teacher\'s class', async () => {
+		courseFindFirst.mockResolvedValueOnce({
+			id: 'course-2',
+			teacherId: 'teacher-2',
+			isActive: true,
+		});
+
+		await expect(
+			getClassById('course-2', { userId: 'teacher-1', role: Role.TEACHER }),
+		).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
+	});
 });
 
 describe('listPublicClasses — public marketing-page course listing', () => {

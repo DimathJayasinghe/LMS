@@ -118,6 +118,11 @@ Returned in list and detail endpoints:
 | PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
 | GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
+| GET | `/academic-staff?role=TEACHER|MARKER` | SUPER_ADMIN; TEACHER for MARKER only | Minimal active staff directory (id/name/role only). |
+
+`GET /academic-staff` intentionally excludes email, phone, NIC, account status metadata, and other
+PII. SUPER_ADMIN uses it for subject/course ownership; an owning TEACHER may request only MARKER
+rows for exam assignment.
 
 ## Endpoint Details
 

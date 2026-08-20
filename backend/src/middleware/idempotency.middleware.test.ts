@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Request, Response } from 'express';
 
 const { findUnique, create, redisSet, redisDel } = vi.hoisted(() => ({
   findUnique: vi.fn(),
@@ -20,8 +21,10 @@ import { checkIdempotency } from './idempotency.middleware';
 const KEY = '11111111-1111-1111-1111-111111111111';
 
 // Minimal Express req/res doubles. res.status/json are chainable and record state.
-function mockRes(): any {
-  return {
+type MockResponse = Response & { body: unknown };
+
+function mockRes(): MockResponse {
+  const response = {
     statusCode: 200,
     body: undefined as unknown,
     status(code: number) {
@@ -33,9 +36,10 @@ function mockRes(): any {
       return this;
     },
   };
+  return response as unknown as MockResponse;
 }
-function mockReq(headers: Record<string, string> = {}): any {
-  return { headers, originalUrl: '/api/payments/p1/override' };
+function mockReq(headers: Record<string, string> = {}): Request {
+  return { headers, originalUrl: '/api/payments/p1/override' } as unknown as Request;
 }
 
 beforeEach(() => {

@@ -12,6 +12,7 @@ import {
 	listMyPaymentsQuerySchema,
 	listPaymentsQuerySchema,
 	overridePaymentSchema,
+	refundPaymentSchema,
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
 	financialReportQuerySchema,
@@ -105,6 +106,24 @@ paymentRoutes.get(
 );
 
 // ─── Get Payment by Id (Owner/Admin/Staff) ────────────────
+paymentRoutes.get(
+	'/:id/adjustments',
+	verifyToken,
+	requireRole(Role.STUDENT, Role.SUPER_ADMIN, Role.ADMIN),
+	validateParams(paymentIdParamSchema),
+	PaymentController.listPaymentAdjustments,
+);
+
+paymentRoutes.post(
+	'/:id/refunds',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN),
+	validateParams(paymentIdParamSchema),
+	validateBody(refundPaymentSchema),
+	checkIdempotency,
+	PaymentController.refundPayment,
+);
+
 paymentRoutes.get(
 	'/:id',
 	verifyToken,

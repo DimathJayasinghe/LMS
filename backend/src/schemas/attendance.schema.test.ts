@@ -17,7 +17,8 @@ describe('scanBarcodeSchema', () => {
 	});
 
 	it('requires institute context', () => {
-		const { instituteId: _instituteId, ...withoutInstitute } = validScan;
+		const withoutInstitute: Partial<typeof validScan> = { ...validScan };
+		delete withoutInstitute.instituteId;
 		expect(scanBarcodeSchema.safeParse(withoutInstitute).success).toBe(false);
 	});
 

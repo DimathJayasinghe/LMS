@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, CalendarDays, Clock, Lock, PlayCircle, Plus } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, Lock, Pencil, PlayCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
 import { LiveClassAction } from "./_components/LiveClassAction";
+import { CourseSeenTracker } from "./_components/CourseSeenTracker";
 import { api, ApiError } from "@/lib/api";
 import { formatDuration } from "@/lib/video";
 import type {
@@ -123,6 +124,7 @@ export default async function ClassDetailPage({
 
   return (
     <div className="mx-auto max-w-5xl">
+      {user.role === "STUDENT" && active && <CourseSeenTracker courseId={course.id} />}
       <Link
         href="/classes"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -157,6 +159,14 @@ export default async function ClassDetailPage({
           <h1 className="text-2xl font-bold tracking-tight">{course.name}</h1>
         </div>
       </div>
+
+      {isStaff && (
+        <div className="mb-6 flex justify-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/classes/${classId}/edit`}><Pencil aria-hidden />Edit class</Link>
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">

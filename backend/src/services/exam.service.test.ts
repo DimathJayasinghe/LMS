@@ -9,6 +9,11 @@ const {
 	assertMarkerAssignedToExam,
 	assertCourseAccess,
 	createR2PresignedGetUrl,
+	userFindMany,
+	markerAssignmentFindMany,
+	markerAssignmentDeleteMany,
+	markerAssignmentCreateMany,
+	transaction,
 } = vi.hoisted(() => ({
 	examFindMany: vi.fn(),
 	examFindUnique: vi.fn(),
@@ -16,11 +21,19 @@ const {
 	assertMarkerAssignedToExam: vi.fn(),
 	assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
 	createR2PresignedGetUrl: vi.fn().mockResolvedValue('https://signed.example/paper.pdf'),
+	userFindMany: vi.fn(),
+	markerAssignmentFindMany: vi.fn(),
+	markerAssignmentDeleteMany: vi.fn(),
+	markerAssignmentCreateMany: vi.fn(),
+	transaction: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		exam: { findMany: examFindMany, findUnique: examFindUnique },
+		user: { findMany: userFindMany },
+		markerAssignment: { findMany: markerAssignmentFindMany },
+		$transaction: transaction,
 	},
 }));
 
@@ -33,7 +46,7 @@ vi.mock('@/utils/r2', () => ({
 	r2HeadObject: vi.fn(),
 }));
 
-import { listExams, getExamById } from './exam.service';
+import { getExamById, listExams, replaceExamMarkers } from './exam.service';
 
 const teacher = { userId: 'teacher-1', role: Role.TEACHER } as const;
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER } as const;
@@ -62,6 +75,58 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	assertCourseAccess.mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' });
 	createR2PresignedGetUrl.mockResolvedValue('https://signed.example/paper.pdf');
+	userFindMany.mockResolvedValue([]);
+	markerAssignmentFindMany.mockResolvedValue([]);
+	transaction.mockImplementation((callback) => callback({
+		markerAssignment: {
+			deleteMany: markerAssignmentDeleteMany,
+			createMany: markerAssignmentCreateMany,
+		},
+	}));
+});
+
+describe('replaceExamMarkers — ownership and exact-set assignment', () => {
+	it('rejects a non-owning teacher before looking up marker accounts', async () => {
+		examFindUnique.mockResolvedValueOnce(examRow);
+		assertCourseAccess.mockRejectedValueOnce(forbidden);
+
+		await expect(
+			replaceExamMarkers('exam-1', { markerIds: ['marker-1'] }, otherTeacher),
+		).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
+		expect(userFindMany).not.toHaveBeenCalled();
+	});
+
+	it('rejects inactive or non-marker IDs', async () => {
+		examFindUnique.mockResolvedValueOnce(examRow);
+		userFindMany.mockResolvedValueOnce([]);
+
+		await expect(
+			replaceExamMarkers('exam-1', { markerIds: ['not-a-marker'] }, teacher),
+		).rejects.toMatchObject({ code: 'INVALID_MARKER_IDS', statusCode: 400 });
+		expect(transaction).not.toHaveBeenCalled();
+	});
+
+	it('removes stale assignments and de-duplicates the requested marker set', async () => {
+		examFindUnique.mockResolvedValue(examRow);
+		userFindMany.mockResolvedValueOnce([{ id: 'marker-1' }, { id: 'marker-2' }]);
+
+		await replaceExamMarkers(
+			'exam-1',
+			{ markerIds: ['marker-1', 'marker-2', 'marker-1'] },
+			teacher,
+		);
+
+		expect(markerAssignmentDeleteMany).toHaveBeenCalledWith({
+			where: { examId: 'exam-1', markerId: { notIn: ['marker-1', 'marker-2'] } },
+		});
+		expect(markerAssignmentCreateMany).toHaveBeenCalledWith({
+			data: [
+				{ markerId: 'marker-1', examId: 'exam-1' },
+				{ markerId: 'marker-2', examId: 'exam-1' },
+			],
+			skipDuplicates: true,
+		});
+	});
 });
 
 describe('listExams — TEACHER course-ownership scoping', () => {

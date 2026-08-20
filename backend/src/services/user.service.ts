@@ -8,6 +8,7 @@ import type {
 	UpdateRoleInput,
 	UpdateStatusInput,
 	AssignBarcodeInput,
+	AcademicStaffQuery,
 	NicUploadUrlInput,
 	NicConfirmInput,
 	CreateStudentBarcodeInput,
@@ -95,6 +96,22 @@ export const listUsers = async (query: ListUsersQuery): Promise<PaginatedResult<
 	]);
 
 	return { data, count };
+};
+
+export const listAcademicStaff = async (
+	query: AcademicStaffQuery,
+	actorRole: Role,
+) => {
+	if (actorRole === Role.TEACHER && query.role !== Role.MARKER) {
+		throw new AppError('FORBIDDEN', 403, 'Teachers may only access the marker directory.');
+	}
+
+	return prisma.user.findMany({
+		where: { role: query.role, deletedAt: null },
+		select: { id: true, name: true, role: true },
+		orderBy: { name: 'asc' },
+		take: 100,
+	});
 };
 
 export const getUserById = async (id: string): Promise<SafeUser> => {

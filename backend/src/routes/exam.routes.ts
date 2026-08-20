@@ -4,8 +4,10 @@ import * as ExamController from '@/controllers/exam.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
 	assignMarkersSchema,
+	replaceMarkersSchema,
 	createExamSchema,
 	examIdParamSchema,
 	examUploadUrlSchema,
@@ -23,6 +25,24 @@ examRoutes.post(
 	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateBody(createExamSchema),
 	ExamController.createExam,
+);
+
+examRoutes.get(
+	'/:id/markers',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	ExamController.listMarkers,
+);
+
+examRoutes.put(
+	'/:id/markers',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	validateBody(replaceMarkersSchema),
+	checkIdempotency,
+	ExamController.replaceMarkers,
 );
 
 // ─── List Exams ─────────────────────────────────────────────

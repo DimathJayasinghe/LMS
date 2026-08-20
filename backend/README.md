@@ -2,7 +2,7 @@
 
 ## Local development
 
-1. Ensure [backend/.env](backend/.env) is set (especially `DATABASE_URL` for Neon).
+1. Ensure `.env` is set (especially `DATABASE_URL` for PostgreSQL).
 2. Install dependencies:
 
 ```bash
@@ -23,36 +23,23 @@ npm run dev
 
 The server runs on `http://localhost:5000`.
 
-If this is a fresh database, run migrations once:
+Apply checked-in migrations before local development when the API container is not managing startup:
 
 ```bash
 npx prisma migrate deploy
 ```
 
-## EC2 Deployment (PM2)
+The production API container performs this step automatically and fails fast on migration errors.
+Never use `prisma db push` for persistent environments. For the one-time adoption of an older db-push
+database, follow `context/Guides_And_Summeries/database_migration_guide.md` before deploying the new image.
 
-This project runs on a single EC2 instance with PM2 managing two processes:
+## Docker
 
-1. Build the API:
-
-```bash
-npm install
-npm run build
-```
-
-2. Start processes with PM2:
+The root Compose stack is the supported local and single-VPS deployment topology.
 
 ```bash
-pm2 start dist/index.js --name "lms-api"
-pm2 start dist/worker.js --name "lms-worker"
+docker compose up -d --build
 ```
 
-Make sure `REDIS_URL` points to Upstash (`rediss://`) and all production env vars are set.
-
-## Docker (Local Only)
-
-Docker Compose is kept for local development only. It starts the API, worker, and a local Redis.
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
+The root deployment also includes PostgreSQL, Redis, nginx, the worker, and backups. See
+`context/documents/09-cost-and-hosting.md` for the VPS runbook.

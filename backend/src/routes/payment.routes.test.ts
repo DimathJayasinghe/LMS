@@ -16,6 +16,8 @@ vi.mock('@/controllers/payment.controller', () => ({
   getFinancialReport: vi.fn(),
   getPaymentById: vi.fn(),
   overridePayment: vi.fn(),
+  listPaymentAdjustments: vi.fn(),
+  refundPayment: vi.fn(),
   bulkUploadPayments: vi.fn(),
 }));
 
@@ -23,16 +25,30 @@ import { paymentRoutes } from './payment.routes';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import * as PaymentController from '@/controllers/payment.controller';
 
-// Returns the ordered handler stack registered for a given method+path on a router.
-function handlesFor(router: any, method: string, path: string): unknown[] {
-  const layer = router.stack.find(
-    (l: any) => l.route?.path === path && l.route?.methods?.[method],
+interface RouterLayer {
+  route?: {
+    path: string;
+    methods: Record<string, boolean>;
+    stack: Array<{ handle: unknown }>;
+  };
+}
+
+// Express keeps its route stack private, so expose only the shape this wiring test needs.
+function handlesFor(router: unknown, method: string, path: string): unknown[] {
+  const stack = (router as { stack: RouterLayer[] }).stack;
+  const layer = stack.find(
+    (candidate) => candidate.route?.path === path && candidate.route.methods[method],
   );
   if (!layer) throw new Error(`route ${method.toUpperCase()} ${path} not found`);
-  return layer.route.stack.map((s: any) => s.handle);
+  return layer.route!.stack.map((entry) => entry.handle);
 }
 
 describe('payment routes — idempotency wiring', () => {
+  it('POST /:id/refunds runs checkIdempotency immediately before the controller', () => {
+    const stack = handlesFor(paymentRoutes, 'post', '/:id/refunds');
+    expect(stack.indexOf(checkIdempotency)).toBe(stack.indexOf(PaymentController.refundPayment) - 1);
+  });
+
   it('PATCH /:id/override carries checkIdempotency', () => {
     expect(handlesFor(paymentRoutes, 'patch', '/:id/override')).toContain(checkIdempotency);
   });

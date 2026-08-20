@@ -31,6 +31,12 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 ## What changed (2026-07-09)
 
+> **Teacher workspace completed 2026-08-20:** `GET /` returns only the acting TEACHER's courses;
+> `GET /:classId` rejects cross-teacher reads; POST always assigns a TEACHER caller as owner; and
+> SUPER_ADMIN may select/reassign only a teacher approved through `SubjectTeacher`. Create and update
+> require `Idempotency-Key`. The frontend exposes `/classes/new` and `/classes/:classId/edit` only to
+> TEACHER/SUPER_ADMIN and derives subject/teacher choices from the assignment endpoints.
+
 - **Course create/update** now requires `subjectId` and (for SUPER_ADMIN) `teacherId`; a TEACHER creating a course owns it automatically.
 - Course gained `bannerUrl` / `backdropUrl` (image URLs).
 - **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise). Enrollments are created/listed via `enrollments.endpoints.md`.

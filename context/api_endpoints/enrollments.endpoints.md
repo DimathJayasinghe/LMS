@@ -21,6 +21,7 @@ All endpoints require the `access_token` cookie.
 - **Create** (`POST /`) — `STUDENT` (self-enroll), or `ADMIN`/`SUPER_ADMIN`
   (front-desk enrolling a specific student via `userId`).
 - **My enrollments** (`GET /my`) — `STUDENT`.
+- **Learning summary/seen marker** (`GET /learning`, `POST /learning/:courseId/seen`) — `STUDENT`.
 - **List all** (`GET /`) — `SUPER_ADMIN`, `ADMIN` (oversight; paginated).
 - **Get one** (`GET /:id`) — the owning `STUDENT`, or `ADMIN`/`SUPER_ADMIN`.
 - **Cancel** (`DELETE /:id`) — the owning `STUDENT`, or `ADMIN`/`SUPER_ADMIN`.
@@ -64,11 +65,20 @@ All endpoints require the `access_token` cookie.
 | --- | --- | --- | --- |
 | POST | `/` | STUDENT, ADMIN, SUPER_ADMIN | Create (or reactivate) an enrollment. |
 | GET | `/my` | STUDENT | List the caller's own enrollments. |
+| GET | `/learning` | STUDENT | Current active enrollments with new lessons/upcoming sessions. |
+| POST | `/learning/:courseId/seen` | STUDENT | Advance the caller's course-content seen marker. |
 | GET | `/` | ADMIN, SUPER_ADMIN | List all enrollments (paginated). |
 | GET | `/:id` | Owner, ADMIN, SUPER_ADMIN | Get one enrollment. |
 | DELETE | `/:id` | Owner, ADMIN, SUPER_ADMIN | Soft-cancel (set `isActive: false`). |
 
 ## Endpoint Details
+
+### GET `/learning` and POST `/learning/:courseId/seen`
+
+The learning list is bounded to 50 active enrollments. Each enrollment includes `learning` with
+`newLessonCount` (READY recordings created after `lastSeenAt`), `latestLessonAt`,
+`upcomingSessionCount`, `nextSessionAt`, and `lastSeenAt`. The seen endpoint requires an active
+enrollment and upserts a private `(userId, courseId)` marker; it never accepts another user's ID.
 
 ### POST `/`
 

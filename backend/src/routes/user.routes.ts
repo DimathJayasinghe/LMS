@@ -8,6 +8,7 @@ import { validateBody, validateParams, validateQuery } from '@/middleware/valida
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
     assignBarcodeSchema,
+    academicStaffQuerySchema,
     createStudentBarcodeSchema,
     listUsersQuerySchema,
     nicUploadUrlSchema,
@@ -138,6 +139,16 @@ userRoutes.get(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateQuery(resolveBarcodeQuerySchema),
     UserController.resolveBarcode,
+);
+
+// Minimal academic directory: SUPER_ADMIN selects teachers/markers; TEACHER
+// may list markers for exams. No email, phone, NIC, or account metadata leaks.
+userRoutes.get(
+    '/academic-staff',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+    validateQuery(academicStaffQuerySchema),
+    UserController.listAcademicStaff,
 );
 
 // GET /api/users/:id — Get user by id (Admin + Staff)

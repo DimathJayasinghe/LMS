@@ -12,7 +12,7 @@ http://localhost:5000/api/attendance
 
 The attendance endpoints require authentication (except for the Zoom webhook). They use the standard `access_token` HTTP-only cookie.
 
-## Roles & recent changes (2026-08-13)
+## Roles & recent changes (2026-08-17)
 
 Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk scans at the entrance).
 
@@ -22,6 +22,10 @@ Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` =
 - **`TEACHER` can now read attendance for their own courses (2026-07-10)** — `GET /session/:sessionId`
   and `GET /class/:classId` were `SUPER_ADMIN`+`ADMIN` only; added `TEACHER`, scoped via
   `assertCourseAccess` (same ownership gate as session/exam/video mutations).
+- **Zoom reconciliation is available to `SUPER_ADMIN` and the owning `TEACHER` (2026-08-17).**
+  A read-only preview compares Zoom's completed-meeting participants with LMS attendance; the
+  idempotent apply endpoint inserts only missing, actively enrolled students and writes an audit
+  event. Front-desk `ADMIN` remains read-only for online attendance.
 
 ## Attendance channels — current state vs. intent (clarified 2026-07-10)
 
@@ -50,6 +54,13 @@ since the schema anticipates more than the code currently does:
    { requirePaid: false })`, so a student can only mark attendance for a course they're enrolled in
    (previously any student could POST for any session). Payment is already enforced when the stream
    token is issued, so enrollment is the gate here.
+4. **Completed-meeting recovery (`GET/POST /session/:sessionId/reconciliation`).** The report uses
+   Zoom's past-meeting participants endpoint after a meeting ends. It matches the server-controlled
+   `(#indexNumber)` display-name suffix first and email as a fallback, refuses conflicting matches,
+   excludes students without an active enrollment in the course, and aggregates reconnect rows.
+   The `/attendance` report UI previews before applying. The Zoom Server-to-Server
+   OAuth app needs `meeting:read:list_past_participants:admin` (or the equivalent admin meeting-read
+   scope), and the account must be Pro or higher.
 
 ## Attendance Record Shape
 
@@ -90,6 +101,8 @@ Returned in most endpoints:
 | POST | `/zoom-webhook` | None | Webhook from Zoom for `participant.joined`. |
 | POST | `/manual` | `ADMIN`, `STAFF` | Manually mark attendance (reconciliation). |
 | POST | `/video` | `STUDENT` | Log attendance on video playback. |
+| GET | `/session/:sessionId/reconciliation` | `SUPER_ADMIN`, `TEACHER`* | Preview Zoom/LMS attendance differences without writing. |
+| POST | `/session/:sessionId/reconciliation` | `SUPER_ADMIN`, `TEACHER`* | Idempotently add matched missing rows and audit the action. |
 | GET | `/session/:sessionId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get all attendance for a specific session. |
 | GET | `/class/:classId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get paginated attendance for a course. |
 | GET | `/student/:userId` | Any | Get student's attendance history (role-scoped). |
@@ -171,6 +184,50 @@ Zoom webhook endpoint for `meeting.participant_joined`. Uses upsert to handle re
 **Zoom URL validation (endpoint.url_validation)**
 
 Zoom expects a raw response payload with `plainToken` and `encryptedToken` (no standard wrapper).
+
+### GET `/session/:sessionId/reconciliation`
+
+Fetch a read-only Zoom comparison for an ended live session. `TEACHER` is restricted to the
+course they own. A matched participant is syncable only when the user is an active `STUDENT`, has
+an active enrollment in the session's course, and does not already have attendance for the session.
+Unknown, conflicting, and not-enrolled identities are returned for review and are never inserted.
+
+**Success (200)**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sessionId": "uuid",
+    "zoomMeetingId": "123456789",
+    "summary": {
+      "zoomRows": 4,
+      "matchedStudents": 2,
+      "alreadyRecorded": 1,
+      "missing": 1,
+      "unmatched": 1,
+      "ignored": 1
+    },
+    "participants": [],
+    "unmatched": []
+  }
+}
+```
+
+### POST `/session/:sessionId/reconciliation`
+
+Re-fetch and apply the current comparison. Requires an `Idempotency-Key` UUID header and no request
+body. The database's `(userId, classSessionId)` unique constraint and `createMany(skipDuplicates)`
+make concurrent/repeated application safe. Writes `ATTENDANCE_RECONCILED` to the audit trail.
+
+**Errors for both reconciliation endpoints**
+
+- 403 `FORBIDDEN_COURSE` — teacher does not own the course
+- 404 `CLASS_SESSION_NOT_FOUND`
+- 409 `LIVE_CLASS_NOT_SCHEDULED`
+- 409 `ZOOM_ATTENDANCE_NOT_READY` — meeting has not ended or Zoom has not processed it yet
+- 429 `ZOOM_RATE_LIMITED`
+- 502 `ZOOM_PARTICIPANTS_FAILED`
 
 ### POST `/manual`
 

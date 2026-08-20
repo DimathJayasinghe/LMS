@@ -10,6 +10,8 @@ interface ClassCardProps {
   subjectName?: string;
   /** Whether the viewing student already holds an active enrollment. */
   enrolled?: boolean;
+  newLessonCount?: number;
+  nextSessionAt?: string | null;
 }
 
 /**
@@ -17,7 +19,13 @@ interface ClassCardProps {
  * course detail page. Uses design tokens throughout; the banner falls back to a
  * neutral tile when a course has no `bannerUrl`.
  */
-export default function ClassCard({ course, subjectName, enrolled }: ClassCardProps) {
+export default function ClassCard({
+  course,
+  subjectName,
+  enrolled,
+  newLessonCount = 0,
+  nextSessionAt,
+}: ClassCardProps) {
   return (
     <Link
       href={`/classes/${course.id}`}
@@ -44,6 +52,11 @@ export default function ClassCard({ course, subjectName, enrolled }: ClassCardPr
             Enrolled
           </Badge>
         )}
+        {newLessonCount > 0 && (
+          <Badge className="absolute left-2 top-2" variant="destructive">
+            {newLessonCount} new {newLessonCount === 1 ? "lesson" : "lessons"}
+          </Badge>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-4">
@@ -63,6 +76,16 @@ export default function ClassCard({ course, subjectName, enrolled }: ClassCardPr
         {course.description && (
           <p className="line-clamp-2 text-sm text-muted-foreground">
             {course.description}
+          </p>
+        )}
+
+        {nextSessionAt && (
+          <p className="text-xs text-muted-foreground">
+            Next session {new Intl.DateTimeFormat("en-LK", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: "Asia/Colombo",
+            }).format(new Date(nextSessionAt))}
           </p>
         )}
 

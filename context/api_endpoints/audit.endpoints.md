@@ -75,6 +75,12 @@ actor do at the time," and `actor.role` for "what can they do now."
 
 ## Writing new audit events
 
+The 2026-08-20 academic-workspace slice added these filterable actions:
+`SUBJECT_TEACHERS_ASSIGNED`, `COURSE_TEACHER_ASSIGNED`, `LIVE_CLASS_SCHEDULED`,
+`VIDEO_UPLOAD_INITIATED`, `VIDEO_ATTACHED`, `VIDEO_UPDATED`, `VIDEO_DELETED`,
+`EXAM_PAPER_ATTACHED`, and `RESULT_CORRECTED`. Corrections include structured before/after values and
+the mandatory reason; teacher/subject/marker replacements include the resulting IDs.
+
 Any privileged mutation should call `AuditService.log(...)` from the controller layer (fire-and-
 forget — never blocks the response, write failures are logged not thrown). See
 `backend/src/services/audit.service.ts` and the `AUDIT_ACTION` constant map. When adding a new

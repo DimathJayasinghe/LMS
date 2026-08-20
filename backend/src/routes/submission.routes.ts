@@ -9,6 +9,7 @@ import {
   startSubmissionSchema,
   completeSubmissionSchema,
   completeSubmissionBodySchema,
+  correctPublishedResultSchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
   listMySubmissionsQuerySchema,
@@ -40,6 +41,16 @@ submissionRoutes.patch(
   validateParams(completeSubmissionSchema),
   validateBody(completeSubmissionBodySchema),
   SubmissionController.completeSubmission,
+);
+
+submissionRoutes.patch(
+  '/:id/result-correction',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+  validateParams(submissionIdParamSchema),
+  validateBody(correctPublishedResultSchema),
+  checkIdempotency,
+  SubmissionController.correctPublishedResult,
 );
 
 // ─── List My Submissions (Student) ──────────────────────────
@@ -81,5 +92,6 @@ submissionRoutes.post(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateParams(publishResultsParamsSchema),
+  checkIdempotency,
   SubmissionController.publishResults,
 );

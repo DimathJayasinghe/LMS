@@ -18,7 +18,8 @@ const LINKS = [
 export default function Nav() {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
-  const [open, setOpen] = useState(false);
+  const [openedPath, setOpenedPath] = useState<string | null>(null);
+  const open = openedPath === pathname;
 
   // Below `md` the link list collapses into this menu — close it if a
   // resize (e.g. rotating a tablet) crosses back over the breakpoint,
@@ -26,15 +27,10 @@ export default function Nav() {
   useEffect(() => {
     if (!open) return;
     const mql = window.matchMedia("(min-width: 48rem)");
-    const handleChange = () => setOpen(false);
+    const handleChange = () => setOpenedPath(null);
     mql.addEventListener("change", handleChange);
     return () => mql.removeEventListener("change", handleChange);
   }, [open]);
-
-  // Route changes (a link was followed) should also close it.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   return (
     <nav className="relative z-[70] mx-4 mb-8 mt-8 w-auto min-w-fit max-w-[50rem] sm:mx-auto sm:mt-14 sm:w-full">
@@ -86,7 +82,7 @@ export default function Nav() {
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           aria-controls="mobile-nav-menu"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpenedPath(open ? null : pathname)}
           className="flex size-12 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-muted md:hidden"
         >
           {open ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}

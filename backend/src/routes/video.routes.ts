@@ -4,6 +4,7 @@ import * as VideoController from '@/controllers/video.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
   createVideoSchema,
   updateVideoSchema,
@@ -24,6 +25,7 @@ videoRoutes.post(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateBody(initiateVideoUploadSchema),
+  checkIdempotency,
   VideoController.initiateUpload,
 );
 
@@ -39,6 +41,7 @@ videoRoutes.post(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateBody(createVideoSchema),
+  checkIdempotency,
   VideoController.createVideo,
 );
 
