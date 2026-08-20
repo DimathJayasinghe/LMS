@@ -226,7 +226,9 @@ logger.info({ userId, action: 'PAYMENT_CREATED' }, 'Student payment processed');
 logger.error({ err, userId }, 'Payment processing failed');
 ```
 
-- Use **Pino** structured JSON logger — never `console.log` in production code.
+- Use **Pino** structured JSON logger — never `console.log` in production code. Request logging must
+  redact authorization, request cookies, and response `Set-Cookie` headers; never log tokens,
+  presigned credentials, passwords, or full identity documents.
 - Always include context object as first argument.
 
 ### 6.3 Date Handling

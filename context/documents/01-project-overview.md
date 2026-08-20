@@ -40,7 +40,9 @@ The institution has one owner, many teachers, front-desk staff, markers, and stu
 ### 3.2 Teacher — many
 - A lecturer employed by the institution. Teaches one or more courses (each course belongs to a subject).
 - **Can**: create and manage **their own** courses' class sessions, attach Zoom links / recordings, create exams, assign markers, and view their students' results and attendance.
-- **Cannot**: manage users/roles, change other teachers' content, or access financial data.
+- **Cannot**: manage users/roles, change other teachers' content, or access institution-wide or
+  student-level financial histories. Teachers may view aggregate income/outstanding analytics for
+  classes they own.
 
 ### 3.3 Admin (front-desk staff) — many
 - Institute managers / front-desk staff.
@@ -137,7 +139,7 @@ Physical classes are held at **pre-configured physical centers ("institutes")** 
 1. **Manage Own Courses** — schedule class sessions (set date, delivery mode, Zoom link if streamed), attach recordings.
 2. **Create Exams** — upload paper PDF / build MCQ, set start/end times, assign markers.
 3. **Publish Results** — review marked submissions, publish batch results (triggers SSE + optional SMS).
-4. **View** their courses' attendance and results.
+4. **View** their courses' attendance, results, and aggregate class income/outstanding analytics.
 
 ### Admin (front-desk)
 1. **Entrance Desk** — scan a student's QR/barcode at the entrance to log attendance, and (optionally) collect the monthly fee on the spot (pay-at-entrance).

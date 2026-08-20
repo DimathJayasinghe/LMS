@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (teacher/student academic workspace slice completed; timetable authoring and broader course modules remain) |
+| **Current Phase** | Phase 9 — Polish & Hardening (authorization/financial analytics correction and full product gap audit) |
 | **Last Updated** | 2026-08-20 |
-| **Last Completed Task** | Teacher/student academic workspace: super-admin subject assignments; teacher-owned class create/edit, sessions and recordings; exact marker assignment; published-result corrections with reasons; student current-enrollment/new-lesson state; comprehensive audits, role tests, real HTTP smoke, production images, and zero-advisory dependency upgrades. |
-| **Next Task** | Complete timetable-slot authoring UI and the `access.service` test gap, then begin course modules/materials as the next P1 vertical slice. |
+| **Last Completed Task** | Teacher-owned aggregate income/outstanding analytics; super-admin teacher/class financial filtering; forced backend ownership scope; privacy-preserving aggregate contract; full-system logic/ethics/product gap analysis. |
+| **Next Task** | Secure class banner/backdrop uploads with documented dimensions, then course modules/materials and marker-group configuration. |
 | **Blockers** | None |
 
 ### 2026-08-20 — Teacher/student academic workspace completed
@@ -24,6 +24,17 @@
 - [x] STUDENT classes distinguish current enrollments from discovery and show new READY recordings plus upcoming sessions; visiting a course advances a persisted per-course seen marker.
 - [x] Added focused backend/frontend authorization and interaction tests. Full verification: backend 225 tests, frontend 93 tests, lint/type/build green, fresh and upgrade PostgreSQL paths at zero drift, authenticated compiled-stack smoke green.
 - [x] Dependency hardening: Next 16.3.1, Prisma 7.9.1, Sentry 10.70, Multer 2.2, vulnerable `xlsx` replaced, backend/frontend full npm audits at zero known advisories.
+
+### 2026-08-20 — Financial scope correction and full-system gap audit
+
+- [x] Teachers can open Financial reports and see collected/outstanding aggregates only for owned classes; individual student payment histories are not returned.
+- [x] SUPER_ADMIN can filter financial aggregates by teacher and class and receives a by-teacher breakdown.
+- [x] Backend scope ignores a teacher-supplied `teacherId` and combines class filters with authenticated ownership; focused service and frontend role-scope tests cover this behavior.
+- [x] Closed the core `assertStudentContentAccess` direct-test gap with privileged-bypass, enrollment, unpaid, and paid-path coverage.
+- [x] Production log review found Pino exposing response `Set-Cookie` values; response-cookie redaction and a regression test were added, and the affected smoke refresh session was revoked.
+- [x] Added `docs/reports/2026-08-20-full-system-gap-analysis.md` covering authorization ethics, media dimensions, materials/live/exam/marker-group usability, fairness/privacy/security gaps, and phased delivery/production-Docker gates.
+- [x] Production-Docker verification: backend 233/233 (31 files), frontend 95/95 (24 files), both production builds and linters green, both dependency audits at zero known vulnerabilities, live migration status/zero drift green, all Compose services healthy, and authenticated SUPER_ADMIN/TEACHER plus negative-role report/UI smoke green.
+- [x] Credential-log production proof: login/logout produced two redacted `Set-Cookie` log events, zero raw token-bearing log lines, and logout left zero smoke refresh sessions.
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was
@@ -110,7 +121,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
   - ✅ Fixed 2026-08-17: `DELETE /timetable/slots/:id` now sets `isActive: false`, preserves generated-session links, and remains safe when repeated. The existing PATCH path restores with `isActive: true`; service tests cover missing, unauthorized, repeated-disable, and repeated-restore cases, and the SUPER_ADMIN timetable view labels inactive slots.
   - ✅ Fixed 2026-07-22: `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` now carry `checkIdempotency`, and the live frontend callers send per-action `Idempotency-Key` UUIDs. `POST /users/me/nic/confirm` remains consciously excluded because it is already idempotent by object-key upsert.
   - ✅ Fixed 2026-08-13: PayHere webhook signature checks now use `crypto.timingSafeEqual`, matching Zoom/Bunny webhook verification.
-- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** dedicated coverage now exists for exam, video, submission, class-session, enrollment learning-state, and subject-teacher assignment services. Still zero direct coverage: `access.service.ts` (the core enrolled+paid content gate — the most important remaining one), `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, and `stream.service.ts`.
+- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** dedicated coverage now exists for exam, video, submission, class-session, enrollment learning-state, subject-teacher assignment, and `access.service` (2026-08-20: privileged bypass, active enrollment, paid/unpaid, and marker assignment). Still zero direct coverage: `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, and `stream.service.ts`.
 - [x] **CI quality gate** (2026-08-13; lint completed 2026-08-17; migration proof added 2026-08-20): `.github/workflows/ci.yml` runs locked installs, Prisma validation/generation, fresh migration deploy + zero-drift verification, legacy db-push baseline adoption, backend/frontend lint and tests, frontend typecheck, and both production builds on PRs into `dev`/`main`, with one aggregate `Quality Gate` check. The backend now has a locked ESLint/typescript-eslint flat config; application code and unit tests are covered, while legacy live-stack diagnostic scripts already excluded from `tsconfig.json` remain a separate cleanup follow-up. The frontend's five React 19 findings were fixed rather than suppressed, with regression tests for payment search cancellation, route-driven mobile-nav closing, and current SSE callback delivery.
 - [x] **Exam read-role leak fixed**: `GET /` and `GET /:id` explicitly allow only SUPER_ADMIN, TEACHER, MARKER, and STUDENT; service-level scoping limits teachers to owned courses, markers to assigned exams with answer keys stripped, and students to enrolled courses and valid time windows. Front-desk ADMIN is rejected at the route.
 
@@ -413,5 +424,5 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | **New 2026-07-15:** `timetable.service.ts` hard-deletes a `TimetableSlot` row despite an inbound FK and an unused `isActive` column | Switch to soft-delete (`isActive: false`) matching every other model | ✅ Done (2026-08-17) |
 | **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ✅ Done (2026-08-13) |
 | **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ✅ Done (2026-07-22) |
-| **New 2026-07-15:** 10/21 backend services have zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | ⬜ To implement |
+| **New 2026-07-15:** 10/21 backend services had zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | 🟡 Core four covered; institute/live/SMS/stream service coverage remains |
 | **New 2026-07-15:** No CI pipeline — nothing runs tests/build on PR | Add `.github/workflows/ci.yml`; establish lint baseline separately | ✅ Done (2026-08-13; lint follow-up recorded) |

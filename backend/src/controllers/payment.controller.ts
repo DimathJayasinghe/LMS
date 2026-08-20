@@ -73,8 +73,12 @@ export const getPaymentsSummary = asyncHandler(async (req: Request, res: Respons
 });
 
 export const getFinancialReport = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-	const { month } = financialReportQuerySchema.parse(req.query);
-	const data = await PaymentService.getFinancialReport(month ?? getCurrentPaymentMonth());
+	const query = financialReportQuerySchema.parse(req.query);
+	const data = await PaymentService.getFinancialReport(
+		query.month ?? getCurrentPaymentMonth(),
+		query,
+		req.user!,
+	);
 
 	res.status(200).json({
 		status: 'success',

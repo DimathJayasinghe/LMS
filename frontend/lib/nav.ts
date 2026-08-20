@@ -94,7 +94,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Reports",
         href: "/admin/reports",
         icon: LineChart,
-        roles: ["SUPER_ADMIN"],
+        roles: ["SUPER_ADMIN", "TEACHER"],
       },
       {
         label: "Audit log",

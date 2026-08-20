@@ -143,13 +143,17 @@ Aggregate one month's payments for the admin dashboard.
   > refunded rows are excluded and reported by `refundedCount`. Route is registered
   > **before** `GET /:id` so `summary` isn't parsed as a payment id.
 
-### 4c. Financial Report (Super Admin)
-Institute-wide financial analytics powering the `/admin/reports` page.
+### 4c. Financial Report (Super Admin / Teacher)
+Aggregate financial analytics powering the `/admin/reports` page. Teachers are always restricted to
+their own classes; super admins may inspect institution, teacher, or class totals.
 
 - **URL:** `/reports`
 - **Method:** `GET`
-- **Auth:** Required (Role: `SUPER_ADMIN` **only** — front-desk `ADMIN` is bounced with 403)
-- **Query Params:** `month` (optional, `YYYY-MM`; defaults to the current payment month)
+- **Auth:** Required (Role: `SUPER_ADMIN`, `TEACHER`; front-desk `ADMIN` is bounced with 403)
+- **Query Params:**
+  - `month` (optional, `YYYY-MM`; defaults to the current payment month)
+  - `teacherId` (optional UUID; `SUPER_ADMIN` only in effect)
+  - `courseId` (optional UUID; combined with the authenticated teacher's ownership for `TEACHER`)
 - **Success Response (200 OK):**
   ```json
   {
@@ -163,6 +167,9 @@ Institute-wide financial analytics powering the `/admin/reports` page.
       "byCourse": [
         { "courseId": "…", "name": "Chemistry", "year": 2026, "collected": "7000.00", "paidCount": 2 }
       ],
+      "byTeacher": [
+        { "teacherId": "…", "name": "Ms Perera", "collected": "18000.00", "paidCount": 6 }
+      ],
       "byMethod": [
         { "method": "ONLINE", "collected": "26000.00", "paidCount": 8 }
       ],
@@ -171,12 +178,14 @@ Institute-wide financial analytics powering the `/admin/reports` page.
   }
   ```
   > `trend` is always exactly **12 entries**, oldest→newest, ending at `month`, zero-filled where a
-  > month has no `SUCCESS` payments. `trend`/`byCourse`/`byMethod` subtract completed partial refunds
+  > month has no `SUCCESS` payments. `trend`/`byCourse`/`byTeacher`/`byMethod` subtract completed partial refunds
   > from `SUCCESS` payments for `month`
   > (byCourse sorted by collected desc). `outstanding` counts **active** enrolments with no `SUCCESS`
   > payment for `month`, and sums their course `monthlyFee` as `expected`. All money values are
   > decimal strings (`"N.NN"`). Route is registered **before** `GET /:id` so `reports` isn't parsed
-  > as a payment id.
+  > as a payment id. The endpoint deliberately returns aggregates only, never individual student
+  > payment histories. A teacher-supplied `teacherId` is ignored and replaced by the authenticated
+  > teacher ID server-side, so query manipulation cannot expand ownership scope.
 
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.

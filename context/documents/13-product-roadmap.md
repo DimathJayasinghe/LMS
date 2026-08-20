@@ -64,7 +64,7 @@ Build these in coherent vertical slices after P0.
 | Teacher/marker workspace | ✅ Owned-class scope, session/video actions, exact marker assignment, marker post-release lock, and audited teacher correction completed 2026-08-20; bulk queues, workload filters and timetable-slot authoring remain |
 | Communication | Course announcements; threaded discussions/Q&A; mentions; attachments; moderation; read state; notification preferences |
 | Calendar and tasks | Unified timetable, exam and assignment calendar; due-soon list; reminders; iCal export; conflict detection |
-| Payments operations | Override UI and immutable completed-refund ledger completed 2026-08-19; provider refunds/voids, compensating re-payment flow, receipt reissue, discounts/scholarships, installments, aging report |
+| Payments operations | Override UI and immutable completed-refund ledger completed 2026-08-19; teacher own-class aggregate analytics and super-admin teacher/class filtering completed 2026-08-20; provider refunds/voids, compensating re-payment flow, receipt reissue, discounts/scholarships, installments, aging report |
 | Guardian access | Guardian-student links; consent/verification; attendance, upcoming/missing work and payment summaries; privacy-limited portal; SMS digest |
 | Student support | Search; bookmarks; notes; progress checklist; downloadable resources; low-bandwidth mode; clear missing/late/upcoming work views |
 
@@ -114,8 +114,8 @@ Every feature slice must include:
 1. ✅ CI pipeline and timetable soft-delete integrity.
 2. ✅ Reconcile versioned database migrations and prove fresh/legacy upgrade paths (2026-08-20); the production restore drill remains an operations task.
 3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
-4. **Next:** Timetable-slot authoring UI plus the core `access.service` test gap.
-5. Course modules/materials and assignments.
+4. **Next:** Secure class banner/backdrop upload (the core paid/enrolled `access.service` direct-test gap was closed 2026-08-20).
+5. Course modules/materials, then timetable-slot/live-flow unification and assignments.
 6. Gradebook, rubrics, feedback, and expanded question bank.
 7. Calendar, discussions, guardian summaries, and notification preferences.
 8. Analytics and at-risk intervention workflows.

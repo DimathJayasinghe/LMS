@@ -501,12 +501,13 @@ export interface RefundPaymentResult {
   remainingRefundable: string;
 }
 
-/** GET /payments/reports?month= — super-admin financial report (see payments.endpoints.md). */
+/** GET /payments/reports — global super-admin or own-course teacher aggregates. */
 export interface FinancialReport {
   month: string; // "YYYY-MM"
   /** Exactly 12 entries, oldest→newest, ending at `month`; zero-filled where absent. */
   trend: { month: string; collected: string; paidCount: number }[];
-  byCourse: { courseId: string; name: string; year: number; collected: string; paidCount: number }[];
+  byCourse: { courseId: string; name: string; year: number | null; collected: string; paidCount: number }[];
+  byTeacher: { teacherId: string; name: string; collected: string; paidCount: number }[];
   byMethod: { method: PaymentMethod; collected: string; paidCount: number }[];
   /** Active enrollments with no SUCCESS payment for `month`, and their expected fees. */
   outstanding: { count: number; expected: string };

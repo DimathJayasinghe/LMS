@@ -95,12 +95,12 @@ paymentRoutes.get(
 	PaymentController.getPaymentsSummary,
 );
 
-// ─── Financial Reports (Super Admin) ──────────────────────
+// ─── Financial Reports (Super Admin / scoped Teacher) ─────
 // Registered BEFORE '/:id' so "reports" isn't captured as an id param.
 paymentRoutes.get(
 	'/reports',
 	verifyToken,
-	requireRole(Role.SUPER_ADMIN),
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateQuery(financialReportQuerySchema),
 	PaymentController.getFinancialReport,
 );

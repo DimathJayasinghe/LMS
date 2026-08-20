@@ -31,7 +31,9 @@ import {
 	type ListPaymentsQuery,
 	type OverridePaymentInput,
 	type PayhereNotifyInput,
+	type FinancialReportQuery,
 } from '@/schemas/payment.schema';
+import type { AuthenticatedUser } from '@/types/auth.types';
 
 interface PayhereCheckoutPayload {
 	merchant_id: string;
@@ -483,13 +485,14 @@ export const getPaymentsSummary = async (month: string): Promise<MonthPaymentSum
 	};
 };
 
-// ─── Financial Reports (Super Admin) ──────────────────────
+// ─── Financial Reports (Super Admin / scoped Teacher) ─────
 
 export interface FinancialReport {
 	month: string;
 	/** 12 months ending at `month`, zero-filled. */
 	trend: { month: string; collected: string; paidCount: number }[];
 	byCourse: { courseId: string; name: string; year: number | null; collected: string; paidCount: number }[];
+	byTeacher: { teacherId: string; name: string; collected: string; paidCount: number }[];
 	byMethod: { method: PaymentMethod; collected: string; paidCount: number }[];
 	/** Active enrollments with no SUCCESS payment this month. */
 	outstanding: { count: number; expected: string };
@@ -509,17 +512,38 @@ const monthsEndingAt = (month: string, n: number): string[] => {
 const money = (v: unknown): string => new Prisma.Decimal((v as Prisma.Decimal | number | string) ?? 0).toFixed(2);
 
 /**
- * Owner financial report for a month: 12-month revenue trend, per-course and
- * per-method breakdowns (SUCCESS only), and outstanding fees (active
- * enrollments unpaid this month). Read-only; SUPER_ADMIN-gated at the route.
+ * Financial report for a month. SUPER_ADMIN may filter across teachers/classes;
+ * TEACHER is always forced to their own courses, regardless of supplied query.
+ * Only aggregate values are returned—never individual student payment records.
  */
-export const getFinancialReport = async (month: string): Promise<FinancialReport> => {
+export const getFinancialReport = async (
+	month: string,
+	query: FinancialReportQuery,
+	actor: AuthenticatedUser,
+): Promise<FinancialReport> => {
+	if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.TEACHER) {
+		throw new AppError('FORBIDDEN', 403, 'You do not have permission to view financial reports.');
+	}
 	const trendMonths = monthsEndingAt(month, 12);
+	const teacherId = actor.role === Role.TEACHER ? actor.userId : query.teacherId;
+	const courseId = query.courseId;
+	const courseWhere: Prisma.CourseWhereInput = {
+		...(teacherId ? { teacherId } : {}),
+		...(courseId ? { id: courseId } : {}),
+	};
+	const hasCourseScope = Boolean(teacherId || courseId);
+	const paymentScope: Prisma.PaymentWhereInput = hasCourseScope
+		? { enrollment: { course: courseWhere } }
+		: {};
+	const sqlScope = Prisma.sql`
+		${teacherId ? Prisma.sql`AND c."teacherId" = ${teacherId}` : Prisma.empty}
+		${courseId ? Prisma.sql`AND c.id = ${courseId}` : Prisma.empty}
+	`;
 
-	const [trendRows, byCourseRows, methodRows, outstandingRows] = await Promise.all([
+	const [trendRows, byCourseRows, byTeacherRows, methodRows, outstandingRows] = await Promise.all([
 		prisma.payment.groupBy({
 			by: ['paymentMonth'],
-			where: { status: PaymentStatus.SUCCESS, paymentMonth: { in: trendMonths } },
+			where: { status: PaymentStatus.SUCCESS, paymentMonth: { in: trendMonths }, ...paymentScope },
 			_sum: { amount: true, refundedAmount: true },
 			_count: { _all: true },
 		}),
@@ -529,12 +553,24 @@ export const getFinancialReport = async (month: string): Promise<FinancialReport
 			JOIN "Enrollment" e ON e.id = p."enrollmentId"
 			JOIN "Course" c ON c.id = e."courseId"
 			WHERE p.status = 'SUCCESS' AND p."paymentMonth" = ${month}
+			${sqlScope}
 			GROUP BY c.id, c.name, c.year
+			ORDER BY total DESC
+		`,
+		prisma.$queryRaw<Array<{ id: string; name: string; total: unknown; cnt: bigint }>>`
+			SELECT u.id, u.name, SUM(p.amount - p."refundedAmount") AS total, COUNT(*) AS cnt
+			FROM "Payment" p
+			JOIN "Enrollment" e ON e.id = p."enrollmentId"
+			JOIN "Course" c ON c.id = e."courseId"
+			JOIN "User" u ON u.id = c."teacherId"
+			WHERE p.status = 'SUCCESS' AND p."paymentMonth" = ${month}
+			${sqlScope}
+			GROUP BY u.id, u.name
 			ORDER BY total DESC
 		`,
 		prisma.payment.groupBy({
 			by: ['method'],
-			where: { status: PaymentStatus.SUCCESS, paymentMonth: month },
+			where: { status: PaymentStatus.SUCCESS, paymentMonth: month, ...paymentScope },
 			_sum: { amount: true, refundedAmount: true },
 			_count: { _all: true },
 		}),
@@ -543,6 +579,7 @@ export const getFinancialReport = async (month: string): Promise<FinancialReport
 			FROM "Enrollment" e
 			JOIN "Course" c ON c.id = e."courseId"
 			WHERE e."isActive" = true
+			${sqlScope}
 			AND NOT EXISTS (
 				SELECT 1 FROM "Payment" p
 				WHERE p."enrollmentId" = e.id AND p."paymentMonth" = ${month} AND p.status = 'SUCCESS'
@@ -565,6 +602,12 @@ export const getFinancialReport = async (month: string): Promise<FinancialReport
 		collected: money(r.total),
 		paidCount: Number(r.cnt),
 	}));
+	const byTeacher = byTeacherRows.map((r) => ({
+		teacherId: r.id,
+		name: r.name,
+		collected: money(r.total),
+		paidCount: Number(r.cnt),
+	}));
 
 	const byMethod = methodRows.map((r) => ({
 		method: r.method,
@@ -575,7 +618,7 @@ export const getFinancialReport = async (month: string): Promise<FinancialReport
 	const out = outstandingRows[0];
 	const outstanding = { count: Number(out?.cnt ?? 0), expected: money(out?.expected) };
 
-	return { month, trend, byCourse, byMethod, outstanding };
+	return { month, trend, byCourse, byTeacher, byMethod, outstanding };
 };
 
 export const listMyPayments = async (
