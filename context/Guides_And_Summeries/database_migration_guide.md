@@ -25,8 +25,10 @@
 | `prisma migrate dev` | Development — generates versioned SQL migrations | ✅ You review the SQL **before** deployment |
 
 **Current setup (since 2026-08-20)**: the API container runs `prisma migrate deploy` on startup and
-stops if migration deployment fails. `prisma db push` is reserved for disposable prototyping and the
-CI-only legacy-adoption simulation.
+stops if migration deployment fails. `prisma db push` is reserved for disposable prototyping. The
+CI legacy-adoption proof executes the two historical baseline SQL files without migration metadata,
+then adopts them and deploys only the later additive migrations; using current `db push` there would
+incorrectly pre-create the additive tables and make their migrations fail.
 
 > [!IMPORTANT]
 > For production, always prefer `prisma migrate` over `prisma db push`. Migrations give you a reviewable SQL file and full rollback history.

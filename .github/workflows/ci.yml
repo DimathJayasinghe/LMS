@@ -69,11 +69,17 @@ jobs:
       - name: Require zero migration drift
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
+      - name: Create isolated legacy-adoption database
+        env:
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/postgres?schema=public
+        run: echo 'CREATE DATABASE lms_legacy_ci' | npx prisma db execute --stdin
+
       - name: Verify adoption of a legacy db-push schema
         env:
-          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/lms_ci?schema=baseline_adoption
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/lms_legacy_ci?schema=public
         run: |
-          npx prisma db push
+          npx prisma db execute --file prisma/migrations/20260510075330_init/migration.sql
+          npx prisma db execute --file prisma/migrations/20260819150000_reconcile_schema_baseline/migration.sql
           npx prisma migrate resolve --applied 20260510075330_init
           npx prisma migrate resolve --applied 20260819150000_reconcile_schema_baseline
           npx prisma migrate deploy

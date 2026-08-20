@@ -35,6 +35,7 @@
 - [x] Added `docs/reports/2026-08-20-full-system-gap-analysis.md` covering authorization ethics, media dimensions, materials/live/exam/marker-group usability, fairness/privacy/security gaps, and phased delivery/production-Docker gates.
 - [x] Production-Docker verification: backend 233/233 (31 files), frontend 95/95 (24 files), both production builds and linters green, both dependency audits at zero known vulnerabilities, live migration status/zero drift green, all Compose services healthy, and authenticated SUPER_ADMIN/TEACHER plus negative-role report/UI smoke green.
 - [x] Credential-log production proof: login/logout produced two redacted `Set-Cookie` log events, zero raw token-bearing log lines, and logout left zero smoke refresh sessions.
+- [x] Remote CI exposed and fixed a flawed legacy-adoption simulation: it no longer `db push`es the current schema before deploying additive migrations; it builds the historical baseline from the first two SQL files, records those two as applied, then proves the later migrations and zero drift.
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was
