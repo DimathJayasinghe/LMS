@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (authorization/financial analytics correction and full product gap audit) |
+| **Current Phase** | Phase 9 — Polish & Hardening (secure course media completed; modules/materials next) |
 | **Last Updated** | 2026-08-20 |
-| **Last Completed Task** | Teacher-owned aggregate income/outstanding analytics; super-admin teacher/class financial filtering; forced backend ownership scope; privacy-preserving aggregate contract; full-system logic/ethics/product gap analysis. |
-| **Next Task** | Secure class banner/backdrop uploads with documented dimensions, then course modules/materials and marker-group configuration. |
+| **Last Completed Task** | Secure, ownership-scoped class banner/backdrop upload, decoded content/dimension verification, lifecycle cleanup, accessible edit UI, and audit coverage. |
+| **Next Task** | Course modules and securely downloadable materials, then timetable/live unification and marker-group configuration. |
 | **Blockers** | None |
 
 ### 2026-08-20 — Teacher/student academic workspace completed
@@ -36,6 +36,16 @@
 - [x] Production-Docker verification: backend 233/233 (31 files), frontend 95/95 (24 files), both production builds and linters green, both dependency audits at zero known vulnerabilities, live migration status/zero drift green, all Compose services healthy, and authenticated SUPER_ADMIN/TEACHER plus negative-role report/UI smoke green.
 - [x] Credential-log production proof: login/logout produced two redacted `Set-Cookie` log events, zero raw token-bearing log lines, and logout left zero smoke refresh sessions.
 - [x] Remote CI exposed and fixed a flawed legacy-adoption simulation: it no longer `db push`es the current schema before deploying additive migrations; it builds the historical baseline from the first two SQL files, records those two as applied, then proves the later migrations and zero drift.
+
+### 2026-08-20 — Secure class banner and backdrop uploads
+
+- [x] Removed arbitrary image URL input from class create/update; only a server-issued, course-bound public-R2 key can become a displayed URL.
+- [x] Added owning-TEACHER/SUPER_ADMIN presign, confirm, and idempotent remove endpoints with audit actions for authorization, attachment, and removal.
+- [x] Confirmation enforces an 8 MB stored-object cap, MIME agreement, patched Sharp/libvips full decoding with a pixel limit, and exact 1600×600 banner / 1920×1080 backdrop dimensions; invalid and replaced tracked objects are deleted best-effort.
+- [x] Added migration-backed object-key lifecycle fields and accessible alt-text fields while retaining existing legacy URLs until replacement/removal.
+- [x] Class edit now provides dimension guidance, format/size checks, preview, accessible description, replace, and remove controls; class creation explains that images are added after creation.
+- [x] Production-Docker verification passed: backend 248/248 (33 files), frontend 99/99 (25 files), both production builds/linters and live npm audits green, live + disposable-fresh migration paths at zero drift, and all Compose services healthy. Authenticated live R2 smoke covered exact-size upload/public preview/alt edit/remove, wrong-size rejection/deletion, strict URL rejection, unauthenticated denial, teacher cross-class denial, SUPER_ADMIN bypass, and audit records. Headless Chromium confirmed one visible form with both dimension guides, two accessible descriptions/file pickers, no legacy URL field, and no page errors; all smoke sessions and objects were cleaned up.
+- [x] Concurrent replace/remove/alt writes use optimistic compare-and-update. A stale confirmation deletes its own upload and returns `409 COURSE_ASSET_CHANGED` rather than overwriting the newer image or leaving that upload orphaned.
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was

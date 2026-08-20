@@ -170,6 +170,16 @@ it was first found; none have drifted in either direction):_
 
 _(Move completed items here with date + PR.)_
 
+- 2026-08-20 — **Secure class artwork editor.** `/classes/[classId]/edit` now shows separate banner
+  (1600×600) and backdrop (1920×1080) upload cards with requirements before selection, optional
+  client dimension feedback, preview, accessible image descriptions, replace/remove controls, and
+  visible errors. Arbitrary URL inputs were removed. The browser uses the ownership-scoped
+  presign → direct public-R2 PUT → server-confirm flow; the server remains authoritative for MIME,
+  full-decode, byte, pixel, and exact-dimension checks. New-class UX explains that artwork becomes
+  available after the class has been created. Production headless-Chromium smoke confirmed both
+  visible editors, the exact dimension guidance, accessible fields, absence of URL inputs, and no
+  page errors; positive/negative real-R2 API smoke verified the complete lifecycle.
+
 - 2026-08-17 — **Teacher attendance reporting + Zoom recovery.** `/attendance` now gives an owning
   TEACHER a course/session picker, source-labelled roster, and read-before-write Zoom difference panel;
   SUPER_ADMIN gets the same report below the existing entrance scanner. Applying a preview uses a UUID

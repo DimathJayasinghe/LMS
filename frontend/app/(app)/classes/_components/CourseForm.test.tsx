@@ -56,6 +56,8 @@ describe("CourseForm teacher creation", () => {
       { headers: { "Idempotency-Key": expect.any(String) } },
     ));
     expect(post.mock.calls[0]![1]).not.toHaveProperty("teacherId");
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("bannerUrl");
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("backdropUrl");
     expect(push).toHaveBeenCalledWith("/classes/course-1");
   });
 

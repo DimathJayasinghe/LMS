@@ -6,6 +6,7 @@ import { AlertCircle, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import type { AcademicStaff, ApiSuccess, Course, Role, Subject } from "@/lib/types";
+import { CourseAssets } from "./CourseAssets";
 
 const field =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
@@ -34,8 +35,6 @@ export function CourseForm({
   const [description, setDescription] = useState(course?.description ?? "");
   const [subjectId, setSubjectId] = useState(course?.subjectId ?? subjects[0]?.id ?? "");
   const [teacherId, setTeacherId] = useState(course?.teacherId ?? "");
-  const [bannerUrl, setBannerUrl] = useState(course?.bannerUrl ?? "");
-  const [backdropUrl, setBackdropUrl] = useState(course?.backdropUrl ?? "");
   const [isActive, setIsActive] = useState(course?.isActive ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +66,6 @@ export function CourseForm({
       monthlyFee: Number(monthlyFee),
       description: description.trim() || undefined,
       isActive,
-      bannerUrl: bannerUrl.trim() || undefined,
-      backdropUrl: backdropUrl.trim() || undefined,
     };
     if (!isEditing || isSuperAdmin) body.subjectId = subjectId;
     if (isSuperAdmin) body.teacherId = teacherId;
@@ -144,16 +141,13 @@ export function CourseForm({
         <textarea id="course-description" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} className={`${field} resize-y`} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <label htmlFor="course-banner" className="text-sm font-medium">Banner URL <span className="font-normal text-muted-foreground">(optional)</span></label>
-          <input id="course-banner" type="url" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className={field} />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="course-backdrop" className="text-sm font-medium">Backdrop URL <span className="font-normal text-muted-foreground">(optional)</span></label>
-          <input id="course-backdrop" type="url" value={backdropUrl} onChange={(e) => setBackdropUrl(e.target.value)} className={field} />
-        </div>
-      </div>
+      {course ? (
+        <CourseAssets initialCourse={course} />
+      ) : (
+        <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+          Create the class first, then open Edit to upload its banner and backdrop securely.
+        </p>
+      )}
 
       <label className="flex items-center gap-2 text-sm text-foreground">
         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="size-4" />

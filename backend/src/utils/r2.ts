@@ -115,18 +115,46 @@ export const r2HeadObject = async (
 };
 
 /**
- * Resolves the *public* avatar bucket + its public base URL. Avatars are served
- * from a separate public bucket (the main bucket is private — NIC/exam PDFs), so
+ * Reads a bounded object into memory for server-side signature inspection.
+ * Callers must supply a small upper bound; this prevents an untrusted upload
+ * from turning confirmation into an unbounded memory allocation.
+ */
+export const r2GetObjectBytes = async (
+  key: string,
+  maxBytes: number,
+  bucket: string = env.R2_BUCKET_NAME,
+): Promise<Uint8Array> => {
+  const client = getR2Client();
+  const response = await client.send(new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Range: `bytes=0-${maxBytes}`,
+  }));
+
+  if (!response.Body) {
+    throw new AppError('UPLOAD_EMPTY', 422, 'The uploaded file is empty.');
+  }
+
+  const bytes = await response.Body.transformToByteArray();
+  if (bytes.byteLength > maxBytes) {
+    throw new AppError('UPLOAD_TOO_LARGE', 413, 'The uploaded file exceeds the allowed size.');
+  }
+  return bytes;
+};
+
+/**
+ * Resolves the public display-asset bucket + its public base URL. These files are
+ * served separately from the private NIC/exam-PDF bucket, so
  * this throws 503 until both env vars are set (and the bucket is made public in the
  * Cloudflare dashboard — the app's S3 key cannot enable public access itself).
  */
-export const getPublicAvatarConfig = (): { bucket: string; publicBaseUrl: string } => {
+export const getPublicAssetConfig = (): { bucket: string; publicBaseUrl: string } => {
   ensureR2Configured();
   if (!env.R2_PUBLIC_BUCKET_NAME || !env.R2_PUBLIC_URL) {
     throw new AppError(
       'R2_NOT_CONFIGURED',
       503,
-      'Public avatar storage is not configured (R2_PUBLIC_BUCKET_NAME / R2_PUBLIC_URL).',
+      'Public asset storage is not configured (R2_PUBLIC_BUCKET_NAME / R2_PUBLIC_URL).',
     );
   }
   return {
@@ -134,6 +162,9 @@ export const getPublicAvatarConfig = (): { bucket: string; publicBaseUrl: string
     publicBaseUrl: env.R2_PUBLIC_URL.replace(/\/+$/, ''),
   };
 };
+
+/** Backward-compatible profile-service name. */
+export const getPublicAvatarConfig = getPublicAssetConfig;
 
 /** Best-effort object delete (used when replacing/removing an avatar). */
 export const deleteR2Object = async (

@@ -205,8 +205,12 @@ model Course {
   isActive    Boolean @default(true)
 
   // Display assets shown on the course page / dashboard
-  bannerUrl   String? // wide banner image URL
-  backdropUrl String? // background/backdrop image URL
+  bannerUrl     String? // server-controlled public URL
+  bannerKey     String? // public R2 object key for lifecycle management
+  bannerAlt     String? // accessible description
+  backdropUrl   String? // server-controlled public URL
+  backdropKey   String? // public R2 object key for lifecycle management
+  backdropAlt   String? // accessible description
 
   subjectId String
   subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)

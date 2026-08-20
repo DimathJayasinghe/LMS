@@ -380,8 +380,12 @@ model Course {
   description String?
   monthlyFee  Decimal  @db.Decimal(10, 2)      // default fee for this course
   isActive    Boolean  @default(true)
-  bannerUrl   String?                          // wide banner image URL
-  backdropUrl String?                          // background/backdrop image URL
+  bannerUrl   String?                          // server-controlled public CDN URL
+  bannerKey   String?                          // public R2 key for replace/remove cleanup
+  bannerAlt   String?                          // accessible image description
+  backdropUrl String?                          // server-controlled public CDN URL
+  backdropKey String?                          // public R2 key for replace/remove cleanup
+  backdropAlt String?                          // accessible image description
 
   subjectId   String
   subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
@@ -407,6 +411,9 @@ model Course {
 - **`subjectId`** — belongs to exactly one Subject.
 - **`teacherId`** — taught by exactly one Teacher (role `TEACHER`, enforced at service layer). A teacher teaching two subjects simply owns two courses.
 - **`isActive`** (not `deletedAt`) — courses are retired, not deleted; they stop accepting new enrollments.
+- Generic course create/update cannot write display URLs. Only the owning TEACHER or SUPER_ADMIN can
+  confirm a server-issued course key after size, MIME, full-decode, and exact-dimension validation
+  (banner 1600×600; backdrop 1920×1080).
 
 ### 4.7 Enrollment
 

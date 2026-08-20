@@ -55,7 +55,7 @@ Build these in coherent vertical slices after P0.
 
 | Capability group | Required functionality |
 |---|---|
-| Course authoring | ✅ Teacher-owned course create/edit, subject approval, sessions and video recordings completed 2026-08-20; modules/topics, reorderable lessons, drafts/scheduling, files/links/text/audio, and prerequisites remain |
+| Course authoring | ✅ Teacher-owned course create/edit, subject approval, secure dimension-verified banner/backdrop upload, sessions and video recordings completed 2026-08-20; modules/topics, reorderable lessons, drafts/scheduling, files/links/text/audio, and prerequisites remain |
 | Assignments | Separate assignment model from exams; due dates; attachments; individual/group allocation; drafts; late policy; resubmission; status tracking |
 | Gradebook | Course-wide gradebook; categories and weights; grading scales; manual columns; import/export; moderation; release controls; student grade view |
 | Rubrics and feedback | Reusable rubrics; criteria scoring; inline PDF/image annotation; private comments; comment bank; submission and grade history |
@@ -114,8 +114,8 @@ Every feature slice must include:
 1. ✅ CI pipeline and timetable soft-delete integrity.
 2. ✅ Reconcile versioned database migrations and prove fresh/legacy upgrade paths (2026-08-20); the production restore drill remains an operations task.
 3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
-4. **Next:** Secure class banner/backdrop upload (the core paid/enrolled `access.service` direct-test gap was closed 2026-08-20).
-5. Course modules/materials, then timetable-slot/live-flow unification and assignments.
+4. ✅ Secure class banner/backdrop upload with public-R2 lifecycle, full image decoding, exact dimensions, accessibility text, and audit events (2026-08-20).
+5. **Next:** Course modules/materials, then timetable-slot/live-flow unification and assignments.
 6. Gradebook, rubrics, feedback, and expanded question bank.
 7. Calendar, discussions, guardian summaries, and notification preferences.
 8. Analytics and at-risk intervention workflows.

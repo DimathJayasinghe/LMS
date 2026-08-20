@@ -129,9 +129,20 @@ export interface Course {
   subjectId: string;
   teacherId: string;
   bannerUrl?: string | null;
+  bannerAlt?: string | null;
   backdropUrl?: string | null;
+  backdropAlt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CourseAssetUploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
+  requiredWidth: number;
+  requiredHeight: number;
+  maxSizeBytes: number;
 }
 
 export type ClassType = "ONLINE" | "PHYSICAL" | null;
@@ -640,7 +651,9 @@ export interface PublicCourse {
   description: string | null;
   monthlyFee: string;
   bannerUrl: string | null;
+  bannerAlt: string | null;
   backdropUrl: string | null;
+  backdropAlt: string | null;
   subject: { name: string };
   teacher: { name: string };
 }

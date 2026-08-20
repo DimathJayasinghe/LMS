@@ -83,7 +83,7 @@ where implementation is incomplete.
 | Teacher ownership | Class/content reads and mutations are ownership-scoped; subject assignment controls class creation | A course has one teacher only; no co-teacher/substitute delegation or time-bounded access | P1 |
 | Teacher finance | Aggregate own-class income/outstanding report and reconciled contracts are implemented in this phase | No payout/commission model or downloadable settlement statement | P1 |
 | Super-admin finance | Institution totals and class breakdown exist; teacher and class filters are implemented in this phase | No aging buckets, institute dimension, settlement/export, discount/scholarship/installment model, or provider refund execution | P1 |
-| Class images | `bannerUrl` and `backdropUrl` are plain URL fields | No upload workflow, ownership-safe R2 keys, MIME/magic-byte checks, dimensions, crop/preview, deletion, or orphan cleanup; external URLs can enable tracking | P1 |
+| Class images | Completed in Phase B: ownership-bound public-R2 presign/confirm/remove, full decode, MIME/size/exact-dimension checks, accessible descriptions, UI preview/replace/remove, audit events, tracked-key cleanup, and stale-write protection | Automated expiry cleanup for presigned-but-never-confirmed uploads and optional crop tooling remain | P2 |
 | Course structure | Sessions and recordings attach directly to a class | No modules/topics, ordering, drafts, release scheduling, prerequisites, or coherent lesson page | P1 |
 | Materials | No material domain model, endpoints, or UI | Students cannot download teacher files or open structured links/text; no upload security, versioning, visibility, or download audit policy | P1 |
 | Live lessons | In-site Zoom session schedule/start/join exists | Recurring timetable links still use a separate/raw flow; provider credentials are placeholders; join readiness and failure recovery need staging proof | P0/P1 |
@@ -250,6 +250,8 @@ can filter all teachers/classes; front desk/student/marker receive 403.
 
 ### Phase B — Class image upload
 
+**Status: completed 2026-08-20.**
+
 - Build presign/confirm/delete endpoints and R2 lifecycle.
 - Validate ownership, content signature, size, exact dimensions, and safe formats.
 - Add class-form picker, preview, dimension guidance, replace/remove, and alt text.
@@ -325,6 +327,6 @@ periodic security testing remain necessary.
 
 ## 10. Immediate next action after this report
 
-Implement Phase B class images before the larger module/material migration. Phase A is complete and
-production-Docker verified. The image slice provides a reusable secure upload pattern and reduces
-risk before file materials are introduced.
+Implement Phase C modules and downloadable materials next. Phases A and B are complete and
+production-Docker verified. Reuse Phase B's bounded presign/confirm/content-validation lifecycle,
+but keep student materials private and authorize every download through enrollment/access policy.

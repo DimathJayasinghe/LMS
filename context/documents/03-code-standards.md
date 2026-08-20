@@ -229,6 +229,13 @@ logger.error({ err, userId }, 'Payment processing failed');
 - Use **Pino** structured JSON logger — never `console.log` in production code. Request logging must
   redact authorization, request cookies, and response `Set-Cookie` headers; never log tokens,
   presigned credentials, passwords, or full identity documents.
+
+- Direct-to-storage public display uploads must use a server-issued resource-bound key, then a
+  separate confirmation request. Confirmation must reauthorize ownership, bound the fetched bytes,
+  compare stored MIME to decoded content, enforce a pixel limit and full decode, check the product's
+  exact dimensions, and only then build the public URL. Never accept an arbitrary client URL for a
+  managed asset. Delete invalid, replaced, and removed tracked objects best-effort and audit the
+  privileged lifecycle actions.
 - Always include context object as first argument.
 
 ### 6.3 Date Handling

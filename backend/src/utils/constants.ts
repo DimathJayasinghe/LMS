@@ -144,6 +144,16 @@ export const AVATAR_IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/web
 /** Max avatar size — 5 MB. */
 export const AVATAR_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
+// ─── Course display assets ─────────────────────────────────
+
+export const COURSE_ASSET_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const COURSE_ASSET_MAX_SIZE_BYTES = 8 * 1024 * 1024;
+export const COURSE_ASSET_URL_TTL_SECONDS = 15 * 60;
+export const COURSE_ASSET_REQUIREMENTS = {
+	BANNER: { width: 1600, height: 600, path: 'banner' },
+	BACKDROP: { width: 1920, height: 1080, path: 'backdrop' },
+} as const;
+
 /** Minimum gap between self email/password changes — 7 days. */
 export const CREDENTIAL_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -245,6 +255,9 @@ export const AUDIT_ACTION = {
 	CLASS_CREATED: 'CLASS_CREATED',
 	CLASS_UPDATED: 'CLASS_UPDATED',
 	COURSE_TEACHER_ASSIGNED: 'COURSE_TEACHER_ASSIGNED',
+	COURSE_ASSET_UPLOAD_URL: 'COURSE_ASSET_UPLOAD_URL',
+	COURSE_ASSET_UPDATED: 'COURSE_ASSET_UPDATED',
+	COURSE_ASSET_REMOVED: 'COURSE_ASSET_REMOVED',
 
 	// Class sessions
 	SESSION_CREATED: 'SESSION_CREATED',

@@ -37,8 +37,13 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 > require `Idempotency-Key`. The frontend exposes `/classes/new` and `/classes/:classId/edit` only to
 > TEACHER/SUPER_ADMIN and derives subject/teacher choices from the assignment endpoints.
 
+> **Secure class artwork completed 2026-08-20:** arbitrary client-supplied image URLs are no longer
+> accepted by create/update. The owner or SUPER_ADMIN uses a course-bound presign → public-R2 PUT →
+> confirm flow. Confirmation checks stored size/MIME, fully decoded content, and exact dimensions
+> before exposing a server-built CDN URL; replacement/removal cleans up tracked keys.
+
 - **Course create/update** now requires `subjectId` and (for SUPER_ADMIN) `teacherId`; a TEACHER creating a course owns it automatically.
-- Course gained `bannerUrl` / `backdropUrl` (image URLs).
+- Course responses include server-controlled `bannerUrl` / `backdropUrl` and accessible alt text.
 - **Students** only see sessions for courses they are **actively enrolled** in (`403 NOT_ENROLLED` otherwise). Enrollments are created/listed via `enrollments.endpoints.md`.
 - Sessions may be **generated from the timetable** (see `timetable.endpoints.md`); `timetableSlotId` links them.
 
@@ -101,7 +106,9 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 	"subjectId": "uuid",
 	"teacherId": "uuid",
 	"bannerUrl": "https://.../banner.png",
+	"bannerAlt": "Students solving equations",
 	"backdropUrl": "https://.../backdrop.png",
+	"backdropAlt": "Physics laboratory equipment",
 	"createdAt": "2026-05-13T06:00:00.000Z",
 	"updatedAt": "2026-05-13T06:00:00.000Z"
 }
@@ -135,6 +142,10 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | GET | `/` | Any authenticated | List classes. |
 | GET | `/:classId` | Any authenticated | Get class detail. |
 | PATCH | `/:classId` | ADMIN, STAFF | Update class (including active status). |
+| POST | `/:classId/assets/upload-url` | Owning TEACHER, SUPER_ADMIN | Authorize a course-bound image upload. |
+| POST | `/:classId/assets/confirm` | Owning TEACHER, SUPER_ADMIN | Decode, verify, and attach uploaded artwork. |
+| PATCH | `/:classId/assets/:kind/alt` | Owning TEACHER, SUPER_ADMIN | Edit accessible description without re-uploading. |
+| DELETE | `/:classId/assets/:kind` | Owning TEACHER, SUPER_ADMIN | Remove `banner` or `backdrop` and tracked object. |
 | POST | `/:classId/sessions` | ADMIN, STAFF | Create a class session. |
 | GET | `/:classId/sessions` | Any authenticated | List class sessions. |
 | GET | `/:classId/sessions/:sessionId` | Any authenticated | Get class session detail. |
@@ -162,7 +173,9 @@ hatch here, unlike `GET /` for `SUPER_ADMIN`.
 			"description": "...",
 			"monthlyFee": "2500.00",
 			"bannerUrl": "https://.../banner.png",
+			"bannerAlt": "Students solving equations",
 			"backdropUrl": "https://.../backdrop.png",
+			"backdropAlt": "Physics laboratory equipment",
 			"subject": { "name": "Physics" },
 			"teacher": { "name": "Ms. Perera" }
 		}
@@ -185,13 +198,12 @@ Creates a class (course).
 	"monthlyFee": 2500,
 	"isActive": true,
 	"subjectId": "uuid",
-	"teacherId": "uuid",
-	"bannerUrl": "https://.../banner.png",
-	"backdropUrl": "https://.../backdrop.png"
+	"teacherId": "uuid"
 }
 ```
 
-- `subjectId` — **required**. `teacherId` — required when the caller is `SUPER_ADMIN`; omitted by a `TEACHER` (they own it). `bannerUrl`/`backdropUrl` — optional image URLs.
+- `subjectId` — **required**. `teacherId` — required when the caller is `SUPER_ADMIN`; omitted by a `TEACHER` (they own it).
+- Image URLs are intentionally rejected as unknown fields. Create the class first, then use the asset flow.
 
 **Success (201)**
 
@@ -283,6 +295,84 @@ Update class details.
 - 403 forbidden (role guard)
 - 404 `CLASS_NOT_FOUND` (service error shape)
 - 409 `CLASS_ALREADY_EXISTS` (service error shape)
+
+### POST `/:classId/assets/upload-url`
+
+Owning TEACHER or SUPER_ADMIN. Allowed types are `image/jpeg`, `image/png`, and `image/webp`;
+SVG is rejected. Maximum size is 8 MB.
+
+```json
+{
+	"kind": "BANNER",
+	"fileName": "physics-banner.png",
+	"contentType": "image/png",
+	"fileSizeBytes": 245760
+}
+```
+
+The server ignores the filename for placement and creates a randomized key under the matching
+`courses/<classId>/<kind>/` prefix.
+
+```json
+{
+	"status": "success",
+	"data": {
+		"uploadUrl": "https://signed-r2-put...",
+		"key": "courses/<classId>/banner/<uuid>.png",
+		"expiresAt": "2026-08-20T15:15:00.000Z",
+		"requiredWidth": 1600,
+		"requiredHeight": 600,
+		"maxSizeBytes": 8388608
+	}
+}
+```
+
+The browser PUTs the raw file to `uploadUrl` with the same `Content-Type`.
+
+### POST `/:classId/assets/confirm`
+
+Requires `Idempotency-Key`.
+
+```json
+{
+	"kind": "BANNER",
+	"key": "courses/<classId>/banner/<uuid>.png",
+	"altText": "Students solving equations"
+}
+```
+
+The key must match the class and kind. Confirmation rechecks the stored 8 MB limit and MIME,
+applies a libvips pixel limit, fully decodes JPG/PNG/WebP content, and requires exact dimensions:
+
+- `BANNER`: 1600×600 pixels (8:3).
+- `BACKDROP`: 1920×1080 pixels (16:9).
+
+On success the response contains the updated Class shape. Invalid uploaded objects are deleted
+best-effort. Relevant errors: `FORBIDDEN_COURSE`, `FORBIDDEN_KEY`, `UPLOAD_NOT_FOUND`,
+`UPLOAD_TOO_LARGE`, `INVALID_IMAGE_TYPE`, `IMAGE_TYPE_MISMATCH`, `INVALID_IMAGE_CONTENT`, and
+`INVALID_IMAGE_DIMENSIONS`. A concurrent replacement returns `409 COURSE_ASSET_CHANGED` and the
+stale request's newly uploaded object is deleted best-effort.
+
+### PATCH `/:classId/assets/:kind/alt`
+
+`kind` is `banner` or `backdrop`. Requires `Idempotency-Key` and an existing image.
+
+```json
+{ "altText": "Students solving equations" }
+```
+
+The non-empty description is trimmed and limited to 200 characters. The owning TEACHER or
+SUPER_ADMIN can update it without re-uploading the file. Returns the updated Class shape; returns
+`409 COURSE_ASSET_NOT_FOUND` if no image exists.
+If another request replaces/removes the image between read and write, this endpoint returns
+`409 COURSE_ASSET_CHANGED` instead of editing the newer asset.
+
+### DELETE `/:classId/assets/:kind`
+
+`kind` is `banner` or `backdrop`. Requires `Idempotency-Key`. Clears URL/key/alt text and deletes a
+tracked public-R2 object best-effort. It also clears legacy external URLs that predate tracked keys.
+Repeated removal is safe and returns the current Class shape.
+Concurrent change returns `409 COURSE_ASSET_CHANGED` rather than clearing the newer image.
 
 ### POST `/:classId/sessions`
 

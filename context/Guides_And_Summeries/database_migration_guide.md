@@ -30,6 +30,10 @@ CI legacy-adoption proof executes the two historical baseline SQL files without 
 then adopts them and deploys only the later additive migrations; using current `db push` there would
 incorrectly pre-create the additive tables and make their migrations fail.
 
+The `20260820150000_secure_course_assets` migration is additive and data-preserving: it adds four
+nullable Course columns (`bannerKey`, `bannerAlt`, `backdropKey`, `backdropAlt`). Existing artwork
+URLs remain intact and can be replaced or removed through the secure asset endpoints.
+
 > [!IMPORTANT]
 > For production, always prefer `prisma migrate` over `prisma db push`. Migrations give you a reviewable SQL file and full rollback history.
 
