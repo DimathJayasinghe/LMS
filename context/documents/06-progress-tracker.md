@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (secure course media completed; modules/materials next) |
-| **Last Updated** | 2026-08-20 |
-| **Last Completed Task** | Secure, ownership-scoped class banner/backdrop upload, decoded content/dimension verification, lifecycle cleanup, accessible edit UI, and audit coverage. |
-| **Next Task** | Course modules and securely downloadable materials, then timetable/live unification and marker-group configuration. |
+| **Current Phase** | Phase 9 — Polish & Hardening (private course modules/materials completed; timetable/live unification next) |
+| **Last Updated** | 2026-08-21 |
+| **Last Completed Task** | Ordered draft/released course modules with verified private file uploads, paid student downloads, lifecycle cleanup, class-page UI, and audit coverage. |
+| **Next Task** | Timetable/live-class unification, then marker-group configuration. |
 | **Blockers** | None |
 
 ### 2026-08-20 — Teacher/student academic workspace completed
@@ -46,6 +46,14 @@
 - [x] Class edit now provides dimension guidance, format/size checks, preview, accessible description, replace, and remove controls; class creation explains that images are added after creation.
 - [x] Production-Docker verification passed: backend 248/248 (33 files), frontend 99/99 (25 files), both production builds/linters and live npm audits green, live + disposable-fresh migration paths at zero drift, and all Compose services healthy. Authenticated live R2 smoke covered exact-size upload/public preview/alt edit/remove, wrong-size rejection/deletion, strict URL rejection, unauthenticated denial, teacher cross-class denial, SUPER_ADMIN bypass, and audit records. Headless Chromium confirmed one visible form with both dimension guides, two accessible descriptions/file pickers, no legacy URL field, and no page errors; all smoke sessions and objects were cleaned up.
 - [x] Concurrent replace/remove/alt writes use optimistic compare-and-update. A stale confirmation deletes its own upload and returns `409 COURSE_ASSET_CHANGED` rather than overwriting the newer image or leaving that upload orphaned.
+
+### 2026-08-21 — Private course modules and downloadable materials
+
+- [x] Owning TEACHER/SUPER_ADMIN can create, order, edit, publish/schedule, and soft-remove modules; ADMIN/MARKER are explicitly denied.
+- [x] Private PDF/JPG/PNG/WebP uploads use course/module-bound randomized R2 keys, a 25 MB bound, decoded content verification, safe filenames, and invalid/removal cleanup.
+- [x] Enrolled students list only released published modules; download issuance repeats current-month payment access and returns a 15-minute attachment URL without exposing object keys.
+- [x] Class detail provides module creation/publish/remove, material upload/remove, and one-click authorized download; all lifecycle actions and downloads are audit-filterable.
+- [x] Production-Docker verification: backend 256/256 (34 files), frontend 102/102 (26 files), both builds/linters green, fresh six-migration path at zero drift, and live Compose healthy. Authenticated SUPER_ADMIN smoke covered real private-R2 PDF upload/confirm/publish/download/removal, unauthenticated 401, audit creation, rendered staff controls, log review, and session/object cleanup.
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was

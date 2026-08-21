@@ -34,6 +34,10 @@ The `20260820150000_secure_course_assets` migration is additive and data-preserv
 nullable Course columns (`bannerKey`, `bannerAlt`, `backdropKey`, `backdropAlt`). Existing artwork
 URLs remain intact and can be replaced or removed through the secure asset endpoints.
 
+The `20260821010000_course_modules_materials` migration is also additive: it creates the two enums,
+`CourseModule`, and `CourseMaterial`, with restrictive foreign keys and query indexes. It does not
+rewrite existing course, enrollment, payment, session, video, or exam rows.
+
 > [!IMPORTANT]
 > For production, always prefer `prisma migrate` over `prisma db push`. Migrations give you a reviewable SQL file and full rollback history.
 

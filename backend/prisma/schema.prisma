@@ -56,6 +56,15 @@ enum VideoStatus {
   FAILED
 }
 
+enum CourseModuleStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum CourseMaterialType {
+  FILE
+}
+
 enum AttendanceSource {
   QR // student QR scanned at the entrance
   BARCODE // physical barcode card
@@ -223,6 +232,7 @@ model Course {
   exams          Exam[]
   timetableSlots TimetableSlot[]
   contentProgress CourseContentProgress[]
+  modules         CourseModule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -270,6 +280,56 @@ model CourseContentProgress {
   @@unique([userId, courseId])
   @@index([userId])
   @@index([courseId])
+}
+
+// Ordered learning units. Students only receive PUBLISHED modules whose
+// releaseAt is absent or has passed; staff management remains ownership-scoped.
+model CourseModule {
+  id          String             @id @default(uuid())
+  title       String
+  description String?
+  position    Int
+  status      CourseModuleStatus @default(DRAFT)
+  releaseAt   DateTime?
+  deletedAt   DateTime?
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  materials CourseMaterial[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId, position])
+  @@index([courseId, status, releaseAt])
+  @@index([deletedAt])
+}
+
+// Private R2-backed resources. objectKey is never exposed in list responses;
+// downloads are authorized server-side and receive only a short-lived URL.
+model CourseMaterial {
+  id           String             @id @default(uuid())
+  type         CourseMaterialType @default(FILE)
+  title        String
+  description  String?
+  position     Int
+  objectKey    String?            @unique
+  fileName     String?
+  contentType  String?
+  sizeBytes    Int?
+  downloadable Boolean            @default(true)
+  version      Int                @default(1)
+  deletedAt    DateTime?
+
+  moduleId String
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([moduleId, position])
+  @@index([deletedAt])
 }
 
 model Enrollment {

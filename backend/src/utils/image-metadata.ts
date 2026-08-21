@@ -20,11 +20,14 @@ const MIME_BY_FORMAT: Record<string, SupportedImageMime | undefined> = {
  * rather than trusting its extension, claimed MIME, or dimension header. The
  * pixel cap prevents a small compressed file from becoming a decompression bomb.
  */
-export const readImageMetadata = async (bytes: Uint8Array): Promise<ImageMetadata> => {
+export const readImageMetadata = async (
+	bytes: Uint8Array,
+	maxInputPixels: number = 1920 * 1080,
+): Promise<ImageMetadata> => {
 	try {
 		const image = sharp(bytes, {
 			failOn: 'error',
-			limitInputPixels: 1920 * 1080,
+			limitInputPixels: maxInputPixels,
 		});
 		const metadata = await image.metadata();
 		const mimeType = metadata.format ? MIME_BY_FORMAT[metadata.format] : undefined;

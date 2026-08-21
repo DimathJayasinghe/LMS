@@ -145,6 +145,43 @@ export interface CourseAssetUploadUrlResult {
   maxSizeBytes: number;
 }
 
+export type CourseModuleStatus = "DRAFT" | "PUBLISHED";
+
+export interface CourseMaterial {
+  id: string;
+  type: "FILE";
+  title: string;
+  description: string | null;
+  position: number;
+  fileName: string | null;
+  contentType: string | null;
+  sizeBytes: number | null;
+  downloadable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  description: string | null;
+  position: number;
+  status: CourseModuleStatus;
+  releaseAt: string | null;
+  courseId: string;
+  materials: CourseMaterial[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseMaterialUploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
+  maxSizeBytes: number;
+}
+
 export type ClassType = "ONLINE" | "PHYSICAL" | null;
 
 /** Enrollment / timetable mode. Unlike a session's `classType`, never null. */

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Role } from '@prisma/client';
 import * as ClassController from '@/controllers/class.controller';
 import { classSessionRoutes } from '@/routes/class-session.routes';
+import { courseModuleRoutes } from '@/routes/course-module.routes';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
@@ -22,6 +23,7 @@ export const classRoutes = Router();
 
 // ─── Class Sessions (Nested) ───────────────────────────────
 classRoutes.use('/:classId/sessions', classSessionRoutes);
+classRoutes.use('/:classId/modules', courseModuleRoutes);
 
 // ─── Public (unauthenticated) — marketing /courses page ─────
 // Must be registered before `GET /:classId` below, or Express would match

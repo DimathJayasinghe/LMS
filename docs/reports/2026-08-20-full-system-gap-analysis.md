@@ -260,6 +260,11 @@ can filter all teachers/classes; front desk/student/marker receive 403.
 
 ### Phase C — Modules and downloadable materials
 
+**Status: completed 2026-08-21 for private file materials.** Ordered module/material CRUD,
+draft/publish/future release, bounded upload confirmation, paid download authorization, cleanup,
+audit events, and the teacher/student class-page workflow are implemented. Link/text/audio types,
+drag-and-drop ordering, and abandoned-presign cleanup remain later enhancements.
+
 - Add module/material schema and migration.
 - Implement ordered CRUD, draft/release, secure upload/confirm/download, and audit events.
 - Build teacher curriculum editor and student “Continue learning” feed.
@@ -327,6 +332,6 @@ periodic security testing remain necessary.
 
 ## 10. Immediate next action after this report
 
-Implement Phase C modules and downloadable materials next. Phases A and B are complete and
-production-Docker verified. Reuse Phase B's bounded presign/confirm/content-validation lifecycle,
-but keep student materials private and authorize every download through enrollment/access policy.
+Implement Phase D timetable/live-class unification next. Phases A-C are implemented; keep the
+existing private material access gate intact while removing raw recurring Zoom-link ambiguity and
+adding conflict-aware timetable authoring/preview.

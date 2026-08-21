@@ -3,7 +3,7 @@
 > The build order and page inventory for the frontend, mirroring the backend's `06-progress-tracker.md`.
 > Keep this current: when a screen is done (per Doc 00 §7), move it to **Done** with the date.
 
-_Last updated: 2026-08-20. The 2026-07-15 re-verification remains the baseline; subsequent completed
+_Last updated: 2026-08-21. The 2026-07-15 re-verification remains the baseline; subsequent completed
 items are called out with their completion date below._
 
 ---
@@ -21,6 +21,7 @@ items are called out with their completion date below._
 | Authenticated `(app)` shell | ✅ Done | `app/(app)/layout.tsx` server auth-guard (`/auth/me`, forwarded cookies → redirect to login); `AppShell` (fixed sidebar + mobile drawer + sticky TopBar); role-based `Sidebar` (`lib/nav.ts`), `TopBar` user menu + logout. |
 | Role-aware `/dashboard` | ✅ Done | Moved into `(app)`; greets user + renders role-filtered quick-link cards. |
 | Classes: role-aware workspace | ✅ Wired | Teachers see only owned classes and can create/edit classes for subjects assigned by SUPER_ADMIN. Students see current enrollments separately from discovery, with new-lesson and upcoming-session indicators. `/classes/[classId]` shows detail, sessions, recordings, enrollment controls, and advances the student's persisted seen marker. |
+| Course modules and materials | ✅ Wired | Class detail now provides ordered module creation, draft/publish controls, private PDF/JPG/PNG/WebP upload, removal, and authorized downloads. Students receive only released modules; every download is minted server-side after enrollment and current-payment checks. |
 | Enroll → pay | ✅ Wired | `EnrollPanel` (client): self-enroll (`POST /enrollments`, ONLINE/PHYSICAL), drop (`DELETE /enrollments/:id`), and **pay** via the shared `initiatePayherePayment` (`POST /payments/initiate` with a UUID `Idempotency-Key`) → **onsite checkout** (`startPayherePayment` → PayHere modal on our page; card fields in PayHere's iframe, no PCI; redirect only as fallback). Verified against the sandbox merchant (2026-07-11): the onsite modal opens on-page with the merchant + amount, no navigation away. |
 | Timetable | ✅ Wired | `/timetable` server-fetches `GET /timetable/slots` + `GET /classes`, renders a Monday-first weekly view (time range, course/title, mode badge, Zoom join). |
 | Enrollment API (backend) | ✅ Added | `POST/GET/DELETE /api/enrollments` (+ `/my`) — the `Enrollment` model previously had no API; this unblocks the paid flow (see `context/api_endpoints/enrollments.endpoints.md`). |

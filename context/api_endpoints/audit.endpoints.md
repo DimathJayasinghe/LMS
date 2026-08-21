@@ -85,6 +85,11 @@ The secure class-artwork slice adds `COURSE_ASSET_UPLOAD_URL`, `COURSE_ASSET_UPD
 `COURSE_ASSET_REMOVED`. Metadata records the asset kind and safe upload attributes, never the signed
 PUT URL or a secret. No-op repeated removal does not create a misleading removal event.
 
+The private course-material slice adds `COURSE_MODULE_CREATED`, `COURSE_MODULE_UPDATED`,
+`COURSE_MODULE_REMOVED`, `COURSE_MATERIAL_UPLOAD_URL`, `COURSE_MATERIAL_ATTACHED`,
+`COURSE_MATERIAL_UPDATED`, `COURSE_MATERIAL_REMOVED`, and `COURSE_MATERIAL_DOWNLOADED`.
+Download events record only course/module/material IDs; signed URLs and R2 keys are excluded.
+
 Any privileged mutation should call `AuditService.log(...)` from the controller layer (fire-and-
 forget — never blocks the response, write failures are logged not thrown). See
 `backend/src/services/audit.service.ts` and the `AUDIT_ACTION` constant map. When adding a new

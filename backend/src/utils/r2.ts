@@ -77,11 +77,15 @@ export const createR2PresignedPutUrl = async (
 export const createR2PresignedGetUrl = async (
   key: string,
   expiresInSeconds: number,
+  downloadName?: string,
 ): Promise<string> => {
   const client = getR2Client();
   const command = new GetObjectCommand({
     Bucket: env.R2_BUCKET_NAME,
     Key: key,
+    ...(downloadName
+      ? { ResponseContentDisposition: `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"` }
+      : {}),
   });
 
   return getSignedUrl(client, command, { expiresIn: expiresInSeconds });

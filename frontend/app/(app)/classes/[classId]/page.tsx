@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
 import { LiveClassAction } from "./_components/LiveClassAction";
 import { CourseSeenTracker } from "./_components/CourseSeenTracker";
+import { CourseModules } from "./_components/CourseModules";
 import { api, ApiError } from "@/lib/api";
 import { formatDuration } from "@/lib/video";
 import type {
@@ -14,6 +15,7 @@ import type {
   ApiSuccess,
   ClassSession,
   Course,
+  CourseModule,
   Enrollment,
   Subject,
   User,
@@ -61,7 +63,7 @@ export default async function ClassDetailPage({
     throw e;
   }
 
-  const [subjectName, sessionsResult, videosResult, active] = await Promise.all([
+  const [subjectName, modulesResult, sessionsResult, videosResult, active] = await Promise.all([
     // Subject name (payload carries only subjectId).
     (async () => {
       try {
@@ -70,6 +72,15 @@ export default async function ClassDetailPage({
         ).data.name;
       } catch {
         return undefined;
+      }
+    })(),
+    (async (): Promise<{ modules: CourseModule[]; gated: boolean }> => {
+      try {
+        const res = await api.get<ApiList<CourseModule>>(`/classes/${classId}/modules`, { cookie });
+        return { modules: res.data, gated: false };
+      } catch (e) {
+        const gated = e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403);
+        return { modules: [], gated };
       }
     })(),
     // Sessions — students who aren't enrolled get 403 NOT_ENROLLED.
@@ -119,6 +130,7 @@ export default async function ClassDetailPage({
 
   const { sessions, gated } = sessionsResult;
   const { videos, gated: videosGated } = videosResult;
+  const { modules, gated: modulesGated } = modulesResult;
   const banner = course.backdropUrl ?? course.bannerUrl;
   const isStaff = user.role === "TEACHER" || user.role === "SUPER_ADMIN";
 
@@ -179,6 +191,10 @@ export default async function ClassDetailPage({
                 {course.description}
               </p>
             </section>
+          )}
+
+          {!modulesGated && (
+            <CourseModules classId={classId} initialModules={modules} canManage={isStaff} />
           )}
 
           <section>

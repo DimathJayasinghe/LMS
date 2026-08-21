@@ -55,7 +55,7 @@ Build these in coherent vertical slices after P0.
 
 | Capability group | Required functionality |
 |---|---|
-| Course authoring | ✅ Teacher-owned course create/edit, subject approval, secure dimension-verified banner/backdrop upload, sessions and video recordings completed 2026-08-20; modules/topics, reorderable lessons, drafts/scheduling, files/links/text/audio, and prerequisites remain |
+| Course authoring | ✅ Teacher-owned course create/edit, subject approval, secure artwork, sessions/video, and ordered draft/released private file modules completed 2026-08-21; links/text/audio materials, drag-and-drop ordering, prerequisites, and cross-course reuse remain |
 | Assignments | Separate assignment model from exams; due dates; attachments; individual/group allocation; drafts; late policy; resubmission; status tracking |
 | Gradebook | Course-wide gradebook; categories and weights; grading scales; manual columns; import/export; moderation; release controls; student grade view |
 | Rubrics and feedback | Reusable rubrics; criteria scoring; inline PDF/image annotation; private comments; comment bank; submission and grade history |

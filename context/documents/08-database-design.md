@@ -396,6 +396,7 @@ model Course {
   enrollments   Enrollment[]
   classSessions ClassSession[]
   exams         Exam[]
+  modules       CourseModule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -414,6 +415,16 @@ model Course {
 - Generic course create/update cannot write display URLs. Only the owning TEACHER or SUPER_ADMIN can
   confirm a server-issued course key after size, MIME, full-decode, and exact-dimension validation
   (banner 1600×600; backdrop 1920×1080).
+
+### 4.6.1 CourseModule and CourseMaterial
+
+`CourseModule` is an ordered, soft-removable learning unit with `DRAFT`/`PUBLISHED` state and an
+optional `releaseAt`. `CourseMaterial` is an ordered, version-ready, soft-removable private file
+record. It stores the verified MIME/size, server-normalized filename, download policy, and private
+R2 key. List responses deliberately omit `objectKey`; download URLs are minted only after the
+service repeats role, ownership, release, enrollment, and current-payment checks. Restrictive
+foreign keys preserve academic history, while service-level removal hides rows and cleans tracked
+objects best-effort.
 
 ### 4.7 Enrollment
 
@@ -960,6 +971,7 @@ Controllers never import Prisma. Services scope every query by the authenticated
 | **Enrollment** | CRUD | Read (own courses) | Create + Read all | ❌ | Read own |
 | **Payment** | CRUD + override | ❌ | Read all, bulk/entrance collect | ❌ | Read own |
 | **ClassSession** | CRUD | CRUD **own courses** | Read all | Read | Read enrolled (non-deleted) |
+| **CourseModule / CourseMaterial** | CRUD | CRUD **own courses** | ❌ | ❌ | Read released when enrolled; download when current fee paid |
 | **Attendance** | Read all | Read own courses | Read all, scan QR/barcode | Read own | Read own |
 | **VideoRecording** | CRUD | CRUD **own courses** | Read all | Read | Read enrolled + paid |
 | **Exam** | CRUD | CRUD **own courses** | Read all | Read assigned | Read enrolled (non-deleted) |
