@@ -124,8 +124,8 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 	"classType": null,
 	"date": "2026-05-13T10:00:00.000Z",
 	"durationMinutes": 90,
-	"zoomLink": "https://zoom.us/...",
-	"zoomMeetingId": "123456789",
+	"zoomMeetingId": null,
+	"liveScheduled": true,
 	"courseId": "uuid",
 	"deletedAt": null,
 	"createdAt": "2026-05-13T06:00:00.000Z",
@@ -376,7 +376,8 @@ Concurrent change returns `409 COURSE_ASSET_CHANGED` rather than clearing the ne
 
 ### POST `/:classId/sessions`
 
-Create a class session.
+Create a class session. Creating, updating, soft-deleting, and scheduling a session require an
+`Idempotency-Key` UUID.
 
 **Request body**
 
@@ -386,11 +387,14 @@ Create a class session.
 	"description": "...",
 	"classType": "ONLINE",
 	"date": "2026-05-13T10:00:00.000Z",
-	"durationMinutes": 90,
-	"zoomLink": "https://zoom.us/...",
-	"zoomMeetingId": "123456789"
+	"durationMinutes": 90
 }
 ```
+
+Clients cannot paste provider links or meeting IDs. For an online session, an owning teacher or
+SUPER_ADMIN calls the audited live-class schedule endpoint. Session reads expose `liveScheduled`;
+students receive `zoomMeetingId: null`, while authorized operational staff retain the meeting
+number only for attendance reconciliation.
 
 **Success (201)**
 

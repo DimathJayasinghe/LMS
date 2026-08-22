@@ -61,9 +61,9 @@ Build these in coherent vertical slices after P0.
 | Rubrics and feedback | Reusable rubrics; criteria scoring; inline PDF/image annotation; private comments; comment bank; submission and grade history |
 | Question bank and tests | Reusable/versioned questions; more question types; random pools; shuffling; multiple attempts; negative/partial marking; answer explanations |
 | Exam accommodations | Per-student extra time, attempt count, availability windows, alternative location/channel, interruption recovery, audit visibility |
-| Teacher/marker workspace | ✅ Owned-class scope, session/video actions, exact marker assignment, marker post-release lock, and audited teacher correction completed 2026-08-20; bulk queues, workload filters and timetable-slot authoring remain |
+| Teacher/marker workspace | ✅ Owned-class scope, session/video actions, timetable authoring, exact marker assignment, marker post-release lock, and audited teacher correction completed; bulk queues and workload filters remain |
 | Communication | Course announcements; threaded discussions/Q&A; mentions; attachments; moderation; read state; notification preferences |
-| Calendar and tasks | Unified timetable, exam and assignment calendar; due-soon list; reminders; iCal export; conflict detection |
+| Calendar and tasks | ✅ Recurring timetable conflict detection and generation preview completed 2026-08-21; unified exam/assignment calendar, due-soon list, reminders, and iCal export remain |
 | Payments operations | Override UI and immutable completed-refund ledger completed 2026-08-19; teacher own-class aggregate analytics and super-admin teacher/class filtering completed 2026-08-20; provider refunds/voids, compensating re-payment flow, receipt reissue, discounts/scholarships, installments, aging report |
 | Guardian access | Guardian-student links; consent/verification; attendance, upcoming/missing work and payment summaries; privacy-limited portal; SMS digest |
 | Student support | Search; bookmarks; notes; progress checklist; downloadable resources; low-bandwidth mode; clear missing/late/upcoming work views |
@@ -115,9 +115,10 @@ Every feature slice must include:
 2. ✅ Reconcile versioned database migrations and prove fresh/legacy upgrade paths (2026-08-20); the production restore drill remains an operations task.
 3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
 4. ✅ Secure class banner/backdrop upload with public-R2 lifecycle, full image decoding, exact dimensions, accessibility text, and audit events (2026-08-20).
-5. **Next:** Course modules/materials, then timetable-slot/live-flow unification and assignments.
-6. Gradebook, rubrics, feedback, and expanded question bank.
-7. Calendar, discussions, guardian summaries, and notification preferences.
-8. Analytics and at-risk intervention workflows.
-9. Accessibility/i18n/PWA hardening.
-10. Ecosystem integrations, adaptive learning, credentials, and optional AI.
+5. ✅ Private course modules/materials and timetable-slot/live-flow unification (2026-08-21).
+6. **Next:** Marker groups and guided exam assignment, then standalone assignments.
+7. Gradebook, rubrics, feedback, and expanded question bank.
+8. Calendar, discussions, guardian summaries, and notification preferences.
+9. Analytics and at-risk intervention workflows.
+10. Accessibility/i18n/PWA hardening.
+11. Ecosystem integrations, adaptive learning, credentials, and optional AI.

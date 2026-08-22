@@ -195,8 +195,8 @@ export interface ClassSession {
   classType: ClassType;
   date: string;
   durationMinutes: number;
-  zoomLink?: string | null;
   zoomMeetingId?: string | null;
+  liveScheduled: boolean;
   courseId: string;
   deletedAt?: string | null;
   createdAt: string;
@@ -244,12 +244,24 @@ export interface TimetableSlot {
   startTime: string; // "HH:mm", Asia/Colombo
   durationMinutes: number;
   classType: ClassType;
-  zoomLink?: string | null;
   isActive: boolean;
   courseId: string;
   instituteId?: string | null;
   createdAt: string;
   updatedAt: string;
+  course?: { name: string; year: number };
+  institute?: { name: string } | null;
+}
+
+export interface UpcomingTimetableSession {
+  id: string;
+  title: string;
+  date: string;
+  durationMinutes: number;
+  classType: ClassType;
+  courseId: string;
+  liveScheduled: boolean;
+  course: { name: string; year: number };
 }
 
 export interface Institute {
@@ -460,8 +472,7 @@ export interface InitiateUploadResult {
 // ── Live classes (Zoom Meeting SDK) ──────────────────────────────────────────
 export interface ScheduleLiveClassResult {
   sessionId: string;
-  zoomMeetingId: string;
-  joinUrl: string;
+  liveScheduled: true;
 }
 
 /**

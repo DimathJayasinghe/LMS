@@ -248,7 +248,7 @@ export default async function ClassDetailPage({
                         <LiveClassAction
                           classId={classId}
                           sessionId={session.id}
-                          scheduled={Boolean(session.zoomMeetingId)}
+                          scheduled={session.liveScheduled}
                           isStaff={isStaff}
                         />
                       )}

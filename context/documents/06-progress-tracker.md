@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (private course modules/materials completed; timetable/live unification next) |
-| **Last Updated** | 2026-08-21 |
-| **Last Completed Task** | Ordered draft/released course modules with verified private file uploads, paid student downloads, lifecycle cleanup, class-page UI, and audit coverage. |
-| **Next Task** | Timetable/live-class unification, then marker-group configuration. |
+| **Current Phase** | Phase 9 — Polish & Hardening (timetable/live unification complete; marker groups next) |
+| **Last Updated** | 2026-08-22 |
+| **Last Completed Task** | Conflict-aware, role/cohort-scoped timetable authoring and preview with credential-safe embedded live flow. |
+| **Next Task** | Marker-group configuration and exam assignment snapshot workflow. |
 | **Blockers** | None |
 
 ### 2026-08-20 — Teacher/student academic workspace completed
@@ -54,6 +54,27 @@
 - [x] Enrolled students list only released published modules; download issuance repeats current-month payment access and returns a 15-minute attachment URL without exposing object keys.
 - [x] Class detail provides module creation/publish/remove, material upload/remove, and one-click authorized download; all lifecycle actions and downloads are audit-filterable.
 - [x] Production-Docker verification: backend 256/256 (34 files), frontend 102/102 (26 files), both builds/linters green, fresh six-migration path at zero drift, and live Compose healthy. Authenticated SUPER_ADMIN smoke covered real private-R2 PDF upload/confirm/publish/download/removal, unauthenticated 401, audit creation, rendered staff controls, log review, and session/object cleanup.
+
+### 2026-08-21 — Timetable and embedded live-class unification
+
+- [x] SUPER_ADMIN/ADMIN see all recurring schedules; TEACHER sees owned active/inactive slots;
+  STUDENT sees only active slots and dated sessions for enrolled matching cohorts; MARKER is denied.
+- [x] Recurring slot create/edit/disable/restore rejects same-course, same-teacher, and same-institute
+  overlaps and prevents cross-midnight schedules.
+- [x] Staff preview a bounded date range before idempotently generating; teacher preview/generation
+  remains server-scoped to owned courses.
+- [x] Timetable slots and generated sessions no longer accept/copy/expose reusable Zoom links.
+  Online occurrences use the existing audited embedded schedule/start/join flow.
+- [x] ADMIN/MARKER live-token access is explicitly denied, and meeting scheduling plus all timetable
+  mutations require replay-safe idempotency keys.
+- [x] Production-Docker verification passed: backend 271/271 (35 files), frontend 105/105
+  (27 files, constrained to two workers on this host), both production builds/linters and live npm
+  audits green, six migrations current, and live schema drift zero. The compiled Compose smoke covered
+  SUPER_ADMIN/TEACHER/STUDENT login, ephemeral MARKER denial, scoped reads, student session-credential
+  redaction, slot create/conflict/disable, preview, audit creation, SSR timetable controls, no raw Zoom
+  URL, log review, and fixture cleanup.
+- [ ] Real Zoom provider scheduling remains blocked on non-placeholder Server-to-Server OAuth and
+  Meeting SDK credentials; production smoke verifies the safe failure path but cannot prove provider success.
 
 > **2026-07-10 reality-check pass.** This tracker had drifted significantly behind the actual
 > code — most of Phase 7 (admin dashboard) and Phase 8 (student dashboard) frontend work was
@@ -140,7 +161,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
   - ✅ Fixed 2026-08-17: `DELETE /timetable/slots/:id` now sets `isActive: false`, preserves generated-session links, and remains safe when repeated. The existing PATCH path restores with `isActive: true`; service tests cover missing, unauthorized, repeated-disable, and repeated-restore cases, and the SUPER_ADMIN timetable view labels inactive slots.
   - ✅ Fixed 2026-07-22: `PATCH /payments/:id/override`, `POST /payments/bulk-upload`, and `PATCH /users/:id/{role,status,barcode}` now carry `checkIdempotency`, and the live frontend callers send per-action `Idempotency-Key` UUIDs. `POST /users/me/nic/confirm` remains consciously excluded because it is already idempotent by object-key upsert.
   - ✅ Fixed 2026-08-13: PayHere webhook signature checks now use `crypto.timingSafeEqual`, matching Zoom/Bunny webhook verification.
-- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** dedicated coverage now exists for exam, video, submission, class-session, enrollment learning-state, subject-teacher assignment, and `access.service` (2026-08-20: privileged bypass, active enrollment, paid/unpaid, and marker assignment). Still zero direct coverage: `institute.service.ts`, `live-class.service.ts`, `sms-notification.service.ts`, and `stream.service.ts`.
+- [ ] **Test coverage gap found in the 2026-07-15 gap audit**: 10 of 21 backend services had zero `.test.ts` file at the time of the audit. **Update:** dedicated coverage now exists for exam, video, submission, class-session, live-class authorization/scheduling, timetable, enrollment learning-state, subject-teacher assignment, and `access.service` (privileged bypass, active enrollment, paid/unpaid, and marker assignment). Still zero direct coverage: `institute.service.ts`, `sms-notification.service.ts`, and `stream.service.ts`.
 - [x] **CI quality gate** (2026-08-13; lint completed 2026-08-17; migration proof added 2026-08-20): `.github/workflows/ci.yml` runs locked installs, Prisma validation/generation, fresh migration deploy + zero-drift verification, legacy db-push baseline adoption, backend/frontend lint and tests, frontend typecheck, and both production builds on PRs into `dev`/`main`, with one aggregate `Quality Gate` check. The backend now has a locked ESLint/typescript-eslint flat config; application code and unit tests are covered, while legacy live-stack diagnostic scripts already excluded from `tsconfig.json` remain a separate cleanup follow-up. The frontend's five React 19 findings were fixed rather than suppressed, with regression tests for payment search cancellation, route-driven mobile-nav closing, and current SSE callback delivery.
 - [x] **Exam read-role leak fixed**: `GET /` and `GET /:id` explicitly allow only SUPER_ADMIN, TEACHER, MARKER, and STUDENT; service-level scoping limits teachers to owned courses, markers to assigned exams with answer keys stripped, and students to enrolled courses and valid time windows. Front-desk ADMIN is rejected at the route.
 
@@ -352,7 +373,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Enforce production env validation for external services
 - [x] Verify Zoom webhook signatures (timestamp + HMAC)
 - [x] Tighten auth rate limit to 10/min
-- [ ] Run backend smoke tests (requires prod-like env)
+- [x] Run backend/frontend smoke tests against compiled production Compose (latest: Phase D, 2026-08-22)
 - [ ] Implement loading skeletons on all data-fetching pages
 - [ ] Implement empty states with illustrations
 - [ ] Implement toast notifications for all mutations
@@ -430,7 +451,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Risk | Mitigation | Status |
 |------|-----------|--------|
 | Thundering herd on result release | Redis caching for result queries | ⬜ To implement (confirmed absent 2026-07-15 — zero `@/config/redis` usage in `exam.service.ts`/`submission.service.ts`) |
-| Zoom webhook missed during server restart | Retry config + Admin "Sync" button | ⬜ To implement (confirmed absent 2026-07-15 — no reconciliation function/route/UI exists) |
+| Zoom webhook missed during server restart | Ownership-scoped preview/apply reconciliation plus SUPER_ADMIN/TEACHER "Sync" UI; provider retry monitoring still remains | 🟡 Reconciliation done 2026-08-17; staging provider proof and retry alerting remain |
 | JWT expiry during long exam | Silent refresh token rotation | 🟡 Partial — reactive refresh-on-401 exists (`frontend/lib/api.ts`, single retry); no proactive/background rotation ahead of the 15-min expiry |
 | R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement (confirmed absent 2026-07-15 — NIC/exam-paper/answer-PDF uploaders are single presign→PUT→confirm, no resume path) |
 | Video piracy (leaked stream link) | Bunny token-authenticated embed + MediaCage DRM, enrolled/paid gating, per-student watermark overlay | ✅ Done (2026-07-11, PR #56 — see `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`) |
@@ -443,5 +464,5 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | **New 2026-07-15:** `timetable.service.ts` hard-deletes a `TimetableSlot` row despite an inbound FK and an unused `isActive` column | Switch to soft-delete (`isActive: false`) matching every other model | ✅ Done (2026-08-17) |
 | **New 2026-07-15:** PayHere webhook signature compared with `!==` instead of constant-time | Switch to `crypto.timingSafeEqual`, matching Zoom/Bunny | ✅ Done (2026-08-13) |
 | **New 2026-07-15:** `Idempotency-Key` missing on `/payments/:id/override`, `/payments/bulk-upload`, `/users/:id/{role,status,barcode}` | Add `checkIdempotency` to match `/initiate`/`/collect-entrance`/mark-finalization | ✅ Done (2026-07-22) |
-| **New 2026-07-15:** 10/21 backend services had zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | 🟡 Core four covered; institute/live/SMS/stream service coverage remains |
+| **New 2026-07-15:** 10/21 backend services had zero test coverage, incl. the core `access.service.ts` content gate | Backfill Vitest coverage, prioritizing `access`/`exam`/`submission`/`video` | 🟡 Core four plus live/timetable covered; institute/SMS/stream service coverage remains |
 | **New 2026-07-15:** No CI pipeline — nothing runs tests/build on PR | Add `.github/workflows/ci.yml`; establish lint baseline separately | ✅ Done (2026-08-13; lint follow-up recorded) |

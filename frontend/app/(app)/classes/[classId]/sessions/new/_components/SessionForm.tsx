@@ -16,7 +16,6 @@ export function SessionForm({ classId }: { classId: string }) {
   const [date, setDate] = useState("");
   const [duration, setDuration] = useState("120");
   const [classType, setClassType] = useState<"" | "ONLINE" | "PHYSICAL">("");
-  const [zoomLink, setZoomLink] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +32,6 @@ export function SessionForm({ classId }: { classId: string }) {
       };
       if (Number(duration) > 0) body.durationMinutes = Number(duration);
       if (classType) body.classType = classType;
-      if (zoomLink.trim()) body.zoomLink = zoomLink.trim();
       if (description.trim()) body.description = description.trim();
 
       await api.post<ApiSuccess<ClassSession>>(`/classes/${classId}/sessions`, body, {
@@ -72,13 +70,6 @@ export function SessionForm({ classId }: { classId: string }) {
           </select>
         </div>
       </div>
-
-      {classType !== "PHYSICAL" && (
-        <div className="space-y-1.5">
-          <label htmlFor="zoom" className="text-sm font-medium text-foreground">Zoom link <span className="text-muted-foreground">(optional)</span></label>
-          <input id="zoom" type="url" value={zoomLink} onChange={(e) => setZoomLink(e.target.value)} className={field} placeholder="https://zoom.us/j/…" />
-        </div>
-      )}
 
       <div className="space-y-1.5">
         <label htmlFor="desc" className="text-sm font-medium text-foreground">Description <span className="text-muted-foreground">(optional)</span></label>

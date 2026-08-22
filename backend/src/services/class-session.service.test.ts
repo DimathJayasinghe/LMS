@@ -32,6 +32,8 @@ import { listClassSessions, getClassSessionById } from './class-session.service'
 const teacher = { userId: 'teacher-1', role: Role.TEACHER } as const;
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER } as const;
 const superAdmin = { userId: 'admin-1', role: Role.SUPER_ADMIN } as const;
+const student = { userId: 'student-1', role: Role.STUDENT } as const;
+const marker = { userId: 'marker-1', role: Role.MARKER } as const;
 const forbidden = new AppError('FORBIDDEN_COURSE', 403, 'You can only manage your own courses.');
 
 const sessionRow = {
@@ -41,7 +43,6 @@ const sessionRow = {
 	classType: 'PHYSICAL',
 	date: new Date('2026-07-01T00:00:00.000Z'),
 	durationMinutes: 60,
-	zoomLink: null,
 	zoomMeetingId: null,
 	courseId: 'course-1',
 	deletedAt: null,
@@ -79,8 +80,21 @@ describe('listClassSessions — TEACHER course-ownership scoping', () => {
 
 		const result = await listClassSessions('course-1', {}, superAdmin);
 
-		expect(result).toEqual([sessionRow]);
+		expect(result).toEqual([{ ...sessionRow, liveScheduled: false }]);
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', superAdmin);
+	});
+
+	it('redacts the provider meeting number from students while exposing scheduled state', async () => {
+		classSessionFindMany.mockResolvedValueOnce([{ ...sessionRow, zoomMeetingId: 'provider-secret' }]);
+		const result = await listClassSessions('course-1', {}, student);
+		expect(result[0]).toMatchObject({ zoomMeetingId: null, liveScheduled: true });
+	});
+
+	it('denies markers before querying course or session data', async () => {
+		await expect(listClassSessions('course-1', {}, marker)).rejects.toMatchObject({
+			code: 'FORBIDDEN', statusCode: 403,
+		});
+		expect(classSessionFindMany).not.toHaveBeenCalled();
 	});
 });
 

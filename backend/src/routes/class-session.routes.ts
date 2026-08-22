@@ -47,6 +47,7 @@ classSessionRoutes.patch(
   requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(classSessionParamsSchema),
   validateBody(updateClassSessionSchema),
+  checkIdempotency,
   ClassSessionController.updateClassSession,
 );
 
@@ -55,6 +56,7 @@ classSessionRoutes.delete(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(classSessionParamsSchema),
+  checkIdempotency,
   ClassSessionController.deleteClassSession,
 );
 
@@ -68,6 +70,7 @@ classSessionRoutes.post(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateParams(classSessionParamsSchema),
+  checkIdempotency,
   LiveClassController.scheduleLiveClass,
 );
 

@@ -35,7 +35,7 @@ export default async function LiveClassPage({
 
   // Nothing to join yet — send back to the class page, where the schedule/join
   // CTA lives, rather than duplicating that UI here.
-  if (session.classType !== "ONLINE" || !session.zoomMeetingId) {
+  if (session.classType !== "ONLINE" || !session.liveScheduled) {
     redirect(`/classes/${classId}`);
   }
 

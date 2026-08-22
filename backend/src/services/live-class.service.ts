@@ -29,8 +29,7 @@ interface LiveSessionRow {
 
 export interface ScheduleResult {
   sessionId: string;
-  zoomMeetingId: string;
-  joinUrl: string;
+  liveScheduled: true;
 }
 
 export interface LiveClassToken {
@@ -104,7 +103,7 @@ export const scheduleLiveClass = async (
     },
   });
 
-  return { sessionId, zoomMeetingId: meeting.meetingId, joinUrl: meeting.joinUrl };
+  return { sessionId, liveScheduled: true };
 };
 
 // ─── Issue Join/Host Token ────────────────────────────────────
@@ -117,6 +116,14 @@ export const issueLiveClassToken = async (
   actor: AuthenticatedUser,
 ): Promise<LiveClassToken> => {
   const session = await getSessionOrThrow(sessionId);
+
+  if (
+    actor.role !== Role.SUPER_ADMIN &&
+    actor.role !== Role.TEACHER &&
+    actor.role !== Role.STUDENT
+  ) {
+    throw new AppError('FORBIDDEN', 403, 'This role cannot join live classes.');
+  }
 
   if (!session.zoomMeetingId) {
     throw new AppError('LIVE_CLASS_NOT_SCHEDULED', 404, 'This session has no live class scheduled yet.');
@@ -140,7 +147,7 @@ export const issueLiveClassToken = async (
   if (isHost) {
     await assertCourseAccess(session.courseId, actor);
   } else {
-    // Students (and any other role) must be enrolled + paid, same as VOD.
+    // Students must be enrolled + paid, same as VOD.
     await assertStudentContentAccess(actor, session.courseId, { requirePaid: true });
   }
 

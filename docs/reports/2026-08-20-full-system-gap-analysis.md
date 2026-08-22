@@ -15,9 +15,9 @@ sessions, recorded video, embedded live classes, attendance, exams, exact marker
 published-result correction, payments, immutable payment adjustments, notifications, audit events,
 Docker deployment, migrations, backups, and CI checks. It is already more than a prototype.
 
-It is not yet a complete teaching product or safe production launch. The largest product gaps are
-course modules/materials, timetable authoring, marker groups and moderation, fair payment-access
-exceptions, privacy/retention controls, and production provider/backup readiness. Some written
+It is not yet a complete teaching product or safe production launch. The largest remaining product
+gaps are marker groups and moderation, fair payment-access exceptions, privacy/retention controls,
+and production provider/backup readiness. Some written
 requirements also conflict with the safest authorization model and need explicit decisions.
 
 The recommended direction is to finish small vertical slices in the order in section 8. Each slice
@@ -84,21 +84,21 @@ where implementation is incomplete.
 | Teacher finance | Aggregate own-class income/outstanding report and reconciled contracts are implemented in this phase | No payout/commission model or downloadable settlement statement | P1 |
 | Super-admin finance | Institution totals and class breakdown exist; teacher and class filters are implemented in this phase | No aging buckets, institute dimension, settlement/export, discount/scholarship/installment model, or provider refund execution | P1 |
 | Class images | Completed in Phase B: ownership-bound public-R2 presign/confirm/remove, full decode, MIME/size/exact-dimension checks, accessible descriptions, UI preview/replace/remove, audit events, tracked-key cleanup, and stale-write protection | Automated expiry cleanup for presigned-but-never-confirmed uploads and optional crop tooling remain | P2 |
-| Course structure | Sessions and recordings attach directly to a class | No modules/topics, ordering, drafts, release scheduling, prerequisites, or coherent lesson page | P1 |
-| Materials | No material domain model, endpoints, or UI | Students cannot download teacher files or open structured links/text; no upload security, versioning, visibility, or download audit policy | P1 |
-| Live lessons | In-site Zoom session schedule/start/join exists | Recurring timetable links still use a separate/raw flow; provider credentials are placeholders; join readiness and failure recovery need staging proof | P0/P1 |
+| Course structure | Phase C added ordered modules with draft/published state, scheduled release, teacher ownership controls, student visibility rules, and class-home management | No prerequisites, rich lesson/topic composition, progress completion, or drag-and-drop bulk ordering | P1 |
+| Materials | Phase C added ownership-bound private PDF/image files, decoded content validation, paid student download authorization, lifecycle UI, and audit events | No link/text/audio materials, version history, malware scanning/quarantine, or resumable upload | P1 |
+| Live lessons | Embedded schedule/start/join is unified with timetable-generated online occurrences; reusable raw-link authoring was removed | Provider credentials are placeholders; join readiness and failure recovery still need staging proof | P0/P1 |
 | Recorded lessons | Teacher direct Bunny upload and student protected playback exist | Provider key readiness has been documented as invalid; no captions/transcripts, attachments, lesson ordering, or low-bandwidth download policy | P0/P1 |
-| Timetable | Recurring slot backend, generated sessions, student weekly view, and soft-disable exist | No complete slot-authoring UI; session/live setup is split across workflows; conflict detection is absent | P1 |
+| Timetable | Phase D completed: role/cohort scoping, slot create/edit/disable/restore UI, overlap checks, bounded preview/generation, dated upcoming view, and embedded-live routing | Room/capacity scheduling, drag-and-drop calendar, reminders, and iCal remain | P2 |
 | Exam creation | Teacher/super-admin create exams; multiple delivery channels and paper upload exist | Editing/review is fragmented; no reusable question bank, draft review, accommodations, version history, or scheduling-conflict warnings | P1 |
 | Marker assignment | Exact marker assignment exists | No reusable marker groups, workload preview, bulk allocation, second marker, moderation, conflict-of-interest declaration, or reassignment history UI | P1 |
 | Result integrity | Marker lock after release and reasoned teacher/super-admin correction exist | No student appeal, second-review/moderation state, correction notification policy, grade history view, or course gradebook | P1 |
-| Student class home | Current enrollments, new recording count, upcoming sessions, video and live links exist | No unified lesson feed containing video/material/live/exam, progress checklist, bookmarks, search, calendar tasks, or offline/low-bandwidth mode | P1/P2 |
+| Student class home | Current enrollments, new recording count, released modules/material downloads, upcoming sessions, video, and embedded live entry exist | No unified lesson feed containing module/video/material/live/exam state, progress checklist, bookmarks, search, calendar tasks, or offline/low-bandwidth mode | P1/P2 |
 | Payment content gate | Active enrollment plus current-month successful payment gates protected content | A hard monthly gate has no scholarship, waiver, grace period, installment, disputed-payment, or admin temporary-access exception; this can unfairly block learning | P0 |
 | Attendance | Entrance scan, recorded-watch attendance, Zoom webhook/reconciliation, teacher reports exist | No student dispute/correction request, excused absence, late/partial presence policy, or transparent attendance calculation | P1 |
 | Audit | Many consequential mutations write audit records | Coverage is not expressed as an auditable event catalogue; audit rows lack a database immutability trigger; no export/retention/integrity monitoring. Logging every read would be invasive and noisy—log security-sensitive reads/exports, not routine lesson views | P0/P1 |
 | Credential-safe logs | Request cookies/authorization were redacted | **Found and fixed in this phase:** response `Set-Cookie` headers were serialized by Pino and could expose access/refresh tokens; response-cookie redaction and a regression test were added, and the exposed smoke session was revoked | Fixed |
 | Privacy | Private R2 objects and ownership checks exist | No privacy/terms pages, consent record, retention schedule, subject-access request/export/delete workflow, or documented handling of NIC images, recordings, attendance, exam answers, and audit logs | P0 |
-| Upload security | Presign/confirm patterns verify object existence | Generic material/image validation is absent; no server-verified image dimensions/content signature, malware scanning plan, quarantine, or orphan cleanup | P0 before materials |
+| Upload security | Presign/confirm flows verify object existence; class artwork enforces decoded type and exact dimensions, while private materials enforce decoded PDF/image type and size | No malware scanning/quarantine, automated abandoned-presign cleanup, or resumable upload | P1 |
 | Accessibility | Semantic tables and several accessible fallbacks exist | No complete WCAG 2.2 AA audit, caption workflow, keyboard evidence for all high-value flows, reduced-motion review, or screen-reader acceptance suite | P0/P1 |
 | Notifications | In-app/SMS notification foundation and bell exist | Several SSE event types lack consumers; no new-lesson/material notification preference, delivery retry dashboard, digest, or student-controlled preferences | P1 |
 | Security tests | Large backend/frontend suites and direct enrolled/paid/marker access-gate tests exist | No automated complete role×resource matrix, restore/security regression suite, or upload-abuse suite | P0 |
@@ -270,9 +270,15 @@ drag-and-drop ordering, and abandoned-presign cleanup remain later enhancements.
 - Build teacher curriculum editor and student “Continue learning” feed.
 
 **Exit:** an owning teacher publishes a file; an enrolled/eligible student downloads it; another
-teacher and non-enrolled student cannot; orphan/quarantine behavior is verified.
+teacher and non-enrolled student cannot; invalid-file and removal cleanup are verified. Automated
+abandoned-presign cleanup and malware quarantine remain explicit follow-ups.
 
 ### Phase D — Timetable and live-class unification
+
+**Status: completed and production-Docker verified 2026-08-22; real Zoom provider success remains
+an environment blocker.** Backend 271/271 and frontend 105/105 tests, both builds/linters/audits,
+healthy compiled Compose, authenticated role/conflict/preview/frontend/audit smoke, migration status,
+zero drift, and fixture cleanup passed.
 
 - Complete recurring slot authoring, conflict detection, generation preview, and restore controls.
 - Route every online occurrence through the embedded live room; remove raw-link ambiguity.
@@ -332,6 +338,6 @@ periodic security testing remain necessary.
 
 ## 10. Immediate next action after this report
 
-Implement Phase D timetable/live-class unification next. Phases A-C are implemented; keep the
-existing private material access gate intact while removing raw recurring Zoom-link ambiguity and
-adding conflict-aware timetable authoring/preview.
+Complete Phase E marker-group configuration and guided exam assignment next. Preserve the new
+exam-specific authorization snapshot rule so later group membership changes cannot silently grant
+historical exam access.
