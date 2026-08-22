@@ -116,7 +116,9 @@ Every feature slice must include:
 3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
 4. ✅ Secure class banner/backdrop upload with public-R2 lifecycle, full image decoding, exact dimensions, accessibility text, and audit events (2026-08-20).
 5. ✅ Private course modules/materials and timetable-slot/live-flow unification (2026-08-21).
-6. **Next:** Marker groups and guided exam assignment, then standalone assignments.
+6. **Next:** Marker groups and guided exam assignment, then standalone assignments. The incremental
+   Phase E implementation plan is documented in
+   [`docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md`](../../docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md).
 7. Gradebook, rubrics, feedback, and expanded question bank.
 8. Calendar, discussions, guardian summaries, and notification preferences.
 9. Analytics and at-risk intervention workflows.

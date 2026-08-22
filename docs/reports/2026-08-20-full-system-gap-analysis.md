@@ -286,6 +286,9 @@ zero drift, and fixture cleanup passed.
 
 ### Phase E — Exam authoring and marker groups
 
+**Status: implementation not started; restart-ready plan documented 2026-08-22 in
+[`docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md`](../plans/2026-08-22-phase-e-marker-groups-exam-workflow.md).**
+
 - Add reusable marker group configuration and membership UI.
 - Add resolved-assignment preview, workload indicators, atomic snapshot, reassignment reason/history.
 - Simplify exam create/edit/preview/publish into one guided workflow.

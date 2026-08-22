@@ -8,11 +8,22 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 9 — Polish & Hardening (timetable/live unification complete; marker groups next) |
+| **Current Phase** | Phase E planning checkpoint — marker groups and guided exam assignment |
 | **Last Updated** | 2026-08-22 |
-| **Last Completed Task** | Conflict-aware, role/cohort-scoped timetable authoring and preview with credential-safe embedded live flow. |
-| **Next Task** | Marker-group configuration and exam assignment snapshot workflow. |
+| **Last Completed Task** | Phase E domain/API/UI/security/test plan documented; no Phase E production code changed. |
+| **Next Task** | Slice E1: test-first marker-group schema, scoped backend CRUD, membership history, and migration. |
 | **Blockers** | None |
+
+### 2026-08-22 — Phase E planning checkpoint
+
+- [x] Captured the current exact-marker authorization behavior and the role/ownership boundaries that
+  must remain invariant.
+- [x] Designed incremental slices for reusable groups, immutable membership history, assignment
+  preview/workload, atomic exam-specific snapshots, group UI, and guided exam authoring.
+- [x] Documented security/ethics constraints, mandatory tests, production-Docker gates, deferrals, and
+  the exact resume point in
+  [`docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md`](../../docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md).
+- [ ] Phase E implementation has not started; begin with Slice E1 tests and migration design.
 
 ### 2026-08-20 — Teacher/student academic workspace completed
 
