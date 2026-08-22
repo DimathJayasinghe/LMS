@@ -18,6 +18,7 @@ const session: ClassSession = {
   date: "2026-08-17T10:00:00.000Z",
   durationMinutes: 60,
   zoomMeetingId: "123456789",
+  liveScheduled: true,
   courseId: "course-1",
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-01T00:00:00.000Z",

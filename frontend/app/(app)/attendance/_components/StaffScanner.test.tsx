@@ -51,6 +51,7 @@ const sessions: ClassSession[] = [
     classType: "PHYSICAL",
     date: new Date().toISOString(),
     durationMinutes: 60,
+    liveScheduled: false,
     courseId: "c1",
     createdAt: "",
     updatedAt: "",
