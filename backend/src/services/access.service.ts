@@ -4,7 +4,8 @@
 //
 // assertStudentContentAccess gates STUDENT on enrollment (+ payment); privileged
 // roles bypass it. This module also hosts assertMarkerAssignedToExam — the gate
-// that scopes a MARKER to the exams they are actually assigned to.
+// that scopes a MARKER to the exams they are actually assigned to. Reusable
+// marker-group membership is deliberately not an exam-access grant.
 
 import { PaymentStatus, Role } from '@prisma/client';
 import { prisma } from '@/config/database';

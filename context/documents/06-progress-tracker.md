@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Submission integrity hardening before Phase E |
+| **Current Phase** | Phase E — reusable marker-group backend foundation |
 | **Last Updated** | 2026-09-06 |
 | **Last Completed Task** | Submission access/privacy fixes independently reviewed; 295 backend tests and 21 isolated compiled HTTP/database/SSR assertions passed. |
-| **Next Task** | Land the submission-integrity PR after CI, then deliver scoped marker groups and accountable physical-paper result entry. |
+| **Next Task** | Use marker groups in the exam allocation preview/snapshot slice; then add accountable physical-paper result entry. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
 
 ### 2026-09-06 — Owner decisions and submission integrity hardening
@@ -23,6 +23,14 @@
 - [x] Verification: backend 295 tests (37 files), frontend 105 tests (27 files), both production builder images, and 21 compiled HTTP/database/SSR assertions on isolated PostgreSQL/Redis with all six migrations. No provider credentials, real users, or existing application database were used. Backend runtime used test configuration; frontend ran its production server. This is not a production-deployment or external-provider certificate.
 - [ ] Finish submission-integrity CI and merge its reviewed PR.
 - [ ] Phase E must add staff physical-paper result entry; the existing student-facing promise has no corresponding staff API yet. Keep exact exam assignment as the marker access source and preserve publication privacy.
+
+### 2026-09-06 — Phase E1 marker-group backend foundation
+
+- [x] Added reusable `COURSE`, `SUBJECT`, and `INSTITUTE` marker groups without changing exact exam authorization; `MarkerAssignment` remains the sole exam-access source.
+- [x] Added transactionally replaced active membership, immutable add/remove events, active-marker validation, required reasons, and a revision increment on every membership change.
+- [x] Scoped group configuration/history to SUPER_ADMIN globally and owning TEACHER course groups only; ADMIN, MARKER, and STUDENT are denied.
+- [x] Added authenticated, idempotent mutation endpoints at `/api/marker-groups`, durable audit records, an additive migration with scope and event-immutability constraints, and focused actor×target Vitest coverage.
+- [ ] Phase E2 must provide read-only allocation preview and atomic exam-specific assignment snapshots; group membership must continue never to alter existing exam access.
 
 ### 2026-09-06 — Production delivery baseline
 

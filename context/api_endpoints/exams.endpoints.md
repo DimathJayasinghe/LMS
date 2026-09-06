@@ -114,6 +114,25 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | GET | `/:id/markers` | SUPER_ADMIN, TEACHER (own) | List the exact marker assignment set. |
 | PUT | `/:id/markers` | SUPER_ADMIN, TEACHER (own) | Replace the exact marker assignment set; idempotency key required. |
 
+## Reusable Marker Groups
+
+Base URL: `http://localhost:5000/api/marker-groups`. Reusable groups are
+configuration only: exact `MarkerAssignment` rows remain the sole source of
+marker access to an exam.
+
+| Method | Path | Roles | Description |
+| --- | --- | --- | --- |
+| GET | `/` | SUPER_ADMIN; TEACHER (own course groups) | List visible groups with active-member counts. |
+| POST | `/` | SUPER_ADMIN; TEACHER (own course only) | Create a group. Subject/institute groups are SUPER_ADMIN-only. Idempotency key required. |
+| GET | `/:id` | SUPER_ADMIN; TEACHER (own course only) | Get configuration and active marker directory. |
+| PATCH | `/:id` | SUPER_ADMIN; TEACHER (own course only) | Update/deactivate a group. Idempotency key required. |
+| PUT | `/:id/members` | SUPER_ADMIN; TEACHER (own course only) | Replace exact membership with a required reason. Idempotency key required. |
+| GET | `/:id/history` | SUPER_ADMIN; TEACHER (own course only) | List immutable membership events. |
+
+Only active, non-deleted `MARKER` accounts may be members. Membership changes
+are transactional, append immutable events, and increment group revision only
+when the active set changes.
+
 ## Endpoint Details
 
 ### POST `/`
