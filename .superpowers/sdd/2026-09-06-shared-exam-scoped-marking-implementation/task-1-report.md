@@ -27,6 +27,9 @@ Implemented E1 reusable marker groups without changing exam authorization:
   transaction, and persists its AuditLog record inside that same transaction.
   The controller has no post-commit audit call, so an audit failure rolls back
   the mutation before it can become an uncached, retryable 5xx response.
+- Added a CI-only rollback fixture for live PostgreSQL proof of immutable
+  membership events. It runs after fresh migration deployment and datasource
+  drift checks using Prisma's installed `db execute` command.
 
 ## Files
 
@@ -106,6 +109,24 @@ An attempted disposable PostgreSQL container also failed before creation because
 the local Docker daemon returned HTTP 500 for the Desktop socket. Therefore the
 database-applied migration, zero-drift command, and direct event UPDATE/DELETE
 trigger attempt remain environment-blocked rather than asserted as passed.
+
+## CI live-database trigger proof
+
+The backend CI job starts a disposable `postgres:16-alpine` database, applies
+migrations, verifies zero datasource drift, then runs:
+
+```bash
+npx prisma db execute --file prisma/verify-marker-group-membership-event-immutability.sql
+```
+
+The fixture inserts only two users, one institute, one institute-scoped group,
+and one membership event inside `BEGIN`. It directly attempts UPDATE and DELETE
+against that event. Each attempt must fail with exactly
+`MarkerGroupMembershipEvent rows are immutable`; a successful mutation, missing
+trigger, or changed error message raises an unhandled exception and fails CI.
+The script reaches `ROLLBACK` only after both expected failures, so no fixture
+data remains in the CI database. This CI proof has been committed but has not
+run in GitHub yet.
 
 ## Self-review
 
