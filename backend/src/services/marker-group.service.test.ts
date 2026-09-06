@@ -12,6 +12,7 @@ const {
 	markerGroupMemberUpdateMany,
 	membershipEventCreate,
 	membershipEventFindMany,
+	auditLogCreate,
 	userFindMany,
 	courseFindUnique,
 	subjectFindUnique,
@@ -29,6 +30,7 @@ const {
 	markerGroupMemberUpdateMany: vi.fn(),
 	membershipEventCreate: vi.fn(),
 	membershipEventFindMany: vi.fn(),
+	auditLogCreate: vi.fn(),
 	userFindMany: vi.fn(),
 	courseFindUnique: vi.fn(),
 	subjectFindUnique: vi.fn(),
@@ -46,6 +48,7 @@ const tx = {
 		updateMany: markerGroupMemberUpdateMany,
 	},
 	markerGroupMembershipEvent: { create: membershipEventCreate, findMany: membershipEventFindMany },
+	auditLog: { create: auditLogCreate },
 	$executeRaw: advisoryLock,
 	user: { findMany: userFindMany },
 };
@@ -113,6 +116,7 @@ beforeEach(() => {
 	markerGroupMemberUpdateMany.mockResolvedValue({ count: 0 });
 	membershipEventCreate.mockResolvedValue({ id: 'event-1' });
 	membershipEventFindMany.mockResolvedValue([]);
+	auditLogCreate.mockResolvedValue({ id: 'audit-1' });
 	userFindMany.mockResolvedValue([{ id: 'marker-a', name: 'Marker A' }]);
 	courseFindUnique.mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' });
 	subjectFindUnique.mockResolvedValue({ id: 'subject-1' });
@@ -137,6 +141,43 @@ describe('marker group authorization and immutable membership history', () => {
 		expect(markerGroupCreate).toHaveBeenCalledWith(expect.objectContaining({
 			data: expect.objectContaining({ courseId: 'course-1', createdById: 'teacher-1' }),
 		}));
+	});
+
+	it('rolls back a group creation when its durable audit write fails so only a successful retry commits', async () => {
+		const committedGroupIds: string[] = [];
+		let auditFails = true;
+		let createCount = 0;
+		transaction.mockImplementation(async (callback: (client: typeof tx) => unknown) => {
+			const pendingGroupIds: string[] = [];
+			const transactionalCreate = vi.fn(async () => {
+				const id = `group-${++createCount}`;
+				pendingGroupIds.push(id);
+				return { ...group, id };
+			});
+			const transactionalAuditCreate = vi.fn(async () => {
+				if (auditFails) throw new Error('audit storage unavailable');
+			});
+			const transactionClient = {
+				...tx,
+				markerGroup: {
+					...tx.markerGroup,
+					create: transactionalCreate,
+				},
+				auditLog: {
+					create: transactionalAuditCreate,
+				},
+			};
+			const result = await callback(transactionClient);
+			committedGroupIds.push(...pendingGroupIds);
+			return result;
+		});
+
+		await expect(createMarkerGroup(createInput, owningTeacher)).rejects.toThrow('audit storage unavailable');
+		expect(committedGroupIds).toEqual([]);
+
+		auditFails = false;
+		await createMarkerGroup(createInput, owningTeacher);
+		expect(committedGroupIds).toEqual(['group-2']);
 	});
 
 	it('rejects a teacher creating a group for another course', async () => {

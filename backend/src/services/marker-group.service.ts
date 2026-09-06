@@ -1,6 +1,7 @@
 import { MarkerGroupMembershipAction, MarkerGroupScope, Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import { AUDIT_ACTION } from '@/utils/constants';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type {
 	CreateMarkerGroupInput,
@@ -35,6 +36,25 @@ const groupDetailSelect = {
 		orderBy: { marker: { name: 'asc' } },
 	},
 } satisfies Prisma.MarkerGroupSelect;
+
+const writeAuditLog = (
+	tx: Prisma.TransactionClient,
+	action: string,
+	targetId: string,
+	actor: AuthenticatedUser,
+	metadata?: Prisma.InputJsonValue,
+) => tx.auditLog.create({
+	data: {
+		action,
+		targetType: 'MarkerGroup',
+		targetId,
+		metadata,
+		ip: null,
+		userAgent: null,
+		actorId: actor.userId,
+		actorRole: actor.role,
+	},
+});
 
 const assertConfigurator = (actor: AuthenticatedUser): void => {
 	if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.TEACHER) {
@@ -79,18 +99,22 @@ const resolveGroupAccess = async (groupId: string, actor: AuthenticatedUser) => 
 
 export const createMarkerGroup = async (input: CreateMarkerGroupInput, actor: AuthenticatedUser) => {
 	await assertScopeTarget(input, actor);
-	return prisma.$transaction((tx) => tx.markerGroup.create({
-		data: {
-			name: input.name,
-			description: input.description ?? null,
-			scope: input.scope,
-			courseId: input.scope === MarkerGroupScope.COURSE ? input.courseId : null,
-			subjectId: input.scope === MarkerGroupScope.SUBJECT ? input.subjectId : null,
-			instituteId: input.scope === MarkerGroupScope.INSTITUTE ? input.instituteId : null,
-			createdById: actor.userId,
-		},
-		select: groupDetailSelect,
-	}));
+	return prisma.$transaction(async (tx) => {
+		const group = await tx.markerGroup.create({
+			data: {
+				name: input.name,
+				description: input.description ?? null,
+				scope: input.scope,
+				courseId: input.scope === MarkerGroupScope.COURSE ? input.courseId : null,
+				subjectId: input.scope === MarkerGroupScope.SUBJECT ? input.subjectId : null,
+				instituteId: input.scope === MarkerGroupScope.INSTITUTE ? input.instituteId : null,
+				createdById: actor.userId,
+			},
+			select: groupDetailSelect,
+		});
+		await writeAuditLog(tx, AUDIT_ACTION.MARKER_GROUP_CREATED, group.id, actor, { scope: input.scope });
+		return group;
+	});
 };
 
 export const listMarkerGroups = async (actor: AuthenticatedUser) => {
@@ -119,11 +143,15 @@ export const updateMarkerGroup = async (
 	actor: AuthenticatedUser,
 ) => {
 	await resolveGroupAccess(groupId, actor);
-	return prisma.$transaction((tx) => tx.markerGroup.update({
-		where: { id: groupId },
-		data: input,
-		select: groupDetailSelect,
-	}));
+	return prisma.$transaction(async (tx) => {
+		const group = await tx.markerGroup.update({
+			where: { id: groupId },
+			data: input,
+			select: groupDetailSelect,
+		});
+		await writeAuditLog(tx, AUDIT_ACTION.MARKER_GROUP_UPDATED, groupId, actor, input);
+		return group;
+	});
 };
 
 export const replaceMarkerGroupMembers = async (
@@ -195,6 +223,9 @@ export const replaceMarkerGroupMembers = async (
 		if (removedIds.length > 0 || addedIds.length > 0) {
 			await tx.markerGroup.update({ where: { id: groupId }, data: { revision: { increment: 1 } } });
 		}
+		await writeAuditLog(tx, AUDIT_ACTION.MARKER_GROUP_MEMBERS_REPLACED, groupId, actor, {
+			markerIds: markers.map((marker) => marker.id), reason: input.reason,
+		});
 		return markers;
 	});
 };

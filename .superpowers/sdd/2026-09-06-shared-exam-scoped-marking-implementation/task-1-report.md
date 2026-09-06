@@ -24,8 +24,9 @@ Implemented E1 reusable marker groups without changing exam authorization:
   these group APIs.
 - Added authenticated APIs at `/api/marker-groups`; every mutation validates a
   Zod request body, uses idempotency middleware, runs its domain mutation in a
-  transaction, and persists its AuditLog record with `await` rather than
-  fire-and-forget logging.
+  transaction, and persists its AuditLog record inside that same transaction.
+  The controller has no post-commit audit call, so an audit failure rolls back
+  the mutation before it can become an uncached, retryable 5xx response.
 
 ## Files
 
@@ -57,12 +58,12 @@ collected because the module under test did not exist.
 
 ### GREEN
 
-The same focused command passed after the service implementation and
-concurrency fix:
+The same focused command passed after the service implementation, concurrency
+fix, and atomic-audit fix:
 
 ```text
 Test Files  1 passed (1)
-Tests  15 passed (15)
+Tests  16 passed (16)
 ```
 
 The cases cover SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT authorization,
@@ -73,11 +74,14 @@ replay, history scoping, and revision increment.
 The concurrency regression first failed with the expected unprotected union
 state (`['marker-c', 'marker-b']`), then passed after the advisory lock was
 added.
+The audit-atomicity regression first observed a committed `group-1` despite an
+audit storage error; after moving the AuditLog write into the transaction it
+proved the failed request commits no group and the retry commits only `group-2`.
 
 ## Verification summary
 
-- `npm test -- marker-group.service.test.ts`: 1 file, 15 tests passed.
-- `npm test`: 38 files, 310 tests passed after the concurrency regression was added.
+- `npm test -- marker-group.service.test.ts`: 1 file, 16 tests passed.
+- `npm test`: 38 files, 311 tests passed after the audit-atomicity regression was added.
 - `npm run lint`: passed (ESLint exit 0).
 - `npx tsc --noEmit`: passed (exit 0).
 - `npx prisma generate`: passed after schema validation.
@@ -111,6 +115,10 @@ trigger attempt remain environment-blocked rather than asserted as passed.
   membership or event write, then appends each event with `await` in its
   transaction. It increments `MarkerGroup.revision` only when active membership
   actually changes.
+- Group create, update, and replacement AuditLog rows are required writes in
+  their respective service transactions. This preserves durable audit records
+  without a post-commit controller failure path; request IP/user-agent are not
+  available in the service transaction and are intentionally stored as null.
 - Re-added historical members reactivate their retained membership row; the
   unique `(groupId, markerId)` constraint is preserved and an `ADDED` event is
   still appended.

@@ -106,21 +106,3 @@ export const log = (input: AuditLogInput): void => {
 			);
 	});
 };
-
-/** Persist an audit row before returning when the action itself is accountable. */
-export const logDurable = async (input: AuditLogInput): Promise<void> => {
-	const { context, action, description, targetType, targetId, metadata } = input;
-	await prisma.auditLog.create({
-		data: {
-			action,
-			description: description ?? null,
-			targetType: targetType ?? null,
-			targetId: targetId ?? null,
-			metadata: metadata ?? undefined,
-			ip: context.ip ?? null,
-			userAgent: context.userAgent ?? null,
-			actorId: context.actorId,
-			actorRole: context.actorRole,
-		},
-	});
-};
