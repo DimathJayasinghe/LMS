@@ -8,11 +8,20 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Production delivery baseline; Phase E implementation remains pending |
+| **Current Phase** | Shared/separate exam and customizable marking design; Phase E implementation pending |
 | **Last Updated** | 2026-09-06 |
-| **Last Completed Task** | Reconciled current source/GitHub evidence, documented release sequence and unresolved owner decisions. |
-| **Next Task** | Resolve launch scope and marker-group scope/management policy, then implement Slice E1 with tests and migration proof. |
-| **Blockers** | Owner decisions: release capacity/Zoom/features, group permissions, forensic requirements. Local Docker daemon unavailable for runtime/migration verification. |
+| **Last Completed Task** | Owner approved the shared/separate exam and customizable marker-access design. |
+| **Next Task** | Write the phased implementation plan, then deliver small tested slices; role-dashboard integration audit follows exam/marking work. |
+| **Blockers** | No design blocker; provider/deployment/recovery and retention requirements remain release gates. |
+
+### 2026-09-06 — Configurable exam scope and dashboard follow-up
+
+- [x] Owner confirmed shared AND separate exam instances, teacher-selected centers/grouped centers/online students, and optional teacher-configured marker restrictions inside shared instances.
+- [x] Owner approved the [customizable exam-marking design](../../docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md), separating paper reuse, exam audiences, student roster and effective marker access. No new behavior/schema is implemented in this design checkpoint.
+- [x] PR #79 remains open, independently reviewed and green in GitHub CI. Its 295-backend/105-frontend tests and 21 compiled-stack assertions are evidence for that patch, not for this planned feature or current `dev`. Its Docker verification supersedes the earlier unavailable-daemon checkpoint.
+- [ ] Land PR #79 and deliver the approved feature as small tested migration/API/UI slices. Preserve both branches and reconcile tracker updates when integrating.
+- [ ] After the current exam/marking work, [issue #81](https://github.com/DimathJayasinghe/LMS/issues/81) covers all five role dashboards: real backend wiring, correct privileges, navigation, loading/error/empty states and end-to-end outcomes. Sparse dashboards do not justify copying another role's privileges.
+- [ ] Separate results-SMS duplication/settings bypass is tracked in [issue #80](https://github.com/DimathJayasinghe/LMS/issues/80).
 
 ### 2026-09-06 — Production delivery baseline
 
