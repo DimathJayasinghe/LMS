@@ -15,6 +15,10 @@ Implemented E1 reusable marker groups without changing exam authorization:
 - Added active membership rows, append-only membership events, immutable-event
   trigger, required replacement reasons, marker validation, and group revision
   increments in the same replacement transaction.
+- Serialized competing member replacements for the same group with a
+  transaction-scoped PostgreSQL advisory lock. A deterministic concurrent
+  regression test proves competing replacements cannot produce a union final
+  set or duplicate the removal event for their shared starting member.
 - Enforced SUPER_ADMIN global access and TEACHER access only to owned
   course-scoped groups. ADMIN, MARKER, and STUDENT cannot configure or read
   these group APIs.
@@ -53,11 +57,12 @@ collected because the module under test did not exist.
 
 ### GREEN
 
-The same focused command passed after the service implementation:
+The same focused command passed after the service implementation and
+concurrency fix:
 
 ```text
 Test Files  1 passed (1)
-Tests  14 passed (14)
+Tests  15 passed (15)
 ```
 
 The cases cover SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT authorization,
@@ -65,11 +70,14 @@ cross-course denial, subject/institute denial for TEACHER, marker-ID
 deduplication and validity filtering, missing group behavior, required reason,
 transaction rollback before member/event/revision writes, exact replacement
 replay, history scoping, and revision increment.
+The concurrency regression first failed with the expected unprotected union
+state (`['marker-c', 'marker-b']`), then passed after the advisory lock was
+added.
 
 ## Verification summary
 
-- `npm test -- marker-group.service.test.ts`: 1 file, 14 tests passed.
-- `npm test`: 38 files, 309 tests passed.
+- `npm test -- marker-group.service.test.ts`: 1 file, 15 tests passed.
+- `npm test`: 38 files, 310 tests passed after the concurrency regression was added.
 - `npm run lint`: passed (ESLint exit 0).
 - `npx tsc --noEmit`: passed (exit 0).
 - `npx prisma generate`: passed after schema validation.

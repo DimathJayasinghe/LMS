@@ -138,6 +138,11 @@ export const replaceMarkerGroupMembers = async (
 	const markerIds = [...new Set(input.markerIds)];
 
 	return prisma.$transaction(async (tx) => {
+		// A transaction alone permits two requests to calculate their diffs from
+		// the same membership snapshot. This lock is released with the transaction.
+		await tx.$executeRaw(
+			Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${groupId}, 0))`,
+		);
 		const markers = await tx.user.findMany({
 			where: { id: { in: markerIds }, role: Role.MARKER, deletedAt: null },
 			select: markerDirectorySelect,

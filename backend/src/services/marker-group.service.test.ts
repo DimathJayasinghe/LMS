@@ -17,6 +17,7 @@ const {
 	subjectFindUnique,
 	instituteFindUnique,
 	transaction,
+	advisoryLock,
 } = vi.hoisted(() => ({
 	markerGroupCreate: vi.fn(),
 	markerGroupFindMany: vi.fn(),
@@ -33,6 +34,7 @@ const {
 	subjectFindUnique: vi.fn(),
 	instituteFindUnique: vi.fn(),
 	transaction: vi.fn(),
+	advisoryLock: vi.fn(),
 }));
 
 const tx = {
@@ -43,7 +45,8 @@ const tx = {
 		update: markerGroupMemberUpdate,
 		updateMany: markerGroupMemberUpdateMany,
 	},
-		markerGroupMembershipEvent: { create: membershipEventCreate, findMany: membershipEventFindMany },
+	markerGroupMembershipEvent: { create: membershipEventCreate, findMany: membershipEventFindMany },
+	$executeRaw: advisoryLock,
 	user: { findMany: userFindMany },
 };
 
@@ -99,6 +102,7 @@ const createInput = { name: 'Term markers', scope: MarkerGroupScope.COURSE, cour
 beforeEach(() => {
 	vi.resetAllMocks();
 	transaction.mockImplementation(async (callback: (client: typeof tx) => unknown) => callback(tx));
+	advisoryLock.mockResolvedValue(undefined);
 	markerGroupCreate.mockResolvedValue(group);
 	markerGroupFindMany.mockResolvedValue([]);
 	markerGroupFindUnique.mockResolvedValue(group);
@@ -222,6 +226,73 @@ describe('marker group authorization and immutable membership history', () => {
 		}, owningTeacher);
 		expect(markerGroupMemberCreateMany).toHaveBeenCalledTimes(1);
 		expect(markerGroupMemberUpdate).toHaveBeenCalledTimes(1);
+	});
+
+	it('serializes simultaneous replacements so they cannot union members or duplicate removal events', async () => {
+		const activeMarkerIds = new Set(['marker-a']);
+		const events: Array<{ markerId: string; action: string }> = [];
+		let activeReadCount = 0;
+		let releaseConcurrentReads: (() => void) | undefined;
+		const concurrentReads = new Promise<void>((resolve) => { releaseConcurrentReads = resolve; });
+		let locked = false;
+		const lockWaiters: Array<() => void> = [];
+
+		advisoryLock.mockImplementation(async () => new Promise<void>((resolve) => {
+			if (!locked) {
+				locked = true;
+				resolve();
+				return;
+			}
+			lockWaiters.push(resolve);
+		}));
+		transaction.mockImplementation(async (callback: (client: typeof tx) => unknown) => {
+			try {
+				return await callback(tx);
+			} finally {
+				if (locked) {
+					const next = lockWaiters.shift();
+					if (next) next();
+					else locked = false;
+				}
+			}
+		});
+		userFindMany.mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
+			Promise.resolve(where.id.in.map((id) => ({ id, name: id }))),
+		);
+		markerGroupMemberFindMany.mockImplementation(async ({ where }: { where: { removedAt?: unknown } }) => {
+			if (where.removedAt === null) {
+				activeReadCount += 1;
+				// Without the advisory lock, force both transactions to compute from
+				// the same snapshot before either writes its replacement.
+				if (advisoryLock.mock.calls.length === 0 && activeReadCount === 1) await concurrentReads;
+				if (advisoryLock.mock.calls.length === 0 && activeReadCount === 2) releaseConcurrentReads!();
+				return [...activeMarkerIds].map((markerId) => ({ markerId }));
+			}
+			return [];
+		});
+		markerGroupMemberUpdate.mockImplementation(async ({ where, data }: {
+			where: { groupId_markerId: { markerId: string } };
+			data: { removedAt?: Date | null };
+		}) => {
+			const markerId = where.groupId_markerId.markerId;
+			if (data.removedAt === null) activeMarkerIds.add(markerId);
+			else activeMarkerIds.delete(markerId);
+		});
+		markerGroupMemberCreateMany.mockImplementation(async ({ data }: { data: Array<{ markerId: string }> }) => {
+			for (const member of data) activeMarkerIds.add(member.markerId);
+		});
+		membershipEventCreate.mockImplementation(async ({ data }: { data: { markerId: string; action: string } }) => {
+			events.push(data);
+		});
+
+		await Promise.all([
+			replaceMarkerGroupMembers('group-a', { markerIds: ['marker-b'], reason: 'First replacement' }, owningTeacher),
+			replaceMarkerGroupMembers('group-a', { markerIds: ['marker-c'], reason: 'Second replacement' }, owningTeacher),
+		]);
+
+		expect([...activeMarkerIds]).toEqual(['marker-c']);
+		expect(events.filter((event) => event.action === 'REMOVED' && event.markerId === 'marker-a')).toHaveLength(1);
+		expect(advisoryLock).toHaveBeenCalledTimes(2);
 	});
 
 	it('scopes group details and membership history to the owning teacher or super-admin', async () => {
