@@ -42,3 +42,6 @@ backups/
 next-env.d.ts
 coverage/
 .vercel
+
+# isolated agent worktrees
+.worktrees/
