@@ -157,7 +157,7 @@ describe('completeSubmission — answer PDF verification', () => {
 		userId: 'student-1',
 		examId: 'exam-1',
 		status: SubmissionStatus.UPLOADING,
-		exam: { endTime: future },
+			exam: { endTime: future, isPublished: false, courseId: 'course-1', deletedAt: null },
 		...over,
 	});
 
@@ -174,14 +174,13 @@ describe('completeSubmission — answer PDF verification', () => {
 		});
 	});
 
-	it('completes with no key (MCQ/typed) without touching R2', async () => {
-		subFindUnique.mockResolvedValueOnce(sub());
-		subUpdate.mockResolvedValueOnce({ id: 'sub-1' });
+	it('replays an already completed MCQ/typed attempt without touching R2', async () => {
+		subFindUnique.mockResolvedValueOnce(sub({ status: SubmissionStatus.COMPLETED }));
 
 		await completeSubmission('sub-1', 'student-1', {});
 
 		expect(r2Head).not.toHaveBeenCalled();
-		expect(subUpdate.mock.calls[0]![0].data.answerPdfUrl).toBeUndefined();
+		expect(subUpdate).not.toHaveBeenCalled();
 	});
 
 	it('rejects a key belonging to another student/exam', async () => {
