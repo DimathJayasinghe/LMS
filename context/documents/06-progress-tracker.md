@@ -8,11 +8,22 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase E planning checkpoint — marker groups and guided exam assignment |
-| **Last Updated** | 2026-08-22 |
-| **Last Completed Task** | Phase E domain/API/UI/security/test plan documented; no Phase E production code changed. |
-| **Next Task** | Slice E1: test-first marker-group schema, scoped backend CRUD, membership history, and migration. |
-| **Blockers** | None |
+| **Current Phase** | Production delivery baseline; Phase E implementation remains pending |
+| **Last Updated** | 2026-09-06 |
+| **Last Completed Task** | Reconciled current source/GitHub evidence, documented release sequence and unresolved owner decisions. |
+| **Next Task** | Resolve launch scope and marker-group scope/management policy, then implement Slice E1 with tests and migration proof. |
+| **Blockers** | Owner decisions: release capacity/Zoom/features, group permissions, forensic requirements. Local Docker daemon unavailable for runtime/migration verification. |
+
+### 2026-09-06 — Production delivery baseline
+
+- [x] Added [`docs/plans/2026-09-06-production-delivery-baseline.md`](../../docs/plans/2026-09-06-production-delivery-baseline.md): source/GitHub evidence, unresolved decisions, delivery sequence, release gates, and verification limits.
+- [x] Created [GitHub delivery issue #77](https://github.com/DimathJayasinghe/LMS/issues/77) to track decisions, Phase E slices, and release safeguards.
+- [x] Verified remote `dev` at `8fcd988` and green CI run `32581060718`; opened a task branch from that baseline.
+- [x] Identified conflicting owner-input history in open PR #72: 500-student MVP/Zoom deferred/Bunny-R2 working versus newer 1,200-student/provider-readiness claims. Treat provider state as unverified until staging evidence exists.
+- [x] Verified both integration/production branches lack branch protection and the repository has no rulesets; recorded release safeguard work.
+- [x] Verified forensic gaps in source: ordinary audit writes are non-blocking; only `PaymentAdjustment`, not `AuditLog`, has a checked-in immutability trigger.
+- [x] Local baseline: frontend 105/105 tests; backend 271/271 after regenerating a stale Prisma client. Both linters/typechecks and backend production build pass; frontend build verification is recorded in the delivery baseline.
+- [ ] Owner scope/policy answers, fresh compiled-stack smoke and migration/recovery proof remain outstanding. No Phase E production behavior or database schema changed in this checkpoint.
 
 ### 2026-08-22 — Phase E planning checkpoint
 
