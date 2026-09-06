@@ -6,7 +6,7 @@ import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/const
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import { assertCourseAccess } from '@/services/class.service';
-import { assertMarkerAssignedToExam } from '@/services/access.service';
+import { assertMarkerAssignedToExam, assertStudentContentAccess } from '@/services/access.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -186,6 +186,14 @@ export const startSubmission = async (
   input: StartSubmissionInput,
 ): Promise<StartSubmissionResult> => {
   const exam = await ensureExamActive(input.examId);
+  await assertStudentContentAccess({ userId, role: Role.STUDENT }, exam.courseId);
+
+  if (exam.type === ExamType.INCLASS) {
+    throw new AppError('INCLASS_SUBMISSION_NOT_ALLOWED', 400, 'This paper is submitted in class. Staff record its result.');
+  }
+  if (exam.isPublished) {
+    throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
+  }
 
   // Server-authoritative time — never trust the client's clock
   const now = new Date();
@@ -215,6 +223,14 @@ export const startSubmission = async (
   const hasTyped =
     input.writtenAnswers !== undefined && Object.keys(input.writtenAnswers).length > 0;
   const usingPdf = requiresWritten && !!input.fileName;
+
+  const hasFileMetadata = input.fileName !== undefined || input.contentType !== undefined || input.fileSizeBytes !== undefined;
+  if (hasFileMetadata && (!input.fileName || !input.contentType || !input.fileSizeBytes)) {
+    throw new AppError('FILE_METADATA_REQUIRED', 400, 'Choose a PDF with its file name, type, and size before submitting.');
+  }
+  if (hasTyped && usingPdf) {
+    throw new AppError('MULTIPLE_WRITTEN_CHANNELS', 400, 'Submit typed answers or an answer PDF, not both.');
+  }
 
   if (requiresMcq && !input.answers) {
     throw new AppError('MCQ_ANSWERS_REQUIRED', 400, 'MCQ answers are required for this exam type.');
@@ -284,7 +300,10 @@ export const startSubmission = async (
     select: submissionDetailSelect,
   });
 
-  const result: StartSubmissionResult = { submission };
+  // Automatic grading is stored immediately but released only by the teacher.
+  const result: StartSubmissionResult = {
+    submission: { ...submission, marks: null, feedback: null, gradedAt: null },
+  };
 
   // Generate presigned upload URL for the answer PDF (PDF channel only).
   if (usingPdf && input.fileName && input.contentType) {
@@ -321,7 +340,7 @@ export const completeSubmission = async (
     select: {
       ...submissionDetailSelect,
       examId: true,
-      exam: { select: { endTime: true } },
+      exam: { select: { endTime: true, isPublished: true, courseId: true, deletedAt: true } },
     },
   });
 
@@ -334,8 +353,19 @@ export const completeSubmission = async (
   }
 
   if (submission.status === SubmissionStatus.COMPLETED) {
-    // Idempotent — already completed, just return it
-    return submission;
+    // A replay must enforce the same publication gate as GET /mine.
+    const { exam, ...ownSubmission } = submission;
+    return exam.isPublished
+      ? ownSubmission
+      : { ...ownSubmission, marks: null, feedback: null, gradedAt: null };
+  }
+
+  if (submission.exam.deletedAt) {
+    throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+  }
+  await assertStudentContentAccess({ userId, role: Role.STUDENT }, submission.exam.courseId);
+  if (submission.exam.isPublished) {
+    throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
   }
 
   // Verify server time hasn't passed exam end + grace period
@@ -352,6 +382,9 @@ export const completeSubmission = async (
   // For the PDF answer channel, verify the file actually reached R2 (HeadObject)
   // before persisting `answerPdfUrl` — the presign no longer eagerly writes it, so
   // a failed/blocked browser PUT never leaves a "submitted" answer that isn't there.
+  if (!input.key) {
+    throw new AppError('UPLOAD_KEY_REQUIRED', 400, 'Upload your answer PDF and provide its upload key before completing.');
+  }
   let answerPdfUrl: string | undefined;
   if (input.key) {
     const expectedPrefix = `${ANSWER_PDF_KEY_PREFIX}/${submission.examId}/${userId}/`;
@@ -378,7 +411,7 @@ export const completeSubmission = async (
     select: submissionDetailSelect,
   });
 
-  return updated;
+  return { ...updated, marks: null, feedback: null, gradedAt: null };
 };
 
 // ─── List Submissions ─────────────────────────────────────

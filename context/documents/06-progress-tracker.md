@@ -8,11 +8,21 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Production delivery baseline; Phase E implementation remains pending |
+| **Current Phase** | Submission integrity hardening before Phase E |
 | **Last Updated** | 2026-09-06 |
-| **Last Completed Task** | Reconciled current source/GitHub evidence, documented release sequence and unresolved owner decisions. |
-| **Next Task** | Resolve launch scope and marker-group scope/management policy, then implement Slice E1 with tests and migration proof. |
-| **Blockers** | Owner decisions: release capacity/Zoom/features, group permissions, forensic requirements. Local Docker daemon unavailable for runtime/migration verification. |
+| **Last Completed Task** | Submission access/privacy fixes independently reviewed; 295 backend tests and 21 isolated compiled HTTP/database/SSR assertions passed. |
+| **Next Task** | Land the submission-integrity PR after CI, then deliver scoped marker groups and accountable physical-paper result entry. |
+| **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
+
+### 2026-09-06 — Owner decisions and submission integrity hardening
+
+- [x] Owner confirmed 1,200 students, physical-center paper groups/results in online academic records, markers working across subjects/courses, and activity/error logging. Proceed with privilege and usability review.
+- [x] PR #78 passed CI and independent review, then squash-merged into `dev`; branch preserved. Docker Desktop is now available and both production builder images compile.
+- [x] Fix verified submission defects: missing enrollment check, fabricated student INCLASS submissions, ambiguous/incomplete upload channels, missing-key completion, unpublished-grade response leaks, and completion after publication/deletion/enrollment revocation.
+- [x] Independent review found publication-grace and revoked-enrollment completion gaps; both now have failing-first regression coverage and fixes. Follow-up review found no blocking issues.
+- [x] Verification: backend 295 tests (37 files), frontend 105 tests (27 files), both production builder images, and 21 compiled HTTP/database/SSR assertions on isolated PostgreSQL/Redis with all six migrations. No provider credentials, real users, or existing application database were used. Backend runtime used test configuration; frontend ran its production server. This is not a production-deployment or external-provider certificate.
+- [ ] Finish submission-integrity CI and merge its reviewed PR.
+- [ ] Phase E must add staff physical-paper result entry; the existing student-facing promise has no corresponding staff API yet. Keep exact exam assignment as the marker access source and preserve publication privacy.
 
 ### 2026-09-06 — Production delivery baseline
 
