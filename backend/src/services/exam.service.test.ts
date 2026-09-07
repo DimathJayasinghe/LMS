@@ -46,7 +46,7 @@ vi.mock('@/utils/r2', () => ({
 	r2HeadObject: vi.fn(),
 }));
 
-import { getExamById, listExams, replaceExamMarkers } from './exam.service';
+import { getExamById, listExams, replaceExamMarkers, updateExam } from './exam.service';
 
 const teacher = { userId: 'teacher-1', role: Role.TEACHER } as const;
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER } as const;
@@ -83,6 +83,13 @@ beforeEach(() => {
 			createMany: markerAssignmentCreateMany,
 		},
 	}));
+});
+
+describe('updateExam — pinned paper revisions', () => {
+	it('rejects changing copied assessment content on a scoped instance', async () => {
+		examFindUnique.mockResolvedValueOnce({ ...examRow, paperRevisionId: 'revision-1' });
+		await expect(updateExam('exam-1', { totalMarks: 50 }, teacher)).rejects.toMatchObject({ code: 'PINNED_PAPER_REVISION', statusCode: 409 });
+	});
 });
 
 describe('replaceExamMarkers — ownership and exact-set assignment', () => {

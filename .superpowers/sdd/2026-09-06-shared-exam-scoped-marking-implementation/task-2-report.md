@@ -37,3 +37,11 @@ Implemented on `feature/exam-audiences` from `a7ab026`.
 ## Migration blocker / concern
 
 Docker/PostgreSQL is unavailable locally, so fresh deploy, DB drift, actual PostgreSQL constraints, and six-migration legacy-upgrade preservation were not proven. `prisma migrate diff --from-migrations` also requires a configured `shadowDatabaseUrl`. CI must run those gates. Dedicated append-only `AcademicEvent` remains deferred to Task 4 as specified; this slice writes transactional `AuditLog` evidence.
+
+## Review-hardening follow-up
+
+- Pinned scoped instances now reject PATCH attempts to alter copied paper content or move to another course.
+- `ExamPaperRevision` now has an UPDATE/DELETE trigger. CI runs a rollback-only fixture script after deploy/drift and requires the exact `ExamPaperRevision rows are immutable` error for both direct mutations.
+- Student starts take the per-instance advisory lock in a serializable transaction and re-read status, enrollment, scoped ONLINE roster placement, and duplicate submission immediately before insert. The focused suite includes a deterministic lock/recheck assertion.
+- Audience replacement with an existing roster requires explicit replacement assignments plus both revisions in one transaction; it never relies on raw FK failure. Configuration and roster mutation responses return audiences, participants, and both revisions; an owner-only configuration read endpoint is available for stale retry recovery.
+- Follow-up verification: 69 focused tests passed; lint, type/build, Prisma validate/generate, from-empty diff, and `git diff --check` passed. Live PostgreSQL/CI-only limitation remains unchanged.

@@ -39,3 +39,14 @@ ALTER TABLE "ExamParticipant" ADD CONSTRAINT "ExamParticipant_examId_fkey" FOREI
 ALTER TABLE "ExamParticipant" ADD CONSTRAINT "ExamParticipant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "ExamParticipant" ADD CONSTRAINT "ExamParticipant_audienceId_examId_fkey" FOREIGN KEY ("audienceId", "examId") REFERENCES "ExamAudience"("id", "examId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "ExamAudience" ADD CONSTRAINT "exam_audience_delivery_matches_institute" CHECK (("deliveryMode" = 'ONLINE' AND "instituteId" IS NULL) OR ("deliveryMode" = 'PHYSICAL' AND "instituteId" IS NOT NULL));
+
+CREATE FUNCTION prevent_exam_paper_revision_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'ExamPaperRevision rows are immutable';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER exam_paper_revision_immutable
+BEFORE UPDATE OR DELETE ON "ExamPaperRevision"
+FOR EACH ROW EXECUTE FUNCTION prevent_exam_paper_revision_mutation();

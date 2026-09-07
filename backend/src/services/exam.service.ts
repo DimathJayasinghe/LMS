@@ -54,6 +54,7 @@ interface ExamListItem {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	paperRevisionId: string | null;
 }
 
 interface ExamDetail extends ExamListItem {
@@ -87,6 +88,7 @@ const examListSelect = {
 	deletedAt: true,
 	createdAt: true,
 	updatedAt: true,
+	paperRevisionId: true,
 } satisfies Prisma.ExamSelect;
 
 const examDetailSelect = {
@@ -350,6 +352,13 @@ export const updateExam = async (
 
 	if (existing.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot be updated.');
+	}
+	if (existing.paperRevisionId && (
+		input.type !== undefined || input.totalMarks !== undefined || input.paperPdfUrl !== undefined ||
+		input.mcqPayload !== undefined || input.allowTypedAnswers !== undefined || input.allowPdfUpload !== undefined ||
+		(input.courseId !== undefined && input.courseId !== existing.courseId)
+	)) {
+		throw new AppError('PINNED_PAPER_REVISION', 409, 'Scoped exam paper content is pinned to its revision.');
 	}
 
 	const nextType = input.type ?? existing.type;

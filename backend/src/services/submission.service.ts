@@ -284,21 +284,25 @@ export const startSubmission = async (
   const isMcqOnly = exam.type === ExamType.MCQ;
   const status = usingPdf ? SubmissionStatus.UPLOADING : SubmissionStatus.COMPLETED;
 
-  const submission = await prisma.submission.create({
-    data: {
-      userId,
-      examId: input.examId,
-      status,
-      answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull,
-      writtenAnswers: hasTyped
-        ? (input.writtenAnswers as unknown as Prisma.InputJsonObject)
-        : Prisma.JsonNull,
-      // Only MCQ-only exams auto-grade; written work waits for a marker.
-      marks: isMcqOnly ? mcqMarks : null,
-      gradedAt: isMcqOnly ? new Date() : null,
-    },
-    select: submissionDetailSelect,
-  });
+  const submission = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.examId}, 0))`);
+    const locked = await tx.exam.findUnique({ where: { id: input.examId }, select: { id: true, courseId: true, paperRevisionId: true, startTime: true, endTime: true, isPublished: true, deletedAt: true } });
+    if (!locked || locked.deletedAt) throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+    if (locked.isPublished) throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
+    const lockedNow = new Date();
+    if (lockedNow < locked.startTime) throw new AppError('EXAM_NOT_STARTED', 400, 'This exam has not started yet.');
+    if (lockedNow > locked.endTime) throw new AppError('EXAM_ENDED', 400, 'This exam has ended. Submissions are no longer accepted.');
+    const enrolled = await tx.enrollment.findFirst({ where: { userId, courseId: locked.courseId, isActive: true }, select: { id: true } });
+    if (!enrolled) throw new AppError('NOT_ENROLLED', 403, 'You are not enrolled in this course.');
+    if (locked.paperRevisionId) {
+      if (!input.audienceId) throw new AppError('EXAM_AUDIENCE_REQUIRED', 400, 'Choose your assigned online audience.');
+      const participant = await tx.examParticipant.findFirst({ where: { examId: input.examId, userId, audienceId: input.audienceId, audience: { deliveryMode: 'ONLINE' } }, select: { id: true } });
+      if (!participant) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'You are not eligible to start this exam audience.');
+    }
+    const duplicate = await tx.submission.findUnique({ where: { userId_examId: { userId, examId: input.examId } }, select: { id: true } });
+    if (duplicate) throw new AppError('ALREADY_SUBMITTED', 409, 'You have already submitted for this exam.');
+    return tx.submission.create({ data: { userId, examId: input.examId, status, answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, writtenAnswers: hasTyped ? (input.writtenAnswers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, marks: isMcqOnly ? mcqMarks : null, gradedAt: isMcqOnly ? new Date() : null }, select: submissionDetailSelect });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   // Automatic grading is stored immediately but released only by the teacher.
   const result: StartSubmissionResult = {

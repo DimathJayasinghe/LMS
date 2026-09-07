@@ -72,6 +72,9 @@ jobs:
       - name: Verify immutable marker-group membership events
         run: npx prisma db execute --file prisma/verify-marker-group-membership-event-immutability.sql
 
+      - name: Verify immutable exam paper revisions
+        run: npx prisma db execute --file prisma/verify-exam-paper-revision-immutability.sql
+
       - name: Create isolated legacy-adoption database
         env:
           DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/postgres?schema=public

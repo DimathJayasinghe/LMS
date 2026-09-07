@@ -8,6 +8,7 @@ import { examIdParamSchema } from '@/schemas/exam.schema';
 import { eligibleStudentsQuerySchema, replaceExamAudiencesSchema, replaceExamParticipantsSchema } from '@/schemas/exam-audience.schema';
 import * as Controller from '@/controllers/exam-audience.controller';
 export const examAudienceRoutes = Router();
+examAudienceRoutes.get('/:id/configuration', verifyToken, requireRole(Role.SUPER_ADMIN, Role.TEACHER), validateParams(examIdParamSchema), Controller.getConfiguration);
 examAudienceRoutes.get('/:id/eligible-students', verifyToken, requireRole(Role.SUPER_ADMIN, Role.TEACHER), validateParams(examIdParamSchema), validateQuery(eligibleStudentsQuerySchema), Controller.listEligibleStudents);
 examAudienceRoutes.put('/:id/audiences', verifyToken, requireRole(Role.SUPER_ADMIN, Role.TEACHER), validateParams(examIdParamSchema), validateBody(replaceExamAudiencesSchema), checkIdempotency, Controller.replaceAudiences);
 examAudienceRoutes.put('/:id/participants', verifyToken, requireRole(Role.SUPER_ADMIN, Role.TEACHER), validateParams(examIdParamSchema), validateBody(replaceExamParticipantsSchema), checkIdempotency, Controller.replaceParticipants);
