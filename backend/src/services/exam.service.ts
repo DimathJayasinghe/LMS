@@ -530,6 +530,9 @@ export const assignMarkersToExam = async (
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');
 	}
+	if (exam.paperRevisionId) {
+		throw new AppError('SCOPED_MARKER_ALLOCATIONS_REQUIRED', 409, 'Use scoped marker allocations for this exam instance.');
+	}
 
 	const uniqueMarkerIds = Array.from(new Set(input.markerIds));
 
@@ -596,6 +599,9 @@ export const replaceExamMarkers = async (
 	await assertCourseAccess(exam.courseId, actor);
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');
+	}
+	if (exam.paperRevisionId) {
+		throw new AppError('SCOPED_MARKER_ALLOCATIONS_REQUIRED', 409, 'Use scoped marker allocations for this exam instance.');
 	}
 
 	const markerIds = Array.from(new Set(input.markerIds));

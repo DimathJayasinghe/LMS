@@ -14,6 +14,8 @@ import {
 	examPaperConfirmSchema,
 	listExamsQuerySchema,
 	updateExamSchema,
+	previewMarkerAllocationsSchema,
+	confirmMarkerAllocationsSchema,
 } from '@/schemas/exam.schema';
 
 export const examRoutes = Router();
@@ -44,6 +46,25 @@ examRoutes.put(
 	validateBody(replaceMarkersSchema),
 	checkIdempotency,
 	ExamController.replaceMarkers,
+);
+
+examRoutes.post(
+	'/:id/marker-allocations/preview',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	validateBody(previewMarkerAllocationsSchema),
+	ExamController.previewMarkerAllocations,
+);
+
+examRoutes.put(
+	'/:id/marker-allocations',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	validateBody(confirmMarkerAllocationsSchema),
+	checkIdempotency,
+	ExamController.confirmMarkerAllocations,
 );
 
 // ─── List Exams ─────────────────────────────────────────────

@@ -13,7 +13,10 @@ import {
 	examPaperConfirmSchema,
 	listExamsQuerySchema,
 	updateExamSchema,
+	previewMarkerAllocationsSchema,
+	confirmMarkerAllocationsSchema,
 } from '@/schemas/exam.schema';
+import * as MarkerAllocationService from '@/services/marker-allocation.service';
 
 export const createExam = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const input = createExamSchema.parse(req.body);
@@ -184,4 +187,16 @@ export const replaceMarkers = asyncHandler(async (req: Request, res: Response): 
 		count: markers.length,
 		message: 'Exam markers updated.',
 	});
+});
+
+export const previewMarkerAllocations = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { id } = examIdParamSchema.parse(req.params);
+	const result = await MarkerAllocationService.previewMarkerAllocations(id, previewMarkerAllocationsSchema.parse(req.body), req.user!);
+	res.status(200).json({ status: 'success', data: result });
+});
+
+export const confirmMarkerAllocations = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { id } = examIdParamSchema.parse(req.params);
+	const result = await MarkerAllocationService.confirmMarkerAllocations(id, confirmMarkerAllocationsSchema.parse(req.body), req.user!);
+	res.status(200).json({ status: 'success', data: result, message: 'Marker allocations confirmed.' });
 });

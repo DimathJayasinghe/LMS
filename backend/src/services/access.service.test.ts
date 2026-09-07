@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 
-const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, examFindUnique, participantFindFirst } = vi.hoisted(() => ({
+const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindFirst } = vi.hoisted(() => ({
 	enrollmentFindFirst: vi.fn(),
 	paymentFindFirst: vi.fn(),
 	markerAssignmentFindUnique: vi.fn(),
+	markerAssignmentFindFirst: vi.fn(),
 	examFindUnique: vi.fn(),
 	participantFindFirst: vi.fn(),
 }));
@@ -13,7 +14,7 @@ vi.mock('@/config/database', () => ({
 	prisma: {
 		enrollment: { findFirst: enrollmentFindFirst },
 		payment: { findFirst: paymentFindFirst },
-	markerAssignment: { findUnique: markerAssignmentFindUnique },
+	markerAssignment: { findUnique: markerAssignmentFindUnique, findFirst: markerAssignmentFindFirst },
 	exam: { findUnique: examFindUnique },
 	examParticipant: { findFirst: participantFindFirst },
 	},
@@ -25,6 +26,7 @@ beforeEach(() => {
 	enrollmentFindFirst.mockReset();
 	paymentFindFirst.mockReset();
 	markerAssignmentFindUnique.mockReset();
+	markerAssignmentFindFirst.mockReset();
 	examFindUnique.mockReset();
 	participantFindFirst.mockReset();
 });
@@ -111,20 +113,42 @@ describe('assertStudentContentAccess', () => {
 
 describe('assertMarkerAssignedToExam', () => {
 	it('resolves when the marker is assigned to the exam', async () => {
-		markerAssignmentFindUnique.mockResolvedValueOnce({ markerId: 'm1', examId: 'e1' });
+		examFindUnique.mockResolvedValueOnce({ id: 'e1', paperRevisionId: null });
+		markerAssignmentFindUnique.mockResolvedValueOnce({ markerId: 'm1', examId: 'e1', marker: { role: Role.MARKER, deletedAt: null } });
 
 		await expect(assertMarkerAssignedToExam('m1', 'e1')).resolves.toBeUndefined();
 		expect(markerAssignmentFindUnique).toHaveBeenCalledWith({
 			where: { markerId_examId: { markerId: 'm1', examId: 'e1' } },
+			select: { id: true, marker: { select: { role: true, deletedAt: true } } },
 		});
 	});
 
 	it('throws 403 MARKER_NOT_ASSIGNED when there is no assignment', async () => {
+		examFindUnique.mockResolvedValueOnce({ id: 'e1', paperRevisionId: null });
 		markerAssignmentFindUnique.mockResolvedValueOnce(null);
 
 		await expect(assertMarkerAssignedToExam('m1', 'e1')).rejects.toMatchObject({
 			code: 'MARKER_NOT_ASSIGNED',
 			statusCode: 403,
+		});
+	});
+
+	it('denies a scoped marker outside the participant audience', async () => {
+		examFindUnique.mockResolvedValueOnce({ id: 'e1', paperRevisionId: 'revision-1' });
+		markerAssignmentFindFirst.mockResolvedValueOnce(null);
+
+		await expect(assertMarkerAssignedToExam('m1', 'e1', 'audience-other')).rejects.toMatchObject({
+			code: 'MARKER_NOT_ASSIGNED',
+			statusCode: 403,
+		});
+		expect(markerAssignmentFindFirst).toHaveBeenCalledWith({
+			where: {
+				markerId: 'm1',
+				examId: 'e1',
+				marker: { role: Role.MARKER, deletedAt: null },
+				audienceGrants: { some: { audienceId: 'audience-other', examId: 'e1' } },
+			},
+			select: { id: true },
 		});
 	});
 });

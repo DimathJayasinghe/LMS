@@ -156,7 +156,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
   select: {
     id: true; title: true; type: true; startTime: true; endTime: true;
     totalMarks: true; isPublished: true; deletedAt: true; mcqPayload: true;
-    allowTypedAnswers: true; allowPdfUpload: true; courseId: true;
+    allowTypedAnswers: true; allowPdfUpload: true; courseId: true; paperRevisionId: true;
   };
 }>> => {
   const exam = await prisma.exam.findUnique({
@@ -164,7 +164,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
     select: {
       id: true, title: true, type: true, startTime: true, endTime: true,
       totalMarks: true, isPublished: true, deletedAt: true, mcqPayload: true,
-      allowTypedAnswers: true, allowPdfUpload: true, courseId: true,
+      allowTypedAnswers: true, allowPdfUpload: true, courseId: true, paperRevisionId: true,
     },
   });
 
@@ -452,11 +452,33 @@ export const listSubmissions = async (
         ? { marks: null }
         : {};
 
+  // A scoped marker list is never merely exam-scoped: bind every returned
+  // student to an audience grant resolved at confirmation. Legacy exams retain
+  // their old explicit whole-exam MarkerAssignment semantics.
+  const markerAudienceFilter: Prisma.SubmissionWhereInput =
+    actor.role === Role.MARKER && exam.paperRevisionId
+      ? {
+          user: {
+            examParticipants: {
+              some: {
+                examId,
+                audience: {
+                  markerAssignmentAudiences: {
+                    some: { examId, assignment: { markerId: actor.userId } },
+                  },
+                },
+              },
+            },
+          },
+        }
+      : {};
+
   const submissions = await prisma.submission.findMany({
     where: {
       examId,
       ...statusFilter,
       ...gradedFilter,
+      ...markerAudienceFilter,
     },
     select: submissionListSelect,
     orderBy: { submittedAt: 'asc' },
@@ -539,7 +561,8 @@ export const submitMarks = async (
     where: { id: submissionId },
     select: {
       ...submissionDetailSelect,
-      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true } },
+      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true, paperRevisionId: true } },
+      user: { select: { examParticipants: { select: { examId: true, audienceId: true } } } },
     },
   });
 
@@ -548,7 +571,13 @@ export const submitMarks = async (
   }
 
   // Verify the marker is assigned to this exam
-  await assertMarkerAssignedToExam(markerId, submission.exam.id);
+  await assertMarkerAssignedToExam(
+    markerId,
+    submission.exam.id,
+    submission.exam.paperRevisionId
+      ? submission.user.examParticipants.find((participant) => participant.examId === submission.exam.id)?.audienceId
+      : undefined,
+  );
 
   if (submission.exam.isPublished) {
     throw new AppError(
