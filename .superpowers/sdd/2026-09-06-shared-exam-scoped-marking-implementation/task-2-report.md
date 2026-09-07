@@ -45,3 +45,10 @@ Docker/PostgreSQL is unavailable locally, so fresh deploy, DB drift, actual Post
 - Student starts take the per-instance advisory lock in a serializable transaction and re-read status, enrollment, scoped ONLINE roster placement, and duplicate submission immediately before insert. The focused suite includes a deterministic lock/recheck assertion.
 - Audience replacement with an existing roster requires explicit replacement assignments plus both revisions in one transaction; it never relies on raw FK failure. Configuration and roster mutation responses return audiences, participants, and both revisions; an owner-only configuration read endpoint is available for stale retry recovery.
 - Follow-up verification: 69 focused tests passed; lint, type/build, Prisma validate/generate, from-empty diff, and `git diff --check` passed. Live PostgreSQL/CI-only limitation remains unchanged.
+
+## Final sealing follow-up
+
+- Scoped paper upload presign and confirmation now both reject pinned revisions.
+- Participant replacement returns the same full configuration view as audience replacement.
+- Legacy-adoption CI seeds a pre-upgrade exam/submission/mark fixture and hard-fails if its IDs/content/mark change after deployment.
+- Revision version allocation now occurs under the per-paper advisory transaction lock; focused paper tests pass. PostgreSQL execution of the new legacy proof remains CI-only.

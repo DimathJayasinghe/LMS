@@ -448,6 +448,7 @@ export const generateExamPaperUploadUrl = async (
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot accept uploads.');
 	}
+	if (exam.paperRevisionId) throw new AppError('PINNED_PAPER_REVISION', 409, 'Scoped exam paper content is pinned to its revision.');
 
 	if (exam.type === ExamType.MCQ) {
 		throw new AppError('PAPER_NOT_ALLOWED', 400, 'MCQ exams do not accept paper uploads.');
@@ -488,6 +489,7 @@ export const confirmExamPaper = async (
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot accept uploads.');
 	}
+	if (exam.paperRevisionId) throw new AppError('PINNED_PAPER_REVISION', 409, 'Scoped exam paper content is pinned to its revision.');
 
 	if (exam.type === ExamType.MCQ) {
 		throw new AppError('PAPER_NOT_ALLOWED', 400, 'MCQ exams do not accept paper uploads.');
