@@ -40,6 +40,7 @@ vi.mock('@/config/database', () => ({
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
 vi.mock('@/services/access.service', () => ({
   assertMarkerAssignedToExam,
+  assertMarkerAssignedToExamAudience: vi.fn(),
   assertStudentContentAccess: vi.fn(),
   assertStudentExamStartAccess: vi.fn(),
 }));
@@ -109,6 +110,12 @@ const publishedSubmission = {
 };
 
 describe('published-result immutability and correction', () => {
+	it.each([{ examParticipants: [] }, { examParticipants: [{ examId: 'exam-1', audienceId: undefined }] }, { examParticipants: [{ examId: 'other-exam', audienceId: 'audience-a' }] }])('denies scoped grading without a usable participant audience: %j', async ({ examParticipants }) => {
+		submissionFindUnique.mockResolvedValueOnce({ ...publishedSubmission, exam: { ...publishedSubmission.exam, isPublished: false, paperRevisionId: 'paper' }, user: { examParticipants } });
+		submissionUpdate.mockResolvedValueOnce(publishedSubmission);
+		await expect(submitMarks('submission-1', { marks: 75 }, 'marker-1')).rejects.toMatchObject({ statusCode: 403 });
+		expect(submissionUpdate).not.toHaveBeenCalled();
+	});
 	it('locks assigned markers out once results are published', async () => {
 		submissionFindUnique.mockResolvedValueOnce(publishedSubmission);
 

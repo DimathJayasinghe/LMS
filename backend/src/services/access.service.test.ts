@@ -20,7 +20,7 @@ vi.mock('@/config/database', () => ({
 	},
 }));
 
-import { assertMarkerAssignedToExam, assertStudentContentAccess, assertStudentExamStartAccess } from './access.service';
+import { assertMarkerAssignedToExam, assertMarkerAssignedToExamAudience, assertStudentContentAccess, assertStudentExamStartAccess } from './access.service';
 
 beforeEach(() => {
 	enrollmentFindFirst.mockReset();
@@ -50,6 +50,19 @@ describe('assertStudentExamStartAccess', () => {
 		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
 		participantFindFirst.mockResolvedValueOnce(null);
 		await expect(assertStudentExamStartAccess(student, 'exam-1', 'other-audience')).rejects.toMatchObject({ code: 'EXAM_PARTICIPANT_NOT_FOUND' });
+	});
+});
+
+describe('exact marker audience gate', () => {
+	it('rejects a missing audience before an optional exam gate can broaden it', async () => {
+		await expect(assertMarkerAssignedToExamAudience('marker', 'exam', '')).rejects.toMatchObject({ statusCode: 403 });
+		expect(markerAssignmentFindFirst).not.toHaveBeenCalled();
+	});
+	it('does not turn a legacy assignment into an exact audience grant', async () => {
+		examFindUnique.mockResolvedValue({ id: 'exam', paperRevisionId: null });
+		markerAssignmentFindUnique.mockResolvedValue({ id: 'assignment', marker: { role: Role.MARKER, deletedAt: null } });
+		markerAssignmentFindFirst.mockResolvedValue(null);
+		await expect(assertMarkerAssignedToExamAudience('marker', 'exam', 'foreign-audience')).rejects.toMatchObject({ statusCode: 403 });
 	});
 });
 

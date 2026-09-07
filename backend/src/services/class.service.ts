@@ -83,8 +83,9 @@ const buildSearchFilter = (search: string): Prisma.CourseWhereInput => {
 export const assertCourseAccess = async (
 	courseId: string,
 	actor: AuthenticatedUser,
+	db: Pick<Prisma.TransactionClient, 'course'> = prisma,
 ): Promise<{ id: string; teacherId: string }> => {
-	const course = await prisma.course.findUnique({
+	const course = await db.course.findUnique({
 		where: { id: courseId },
 		select: { id: true, teacherId: true },
 	});

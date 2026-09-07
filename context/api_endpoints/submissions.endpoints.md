@@ -1,5 +1,26 @@
 # Submissions + Marking API Endpoints
 
+## Scoped marker access (2026-09-07)
+
+For exams with non-null `paperRevisionId`, every answer-bearing marker operation requires a confirmed
+grant for the student's frozen participant audience. Membership in a marker group alone grants no
+access. Legacy null-paper-revision exams retain their whole-exam assignment behavior.
+
+- `GET /api/submissions/exam/:examId` filters rows in the database through participant audience grants.
+  Its `count` is the length of that filtered result, and signed answer-PDF URLs are issued only for
+  those rows. This API has no separate marker submission-detail or answer-download endpoint; the list
+  contains answers and signed download links.
+- `PATCH /api/submissions/:id/marks` resolves the submission's participant in the same exam and checks
+  its exact audience. Missing participant/audience returns `403 EXAM_PARTICIPANT_NOT_FOUND`; another
+  audience or revoked assignment returns `403 MARKER_NOT_ASSIGNED`.
+- Grading requires a UUID `Idempotency-Key`. Fresh audience authorization runs before cached replay;
+  response keys are bound to actor, method and request URL, so a key cannot retrieve another
+  submission's answers. Removing a grant blocks fresh lists, new download URLs and grade retries.
+
+Previously issued signed URLs remain usable until their existing short expiry. Marker exam detail
+still strips MCQ answer keys, and student `/mine` responses still hide marks, feedback and graded time
+until results are published. No marker physical-entry roster endpoint exists in this slice.
+
 > Step 9 — Students submit answers, markers grade, admin publishes results.
 
 ---

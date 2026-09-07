@@ -519,20 +519,19 @@ export const confirmExamPaper = async (
 
 // ─── Marker Assignment ─────────────────────────────────────
 
+export const assertLegacyMarkerMutationAllowed = async (examId: string, actor: AuthenticatedUser) => {
+	const exam = await ensureExamExists(examId);
+	await assertCourseAccess(exam.courseId, actor);
+	if (exam.deletedAt) throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');
+	if (exam.paperRevisionId) throw new AppError('SCOPED_MARKER_ALLOCATIONS_REQUIRED', 409, 'Use scoped marker allocations for this exam instance.');
+};
+
 export const assignMarkersToExam = async (
 	examId: string,
 	input: AssignMarkersInput,
 	actor: AuthenticatedUser,
 ): Promise<MarkerAssignmentResult> => {
-	const exam = await ensureExamExists(examId);
-	await assertCourseAccess(exam.courseId, actor);
-
-	if (exam.deletedAt) {
-		throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');
-	}
-	if (exam.paperRevisionId) {
-		throw new AppError('SCOPED_MARKER_ALLOCATIONS_REQUIRED', 409, 'Use scoped marker allocations for this exam instance.');
-	}
+	await assertLegacyMarkerMutationAllowed(examId, actor);
 
 	const uniqueMarkerIds = Array.from(new Set(input.markerIds));
 
@@ -557,6 +556,7 @@ export const assignMarkersToExam = async (
 		data: markers.map((marker) => ({
 			markerId: marker.id,
 			examId,
+			allAudiences: true,
 		})),
 		skipDuplicates: true,
 	});
@@ -595,14 +595,7 @@ export const replaceExamMarkers = async (
 	input: ReplaceMarkersInput,
 	actor: AuthenticatedUser,
 ) => {
-	const exam = await ensureExamExists(examId);
-	await assertCourseAccess(exam.courseId, actor);
-	if (exam.deletedAt) {
-		throw new AppError('EXAM_DELETED', 400, 'Cannot assign markers to a deleted exam.');
-	}
-	if (exam.paperRevisionId) {
-		throw new AppError('SCOPED_MARKER_ALLOCATIONS_REQUIRED', 409, 'Use scoped marker allocations for this exam instance.');
-	}
+	await assertLegacyMarkerMutationAllowed(examId, actor);
 
 	const markerIds = Array.from(new Set(input.markerIds));
 	const markers = await prisma.user.findMany({
@@ -626,7 +619,7 @@ export const replaceExamMarkers = async (
 		});
 		if (markerIds.length > 0) {
 			await tx.markerAssignment.createMany({
-				data: markerIds.map((markerId) => ({ markerId, examId })),
+				data: markerIds.map((markerId) => ({ markerId, examId, allAudiences: true })),
 				skipDuplicates: true,
 			});
 		}

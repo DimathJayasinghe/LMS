@@ -121,7 +121,7 @@ const markerAllocationSchema = z.object({
 });
 
 export const previewMarkerAllocationsSchema = z.object({
-	allocations: z.array(markerAllocationSchema).min(1).max(100),
+	allocations: z.array(markerAllocationSchema).max(100),
 });
 export const confirmMarkerAllocationsSchema = previewMarkerAllocationsSchema.extend({
 	reason: z.string().trim().min(3).max(500),

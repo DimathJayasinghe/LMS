@@ -6,7 +6,7 @@ import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/const
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import { assertCourseAccess } from '@/services/class.service';
-import { assertMarkerAssignedToExam, assertStudentContentAccess, assertStudentExamStartAccess } from '@/services/access.service';
+import { assertMarkerAssignedToExam, assertMarkerAssignedToExamAudience, assertStudentContentAccess, assertStudentExamStartAccess } from '@/services/access.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -552,11 +552,10 @@ export const listMySubmissions = async (
 // ─── Submit Marks ──────────────────────────────────────────
 // Markers grade a specific submission. Idempotency is handled at the route level.
 
-export const submitMarks = async (
+export const assertMarkerMayGradeSubmission = async (
   submissionId: string,
-  input: SubmitMarksInput,
   markerId: string,
-): Promise<SubmissionResult> => {
+) => {
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
     select: {
@@ -570,14 +569,22 @@ export const submitMarks = async (
     throw new AppError('SUBMISSION_NOT_FOUND', 404, 'Submission not found.');
   }
 
-  // Verify the marker is assigned to this exam
-  await assertMarkerAssignedToExam(
-    markerId,
-    submission.exam.id,
-    submission.exam.paperRevisionId
-      ? submission.user.examParticipants.find((participant) => participant.examId === submission.exam.id)?.audienceId
-      : undefined,
-  );
+  if (submission.exam.paperRevisionId) {
+    const audienceId = submission.user.examParticipants.find((participant) => participant.examId === submission.exam.id)?.audienceId;
+    if (!audienceId) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'This scoped submission has no eligible exam audience.');
+    await assertMarkerAssignedToExamAudience(markerId, submission.exam.id, audienceId);
+  } else {
+    await assertMarkerAssignedToExam(markerId, submission.exam.id);
+  }
+  return submission;
+};
+
+export const submitMarks = async (
+  submissionId: string,
+  input: SubmitMarksInput,
+  markerId: string,
+): Promise<SubmissionResult> => {
+  const submission = await assertMarkerMayGradeSubmission(submissionId, markerId);
 
   if (submission.exam.isPublished) {
     throw new AppError(

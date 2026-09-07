@@ -128,8 +128,8 @@ describe('replaceExamMarkers — ownership and exact-set assignment', () => {
 		});
 		expect(markerAssignmentCreateMany).toHaveBeenCalledWith({
 			data: [
-				{ markerId: 'marker-1', examId: 'exam-1' },
-				{ markerId: 'marker-2', examId: 'exam-1' },
+				{ markerId: 'marker-1', examId: 'exam-1', allAudiences: true },
+				{ markerId: 'marker-2', examId: 'exam-1', allAudiences: true },
 			],
 			skipDuplicates: true,
 		});

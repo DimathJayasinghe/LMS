@@ -169,6 +169,11 @@ export const listMarkers = asyncHandler(async (req: Request, res: Response): Pro
 
 export const replaceMarkers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = examIdParamSchema.parse(req.params);
+	if (Array.isArray(req.body?.allocations)) {
+		const result = await MarkerAllocationService.confirmMarkerAllocations(id, confirmMarkerAllocationsSchema.parse(req.body), req.user!, req.get('Idempotency-Key'));
+		res.status(200).json({ status: 'success', data: result, message: 'Marker allocations confirmed.' });
+		return;
+	}
 	const input = replaceMarkersSchema.parse(req.body);
 	const markers = await ExamService.replaceExamMarkers(id, input, req.user!);
 
@@ -189,14 +194,22 @@ export const replaceMarkers = asyncHandler(async (req: Request, res: Response): 
 	});
 });
 
+export const authorizeLegacyMarkerReplacement = asyncHandler(async (req, _res, next) => {
+	if (!Array.isArray(req.body.allocations)) {
+		const { id } = examIdParamSchema.parse(req.params);
+		await ExamService.assertLegacyMarkerMutationAllowed(id, req.user!);
+	}
+	next();
+});
+
 export const previewMarkerAllocations = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = examIdParamSchema.parse(req.params);
 	const result = await MarkerAllocationService.previewMarkerAllocations(id, previewMarkerAllocationsSchema.parse(req.body), req.user!);
 	res.status(200).json({ status: 'success', data: result });
 });
 
-export const confirmMarkerAllocations = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+export const listMarkerAllocationHistory = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = examIdParamSchema.parse(req.params);
-	const result = await MarkerAllocationService.confirmMarkerAllocations(id, confirmMarkerAllocationsSchema.parse(req.body), req.user!);
-	res.status(200).json({ status: 'success', data: result, message: 'Marker allocations confirmed.' });
+	const result = await MarkerAllocationService.listMarkerAllocationHistory(id, req.user!);
+	res.status(200).json({ status: 'success', data: result, count: result.length });
 });

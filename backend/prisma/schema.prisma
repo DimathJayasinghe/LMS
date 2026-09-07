@@ -662,6 +662,7 @@ model MarkerAssignment {
   exam   Exam   @relation(fields: [examId], references: [id], onDelete: Restrict)
 
   assignedAt DateTime @default(now())
+  allAudiences Boolean @default(false)
 
   // Scoped instances resolve every confirmed allocation to these exact,
   // audience-bound grants. Legacy instances intentionally retain their
@@ -669,6 +670,7 @@ model MarkerAssignment {
   audienceGrants MarkerAssignmentAudience[]
 
   @@unique([markerId, examId])
+  @@unique([id, examId])
   @@index([markerId])
   @@index([examId])
 }
@@ -677,7 +679,7 @@ model MarkerAssignmentAudience {
   id String @id @default(uuid())
 
   assignmentId String
-  assignment MarkerAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment MarkerAssignment @relation(fields: [assignmentId, examId], references: [id, examId], onDelete: Cascade)
 
   // `examId` is duplicated so PostgreSQL can bind the grant to an audience of
   // the same instance through the composite audience foreign key.
@@ -687,6 +689,7 @@ model MarkerAssignmentAudience {
   audience ExamAudience @relation(fields: [audienceId, examId], references: [id, examId], onDelete: Restrict)
 
   createdAt DateTime @default(now())
+  source Json @default("[]")
 
   @@unique([assignmentId, audienceId])
   @@index([examId, audienceId])
@@ -704,11 +707,16 @@ model MarkerAllocationRevision {
   digest String
   beforeState Json
   afterState Json
+  sourceState Json @default("[]")
+  evidenceState Json @default("{}")
+  requestState Json @default("{}")
+  idempotencyKey String?
   actorId String
   actor User @relation("MarkerAllocationActor", fields: [actorId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())
 
   @@unique([examId, revision])
+  @@unique([examId, actorId, idempotencyKey])
   @@index([examId, createdAt])
   @@index([actorId])
 }
