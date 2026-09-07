@@ -1,26 +1,54 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 
-const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique } = vi.hoisted(() => ({
+const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, examFindUnique, participantFindFirst } = vi.hoisted(() => ({
 	enrollmentFindFirst: vi.fn(),
 	paymentFindFirst: vi.fn(),
 	markerAssignmentFindUnique: vi.fn(),
+	examFindUnique: vi.fn(),
+	participantFindFirst: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		enrollment: { findFirst: enrollmentFindFirst },
 		payment: { findFirst: paymentFindFirst },
-		markerAssignment: { findUnique: markerAssignmentFindUnique },
+	markerAssignment: { findUnique: markerAssignmentFindUnique },
+	exam: { findUnique: examFindUnique },
+	examParticipant: { findFirst: participantFindFirst },
 	},
 }));
 
-import { assertMarkerAssignedToExam, assertStudentContentAccess } from './access.service';
+import { assertMarkerAssignedToExam, assertStudentContentAccess, assertStudentExamStartAccess } from './access.service';
 
 beforeEach(() => {
 	enrollmentFindFirst.mockReset();
 	paymentFindFirst.mockReset();
 	markerAssignmentFindUnique.mockReset();
+	examFindUnique.mockReset();
+	participantFindFirst.mockReset();
+});
+
+describe('assertStudentExamStartAccess', () => {
+	const student = { userId: 'student-1', role: Role.STUDENT };
+	it('retains active course enrollment behavior for a legacy exam', async () => {
+		examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: null });
+		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
+		await expect(assertStudentExamStartAccess(student, 'exam-1')).resolves.toBeUndefined();
+		expect(participantFindFirst).not.toHaveBeenCalled();
+	});
+	it('denies an unlisted enrolled student on a scoped exam', async () => {
+		examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: 'revision-1' });
+		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
+		participantFindFirst.mockResolvedValueOnce(null);
+		await expect(assertStudentExamStartAccess(student, 'exam-1', 'audience-1')).rejects.toMatchObject({ code: 'EXAM_PARTICIPANT_NOT_FOUND' });
+	});
+	it('denies a tampered or physical audience for a scoped online start', async () => {
+		examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: 'revision-1' });
+		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
+		participantFindFirst.mockResolvedValueOnce(null);
+		await expect(assertStudentExamStartAccess(student, 'exam-1', 'other-audience')).rejects.toMatchObject({ code: 'EXAM_PARTICIPANT_NOT_FOUND' });
+	});
 });
 
 describe('assertStudentContentAccess', () => {

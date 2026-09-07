@@ -28,6 +28,8 @@ export type WrittenAnswersInput = z.infer<typeof writtenAnswersSchema>;
 
 export const startSubmissionSchema = z.object({
   examId: z.string().uuid(),
+  // Required by scoped instances; ignored for legacy course-wide exams.
+  audienceId: z.string().uuid().optional(),
   // For WRITTEN/HYBRID — client provides file metadata to get a presigned upload URL
   fileName: z
     .string()

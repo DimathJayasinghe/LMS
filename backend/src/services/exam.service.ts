@@ -199,22 +199,30 @@ export const createExam = async (
 	await assertCourseAccess(input.courseId, actor);
 
 	validateExamWindow(input.startTime, input.endTime);
+	const pinnedRevision = input.paperRevisionId
+		? await prisma.examPaperRevision.findUnique({ where: { id: input.paperRevisionId }, select: { id: true, paper: { select: { courseId: true } }, type: true, totalMarks: true, paperPdfUrl: true, mcqPayload: true, allowTypedAnswers: true, allowPdfUpload: true } })
+		: null;
+	if (input.paperRevisionId && (!pinnedRevision || pinnedRevision.paper.courseId !== input.courseId)) {
+		throw new AppError('INVALID_PAPER_REVISION', 400, 'The paper revision must belong to this course.');
+	}
 
-	const mcqPayload = resolveMcqPayload(input.type, input.mcqPayload);
-	const paperPdfUrl = resolvePaperKey(input.type, input.paperPdfUrl);
+	const sourceType = pinnedRevision?.type ?? input.type;
+	const mcqPayload = resolveMcqPayload(sourceType, pinnedRevision?.mcqPayload ?? input.mcqPayload);
+	const paperPdfUrl = resolvePaperKey(sourceType, pinnedRevision?.paperPdfUrl ?? input.paperPdfUrl);
 
 	const created = await prisma.exam.create({
 		data: {
 			title: input.title,
-			type: input.type,
+			type: sourceType,
 			courseId: input.courseId,
 			startTime: input.startTime,
 			endTime: input.endTime,
-			totalMarks: input.totalMarks,
+			totalMarks: pinnedRevision?.totalMarks ?? input.totalMarks,
+			paperRevisionId: pinnedRevision?.id,
 			paperPdfUrl,
 			mcqPayload: mcqPayload ?? Prisma.JsonNull,
-			allowTypedAnswers: input.allowTypedAnswers,
-			allowPdfUpload: input.allowPdfUpload,
+			allowTypedAnswers: pinnedRevision?.allowTypedAnswers ?? input.allowTypedAnswers,
+			allowPdfUpload: pinnedRevision?.allowPdfUpload ?? input.allowPdfUpload,
 		},
 		select: examDetailSelect,
 	});

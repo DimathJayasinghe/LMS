@@ -24,6 +24,7 @@ examRoutes.post(
 	verifyToken,
 	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateBody(createExamSchema),
+	checkIdempotency,
 	ExamController.createExam,
 );
 

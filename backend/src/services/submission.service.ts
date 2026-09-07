@@ -6,7 +6,7 @@ import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/const
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import { assertCourseAccess } from '@/services/class.service';
-import { assertMarkerAssignedToExam, assertStudentContentAccess } from '@/services/access.service';
+import { assertMarkerAssignedToExam, assertStudentContentAccess, assertStudentExamStartAccess } from '@/services/access.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -186,7 +186,7 @@ export const startSubmission = async (
   input: StartSubmissionInput,
 ): Promise<StartSubmissionResult> => {
   const exam = await ensureExamActive(input.examId);
-  await assertStudentContentAccess({ userId, role: Role.STUDENT }, exam.courseId);
+  await assertStudentExamStartAccess({ userId, role: Role.STUDENT }, input.examId, input.audienceId);
 
   if (exam.type === ExamType.INCLASS) {
     throw new AppError('INCLASS_SUBMISSION_NOT_ALLOWED', 400, 'This paper is submitted in class. Staff record its result.');
