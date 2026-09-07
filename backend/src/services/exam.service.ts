@@ -54,6 +54,7 @@ interface ExamListItem {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	paperRevisionId: string | null;
 }
 
 interface ExamDetail extends ExamListItem {
@@ -87,6 +88,7 @@ const examListSelect = {
 	deletedAt: true,
 	createdAt: true,
 	updatedAt: true,
+	paperRevisionId: true,
 } satisfies Prisma.ExamSelect;
 
 const examDetailSelect = {
@@ -199,22 +201,30 @@ export const createExam = async (
 	await assertCourseAccess(input.courseId, actor);
 
 	validateExamWindow(input.startTime, input.endTime);
+	const pinnedRevision = input.paperRevisionId
+		? await prisma.examPaperRevision.findUnique({ where: { id: input.paperRevisionId }, select: { id: true, paper: { select: { courseId: true } }, type: true, totalMarks: true, paperPdfUrl: true, mcqPayload: true, allowTypedAnswers: true, allowPdfUpload: true } })
+		: null;
+	if (input.paperRevisionId && (!pinnedRevision || pinnedRevision.paper.courseId !== input.courseId)) {
+		throw new AppError('INVALID_PAPER_REVISION', 400, 'The paper revision must belong to this course.');
+	}
 
-	const mcqPayload = resolveMcqPayload(input.type, input.mcqPayload);
-	const paperPdfUrl = resolvePaperKey(input.type, input.paperPdfUrl);
+	const sourceType = pinnedRevision?.type ?? input.type;
+	const mcqPayload = resolveMcqPayload(sourceType, pinnedRevision?.mcqPayload ?? input.mcqPayload);
+	const paperPdfUrl = resolvePaperKey(sourceType, pinnedRevision?.paperPdfUrl ?? input.paperPdfUrl);
 
 	const created = await prisma.exam.create({
 		data: {
 			title: input.title,
-			type: input.type,
+			type: sourceType,
 			courseId: input.courseId,
 			startTime: input.startTime,
 			endTime: input.endTime,
-			totalMarks: input.totalMarks,
+			totalMarks: pinnedRevision?.totalMarks ?? input.totalMarks,
+			paperRevisionId: pinnedRevision?.id,
 			paperPdfUrl,
 			mcqPayload: mcqPayload ?? Prisma.JsonNull,
-			allowTypedAnswers: input.allowTypedAnswers,
-			allowPdfUpload: input.allowPdfUpload,
+			allowTypedAnswers: pinnedRevision?.allowTypedAnswers ?? input.allowTypedAnswers,
+			allowPdfUpload: pinnedRevision?.allowPdfUpload ?? input.allowPdfUpload,
 		},
 		select: examDetailSelect,
 	});
@@ -343,6 +353,13 @@ export const updateExam = async (
 	if (existing.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot be updated.');
 	}
+	if (existing.paperRevisionId && (
+		input.type !== undefined || input.totalMarks !== undefined || input.paperPdfUrl !== undefined ||
+		input.mcqPayload !== undefined || input.allowTypedAnswers !== undefined || input.allowPdfUpload !== undefined ||
+		(input.courseId !== undefined && input.courseId !== existing.courseId)
+	)) {
+		throw new AppError('PINNED_PAPER_REVISION', 409, 'Scoped exam paper content is pinned to its revision.');
+	}
 
 	const nextType = input.type ?? existing.type;
 	const nextStartTime = input.startTime ?? existing.startTime;
@@ -431,6 +448,7 @@ export const generateExamPaperUploadUrl = async (
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot accept uploads.');
 	}
+	if (exam.paperRevisionId) throw new AppError('PINNED_PAPER_REVISION', 409, 'Scoped exam paper content is pinned to its revision.');
 
 	if (exam.type === ExamType.MCQ) {
 		throw new AppError('PAPER_NOT_ALLOWED', 400, 'MCQ exams do not accept paper uploads.');
@@ -471,6 +489,7 @@ export const confirmExamPaper = async (
 	if (exam.deletedAt) {
 		throw new AppError('EXAM_DELETED', 400, 'Deleted exams cannot accept uploads.');
 	}
+	if (exam.paperRevisionId) throw new AppError('PINNED_PAPER_REVISION', 409, 'Scoped exam paper content is pinned to its revision.');
 
 	if (exam.type === ExamType.MCQ) {
 		throw new AppError('PAPER_NOT_ALLOWED', 400, 'MCQ exams do not accept paper uploads.');

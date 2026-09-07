@@ -65,6 +65,28 @@ export const assertStudentContentAccess = async (
 };
 
 /**
+ * Student start gate for exam instances. Legacy exams deliberately preserve
+ * course-wide enrollment behavior; scoped instances additionally require the
+ * student's frozen participant row in the requested ONLINE audience.
+ */
+export const assertStudentExamStartAccess = async (
+  actor: AuthenticatedUser,
+  examId: string,
+  audienceId?: string,
+): Promise<void> => {
+  if (actor.role !== Role.STUDENT) return;
+  const exam = await prisma.exam.findUnique({ where: { id: examId }, select: { id: true, courseId: true, paperRevisionId: true } });
+  if (!exam) throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+  await assertStudentContentAccess(actor, exam.courseId);
+  if (!exam.paperRevisionId) return;
+  if (!audienceId) throw new AppError('EXAM_AUDIENCE_REQUIRED', 400, 'Choose your assigned online audience.');
+  const participant = await prisma.examParticipant.findFirst({
+    where: { examId, userId: actor.userId, audienceId, audience: { deliveryMode: 'ONLINE' } }, select: { id: true },
+  });
+  if (!participant) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'You are not eligible to start this exam audience.');
+};
+
+/**
  * Authorization gate: a MARKER may only act on an exam they are assigned to
  * (grade its submissions, read its detail). Extracted here — the authz-gate
  * module — so submission.service and exam.service share one definition instead

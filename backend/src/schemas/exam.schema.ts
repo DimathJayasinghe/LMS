@@ -41,6 +41,7 @@ const examBaseSchema = z.object({
 	// Answer channels students may use (default true in DB if omitted)
 	allowTypedAnswers: z.boolean().optional(),
 	allowPdfUpload: z.boolean().optional(),
+	paperRevisionId: z.string().uuid().optional(),
 });
 
 export const createExamSchema = examBaseSchema;

@@ -38,6 +38,7 @@ prisma/migrations/**/migration_lock.toml
 backups/
 
 # misc
+.superpowers/
 *.tsbuildinfo
 next-env.d.ts
 coverage/

@@ -133,6 +133,35 @@ Only active, non-deleted `MARKER` accounts may be members. Membership changes
 are transactional, append immutable events, and increment group revision only
 when the active set changes.
 
+## Reusable papers, scoped audiences and frozen rosters
+
+`POST /api/exam-papers` creates a course-owned reusable paper together with
+immutable revision 1. `POST /api/exam-papers/:id/revisions` appends a revision;
+it never updates a prior revision. Both routes require `SUPER_ADMIN` or the
+owning `TEACHER` and an `Idempotency-Key`.
+
+An exam created with `paperRevisionId` is a scoped instance. Its paper content,
+type, marks and answer-channel flags are pinned from that revision. A null
+`paperRevisionId` remains a legacy course-wide exam and preserves its existing
+enrollment behavior.
+
+Base URL: `http://localhost:5000/api/exam-audiences`.
+
+| Method | Path | Roles | Description |
+| --- | --- | --- | --- |
+| GET | `/:id/eligible-students?page=1&pageSize=50` | SUPER_ADMIN; owning TEACHER | Paginated minimal active course-student directory; never infers a center. |
+| PUT | `/:id/audiences` | SUPER_ADMIN; owning TEACHER | Replaces selected ONLINE/PHYSICAL audiences; requires `reason`, `expectedRevision`, and `Idempotency-Key`. |
+| PUT | `/:id/participants` | SUPER_ADMIN; owning TEACHER | Replaces frozen user→audience roster; requires `reason`, `expectedRevision`, and `Idempotency-Key`. |
+
+ONLINE audiences have no `instituteId`; PHYSICAL audiences require an active
+institute. A scoped exam with any ONLINE audience cannot use legacy `INCLASS`.
+Audience/roster replacement is serializable and rejects stale versions with
+`409 EXAM_CONFIGURATION_STALE`; started, published, deleted, or legacy exams
+reject scoped configuration. Each participant must be an active student with
+an active enrollment in the exam course and may appear only once per instance.
+New scoped online starts provide an audience ID and require an ONLINE matching
+participant row; legacy starts retain course-enrollment behavior.
+
 ## Endpoint Details
 
 ### POST `/`

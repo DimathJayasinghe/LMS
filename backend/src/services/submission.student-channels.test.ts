@@ -3,7 +3,7 @@ import { ExamType, SubmissionStatus } from '@prisma/client';
 
 const db = vi.hoisted(() => ({
   exam: { findUnique: vi.fn() }, enrollment: { findFirst: vi.fn() },
-  submission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+  submission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() }, $executeRaw: vi.fn(), $transaction: vi.fn(), examParticipant: { findFirst: vi.fn() },
 }));
 const storage = vi.hoisted(() => ({ createR2PresignedPutUrl: vi.fn(), r2HeadObject: vi.fn() }));
 vi.mock('@/config/database', () => ({ prisma: db }));
@@ -33,6 +33,7 @@ beforeEach(() => {
   db.enrollment.findFirst.mockResolvedValue({ id: 'enrollment-1' });
   db.submission.findUnique.mockResolvedValue(null);
   db.submission.create.mockResolvedValue(row);
+	 db.$transaction.mockImplementation(async (callback: (tx: typeof db) => unknown) => callback(db));
   storage.createR2PresignedPutUrl.mockResolvedValue('https://upload.example/answer');
 });
 afterEach(() => vi.useRealTimers());

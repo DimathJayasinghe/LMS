@@ -4,7 +4,7 @@ import { ExamType, SubmissionStatus } from '@prisma/client';
 const db = vi.hoisted(() => ({
   exam: { findUnique: vi.fn() },
   enrollment: { findFirst: vi.fn() },
-  submission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+  submission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() }, $executeRaw: vi.fn(), $transaction: vi.fn(), examParticipant: { findFirst: vi.fn() },
 }));
 const storage = vi.hoisted(() => ({
   createR2PresignedPutUrl: vi.fn(), createR2PresignedGetUrl: vi.fn(), r2HeadObject: vi.fn(),
@@ -37,6 +37,7 @@ beforeEach(() => {
   db.submission.findUnique.mockResolvedValue(null);
   db.submission.create.mockResolvedValue(submission);
   db.submission.update.mockResolvedValue(submission);
+	 db.$transaction.mockImplementation(async (callback: (tx: typeof db) => unknown) => callback(db));
   storage.createR2PresignedPutUrl.mockResolvedValue('https://upload.example/answer');
   storage.r2HeadObject.mockResolvedValue({ exists: true });
 });
@@ -56,6 +57,13 @@ describe('student attempt authorization and input integrity', () => {
     expect(db.enrollment.findFirst).toHaveBeenCalledWith({
       where: { userId: 'student-1', courseId: 'course-1', isActive: true }, select: { id: true },
     });
+  });
+
+  it('serializes the final eligibility and duplicate recheck under the instance lock', async () => {
+    await startSubmission('student-1', { examId: exam.id, writtenAnswers: { q1: 'Answer' } });
+    expect(db.$transaction).toHaveBeenCalled();
+    expect(db.$executeRaw).toHaveBeenCalled();
+    expect(db.submission.findUnique).toHaveBeenCalledTimes(2);
   });
 
   it('prevents a student from manufacturing an in-class paper record', async () => {
