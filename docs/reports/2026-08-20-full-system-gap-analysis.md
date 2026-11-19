@@ -16,7 +16,7 @@ frontend routes, test inventory, migrations, Docker Compose runtime, and the exi
 > and every requirement is mapped to a status in
 > [15-requirements-traceability.md](../../context/documents/15-requirements-traceability.md).
 > References below to "single-institution" mean "one organization" under the new terminology.
-> Phase E status below ("implementation not started") is stale: Phase E slice E1 is merged on `dev`; see [06-implementation-tracker.md](../../context/documents/06-implementation-tracker.md) for current status.
+> Phase E status below ("implementation not started") is stale: Phase E slice E1 is merged on `dev`; see [06-progress-tracker.md](../../context/documents/06-progress-tracker.md) for current status.
 
 ## 1. Executive assessment
 
