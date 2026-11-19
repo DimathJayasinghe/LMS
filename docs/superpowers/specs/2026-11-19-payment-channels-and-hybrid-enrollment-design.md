@@ -122,13 +122,16 @@ Rules:
 #### Cross-channel rules
 
 These were verified against `payment.service.ts` on 2026-11-19: `initiatePayherePayment` **upserts a
-`PENDING` row with method `ONLINE`** as soon as checkout starts, so an abandoned PayHere checkout leaves
-a pending row; `collectEntrancePayment` and `bulkUploadPayments` accept an existing row and only refuse
+`PENDING` row** as soon as checkout starts (the create path takes the schema default method `ONLINE`; the
+update path does not touch `method`), so an abandoned PayHere checkout leaves a pending row, and the
+PayHere webhook success update sets only `status` and `payhereId`; `collectEntrancePayment` and `bulkUploadPayments` accept an existing row and only refuse
 one that is `SUCCESS` **and** has a `payhereId`.
 
 1. **A slip attaches to the existing `Payment` row** for `(enrollmentId, paymentMonth)`. If none exists
    the service creates a `PENDING` row with method `BANK_TRANSFER`; if an abandoned PayHere `PENDING`
    row exists, the slip attaches to it and approval changes its `method` to `BANK_TRANSFER`.
+   A `FAILED` row is reusable the same way (the slip resets it to `PENDING`). A `REFUNDED` row is
+   refused with `409`, matching the existing refund guard in `initiatePayherePayment`.
 2. **Submitting a slip is refused (`409 ALREADY_PAID`) when the month is already `SUCCESS`** through any
    channel.
 3. **If the month is settled by another channel while slips are open** (PayHere webhook, entrance
@@ -136,14 +139,19 @@ one that is `SUCCESS` **and** has a `payhereId`.
    payment is moved to `SUPERSEDED` in the same transaction, with the fixed reason "Month already paid
    via <method>", an audit event, and a student notification. Approval of a slip that has become
    `SUPERSEDED` fails with `409`.
-4. **`ENTRANCE`, `BULK` and `MANUAL` must accept a `PENDING` row created by a slip.** Their existing
-   "already paid online" guard keys on `payhereId`, so a `SUCCESS` bank-transfer row (no `payhereId`)
+4. **`ENTRANCE` and `BULK` must accept a `PENDING` row created by a slip.** Their existing
+   "already paid online" guard keys on `payhereId` (`MANUAL`/`overridePayment` has no such guard, only a
+   `REFUNDED` check, and stays owner-only), so a `SUCCESS` bank-transfer row (no `payhereId`)
    would be silently overwritten. The guard must be generalized to "`SUCCESS` through another channel"
    before the slip channel ships.
 5. **A PayHere success arriving for a row already `SUCCESS` by bank transfer** is a duplicate payment.
    The row is not overwritten; the event is recorded, staff are notified, and the customer is refunded
    through the existing `PaymentAdjustment` ledger. The same applies in reverse for a slip approved after
    an online success (blocked by rule 3).
+6. **`initiatePayherePayment` and the PayHere webhook success update must set `method = ONLINE`.**
+   Today neither does, so a slip-created `PENDING` `BANK_TRANSFER` row paid through PayHere would keep
+   `method = BANK_TRANSFER` alongside a `payhereId`, and rule 3's "already paid via <method>" text would
+   be wrong.
 
 #### Constraints Prisma cannot express
 
@@ -286,7 +294,7 @@ new value.
 
 ## 5. Delivery order
 
-1. Owner answers the two decisions in §4.4.
+1. Owner decides the per-mode fee question in §4.4 (the other §4.4 decision is settled).
 2. `HYBRID` enum + merge migration + eligibility helper + tests (small, self-contained).
 3. `BANK_TRANSFER` enum value + `PaymentSlip` migration + service + routes + tests.
 4. Slip UI (student upload, staff queue), notification types, expiry job.

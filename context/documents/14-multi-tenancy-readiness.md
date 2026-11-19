@@ -140,14 +140,14 @@ Today every provider credential is a single process-wide environment variable va
 | Zoom | `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_SDK_KEY`, `ZOOM_SDK_SECRET`, `ZOOM_WEBHOOK_SECRET` | Each organization's own Zoom account |
 | SMS | `NOTIFY_API_KEY`, `NOTIFY_USER_ID`, `NOTIFY_SENDER_ID` | Sender ID is per organization (it is the brand students see) |
 | Bank transfer details | none | Account name, number, bank, branch, shown to students on the slip form |
-| Storage | `R2_*`, one bucket | One shared bucket with a per-organization key prefix (§7); a dedicated bucket is an optional override |
+| Storage | `R2_*`: a private bucket plus a public display-asset bucket (`R2_PUBLIC_BUCKET_NAME`, `R2_PUBLIC_URL`) | Both buckets are shared, with a per-organization key prefix (§7); a dedicated bucket is an optional override |
 
 ### 4.1 Storage design
 
 - A new `OrganizationIntegration` table: `organizationId`, `provider` (enum), `config` (JSON of
   non-secret fields), `secretsEnc` (secrets encrypted at rest with AES-256-GCM using a master key from
   the environment, `INTEGRATION_ENCRYPTION_KEY`), `status`, `lastVerifiedAt`.
-- Secrets are never returned by any API, never logged (extend the existing Pino redaction list) and are
+- Secrets are never returned by any API, never logged (the HTTP request logger already redacts three header paths; the base logger in `config/logger.ts` has no redaction yet and needs a `redact` list first) and are
   only decrypted inside the provider utility that needs them.
 - Provider utilities (`utils/bunny.ts`, `utils/zoom.ts`, `utils/r2.ts`, the PayHere signer and the SMS
   job) stop reading `env` directly and take a resolved `ProviderConfig` for the request's organization.
@@ -226,6 +226,8 @@ layered:
   concatenates a key by hand.
 - **Existing objects keep their current keys.** Keys are stored in the database as full strings, so
   legacy keys continue to work; only newly created objects get the prefix. No object copy is needed.
+- The prefix and the key builder apply to **both** buckets: the private bucket (NIC scans, exam PDFs,
+  slips, materials) and the public display-asset bucket (avatars, banners).
 - Presign and confirm functions assert that the key starts with the caller's organization prefix (or is a
   legacy key attached to a row the caller's organization owns).
 
@@ -294,7 +296,7 @@ rebased after M1 so that their new tables are created with `organizationId` from
 no migration may add a tenant-owned table without `organizationId`**, and the registry test enforces it.
 
 Recommended ordering relative to feature work: land **M1–M3 before the next Phase E slice (E2 allocation
-snapshots)**, then `PaymentSlip` and HYBRID enrollment (see the
+snapshots)**, then HYBRID enrollment and `PaymentSlip` (see the
 [payment and enrollment spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)),
 then M4–M7 in parallel with the rest of the roadmap.
 

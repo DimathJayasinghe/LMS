@@ -132,7 +132,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-COM-01 | SMS through a local gateway | Done | Notify.lk; `SmsLog`; BullMQ job |
 | R-COM-02 | Message templates for absence, fee due, cancellations | Partial | Only three `NotificationType` values exist |
 | R-COM-03 | In-app real-time updates | Done | SSE |
-| R-COM-04 | Email | Deferred | Decision 2026-07-09; `resend` dependency to be removed |
+| R-COM-04 | Email | Deferred | Decision 2026-07-09; the `resend` dependency is already removed |
 | R-COM-05 | WhatsApp as a notification channel | Decide | Chat features are out of scope; one-way WhatsApp notifications are a separate question (§2) |
 | R-COM-06 | Push notifications | Planned | With the PWA (roadmap P2) |
 | R-COM-07 | Announcements per class/batch | Planned | Roadmap P1 "Communication" |
@@ -163,7 +163,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | ID | Requirement | Status | Evidence / where tracked |
 |---|---|---|---|
 | R-NFR-01 | Mobile-first responsive web | Partial | Responsive; PWA planned (P2); native app Deferred |
-| R-NFR-02 | Capacity | Decide | Documented target is ~1,200 students on one VPS; no load test evidence (baseline doc §2). See §2 |
+| R-NFR-02 | Capacity | Decide | Documented target is ~1,200 students on one VPS; no load test evidence ([production delivery baseline](../../docs/plans/2026-09-06-production-delivery-baseline.md), owner clarification). See §2 |
 | R-NFR-03 | Multi-tenant ready | Planned | ADR 14 |
 | R-NFR-04 | Offline-tolerant UX | Gap | Roadmap mentions selected offline downloads only |
 | R-NFR-05 | Backups and recovery | Partial | Scheduled verified dumps; encryption, off-site copy and restore drill outstanding (P0) |
@@ -204,7 +204,7 @@ decision stands.
 |---|---|---|---|
 | 1 | Multi-tenant SaaS, several institutes | 01 §6 listed multi-tenancy as out of scope | **Resolved 2026-11-19:** the codebase becomes tenant-ready, deployed for one organization first (ADR 14) |
 | 2 | Sinhala and Tamil UI | "English-only for v1" (01 §6); roadmap P2 already lists it | Decide whether launch needs it. Recommended: add the message-catalog scaffolding and a per-user `locale` now, because retrofitting strings across every screen later is far costlier, and translate screen by screen |
-| 3 | 3,000+ students in one class | Target is ~1,200 students total on one VPS | Treat 1,200 as the supported scale until a load test proves more (baseline doc §2) |
+| 3 | 3,000+ students in one class | Target is ~1,200 students total on one VPS | Treat 1,200 as the supported scale until a load test proves more ([production delivery baseline](../../docs/plans/2026-09-06-production-delivery-baseline.md)) |
 | 4 | Email and WhatsApp channels | Email deferred; chat out of scope | Keep email deferred. Decide whether one-way WhatsApp notifications are acceptable (needs a Business API provider and cost) |
 | 5 | Native Android app | Native apps deferred; PWA planned | Keep web/PWA; revisit only for OS-level capture blocking |
 | 6 | Discussion forums and announcements | 01 §6 said forums are out of scope for v1, while roadmap P1 lists threaded discussions | Reconcile: announcements in P1, threaded discussions later. 01 now points at the roadmap |
