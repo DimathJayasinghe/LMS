@@ -1,6 +1,6 @@
 # Shared exams and customizable marker access
 
-**Status:** owner-approved design; implementation pending, no product behavior changed.
+**Status:** owner-approved design. Delivered on `dev` as of 2026-11-19: reusable marker groups, paper revisions, audiences and frozen rosters, and scoped marker allocations (compatibility steps 1-3 below). Still pending: staff-entered physical results with immutable academic evidence, the guided staff/marker/student workflow, and the dashboard audit. See [the plan](../plans/2026-09-06-shared-exam-scoped-marking-implementation.md) for status.
 **Date:** 2026-09-06. **Tracking:** [delivery #77](https://github.com/DimathJayasinghe/LMS/issues/77).
 **Prerequisite:** reviewed, green [submission-integrity PR #79](https://github.com/DimathJayasinghe/LMS/pull/79).
 

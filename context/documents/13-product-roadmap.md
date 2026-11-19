@@ -126,8 +126,8 @@ Every feature slice must include:
 3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
 4. ✅ Secure class banner/backdrop upload with public-R2 lifecycle, full image decoding, exact dimensions, accessibility text, and audit events (2026-08-20).
 5. ✅ Private course modules/materials and timetable-slot/live-flow unification (2026-08-21).
-6. **Next (re-ordered 2026-11-19):** tenant foundation (ADR 14 M1–M3), then continue Phase E (allocation snapshots), then `HYBRID` enrollment and the bank-slip channel, then standalone assignments. Phase E (marker groups, exam papers/audiences, allocation snapshots, guided
-   exam authoring) is partly merged: E1 marker groups and exam papers/audiences are on `dev`. The incremental
+6. **Next (re-ordered 2026-11-19):** tenant foundation (ADR 14 M1–M3), then continue Phase E (physical-result entry and academic evidence), then `HYBRID` enrollment and the bank-slip channel, then standalone assignments. Phase E (marker groups, exam papers/audiences, allocation snapshots, guided
+   exam authoring) is partly merged: E1 marker groups, exam papers/audiences and scoped marker allocations (#85) are on `dev`. The incremental
    Phase E implementation plan is documented in
    [`docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md`](../../docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md).
 7. Gradebook, rubrics, feedback, and expanded question bank.

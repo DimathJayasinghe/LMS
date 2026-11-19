@@ -81,7 +81,7 @@ All of these are tenant-owned: `User`, `Permission`, `RefreshToken`, `Idempotenc
 `SubjectTeacher`, `Course`, `CourseContentProgress`, `CourseModule`, `CourseMaterial`, `Enrollment`,
 `Payment`, `PaymentAdjustment`, `PaymentSlip` (planned), `ClassSession`, `Attendance`,
 `VideoRecording`, `Exam`, `ExamPaper`, `ExamPaperRevision`, `ExamAudience`, `ExamParticipant`,
-`Submission`, `MarkerAssignment`, `MarkerGroup`, `MarkerGroupMember`, `MarkerGroupMembershipEvent`,
+`Submission`, `MarkerAssignment`, `MarkerGroup`, `MarkerGroupMember`, `MarkerGroupMembershipEvent`, `MarkerAssignmentAudience`, `MarkerAllocationRevision`,
 `AuditLog`, `SmsLog`, `Notification`, `NotificationSetting`, `Institute`, `TimetableSlot`,
 `StudentBarcode`.
 
@@ -291,14 +291,14 @@ working at every step.
 | **M7 Login + routing** | Host-based tenant resolution, organization-scoped login, `TENANT_MISMATCH` | Two organizations on two hostnames in the Compose stack |
 | **M8 (optional)** | Postgres RLS behind a benchmark | Measured overhead recorded before enabling |
 
-**Rule for work already in flight.** Marker groups and exam papers/audiences are merged on `dev`;
-M1 gives them `organizationId` retroactively. Branches that add new tables before M1 lands
-(`feature/exam-audiences`, `feature/exam-marker-allocations`, `feature/marker-groups` worktrees) must be
-rebased after M1 so that their new tables are created with `organizationId` from day one. **After M1,
+**Rule for work already in flight.** Marker groups, exam papers/audiences and scoped marker allocations are merged on `dev`;
+M1 gives them `organizationId` retroactively. Any branch that adds new tables before M1 lands (for example the
+physical-result and academic-evidence slice) must be rebased after M1 so that its new tables are created with
+`organizationId` from day one. **After M1,
 no migration may add a tenant-owned table without `organizationId`**, and the registry test enforces it.
 
-Recommended ordering relative to feature work: land **M1–M3 before the next Phase E slice (E2 allocation
-snapshots)**, then HYBRID enrollment and `PaymentSlip` (see the
+Recommended ordering relative to feature work: land **M1–M3 before the next Phase E slice (physical-result entry and
+academic evidence, plan Task 4)**, then HYBRID enrollment and `PaymentSlip` (see the
 [payment and enrollment spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)),
 then M4–M7 in parallel with the rest of the roadmap.
 

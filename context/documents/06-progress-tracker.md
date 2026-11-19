@@ -11,7 +11,7 @@
 | **Current Phase** | Requirements and docs alignment (multi-tenancy, payment channels, HYBRID enrollment), then code alignment; Phase E marker groups and exam papers/audiences are merged |
 | **Last Updated** | 2026-11-19 |
 | **Last Completed Task** | Owner decisions of 2026-11-19 recorded in docs: [14 multi-tenancy ADR](./14-multi-tenancy-readiness.md), [15 requirements traceability](./15-requirements-traceability.md), and the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md). No code changed. |
-| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → Phase E allocation preview/snapshot slice and accountable physical-paper result entry → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
+| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → accountable physical-paper result entry (Phase E Task 4; scoped allocations are merged in #85) → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
 
 ### 2026-11-19 — Local offline development with provider drivers
@@ -43,11 +43,12 @@
 ### 2026-09-06 — Configurable exam scope and dashboard follow-up
 
 - [x] Owner confirmed shared AND separate exam instances, teacher-selected centers/grouped centers/online students, and optional teacher-configured marker restrictions inside shared instances.
-- [x] Owner approved the [customizable exam-marking design](../../docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md), separating paper reuse, exam audiences, student roster and effective marker access. No new behavior/schema is implemented in this design checkpoint.
-- [x] PR #79 was open at the time of this entry (independently reviewed, green in GitHub CI); it has since merged into `dev` (2026-11). Its 295-backend/105-frontend tests and 21 compiled-stack assertions are evidence for that patch, not for this planned feature or current `dev`. Its Docker verification supersedes the earlier unavailable-daemon checkpoint.
-- [ ] ~~Land PR #79~~ (merged) and deliver the approved feature as small tested migration/API/UI slices; Phase E slices E1 and the allocation scoping are on `dev`, allocation preview/snapshot and physical-result entry remain. Preserve both branches and reconcile tracker updates when integrating.
+- [x] Owner approved the [customizable exam-marking design](../../docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md), separating paper reuse, exam audiences, student roster and effective marker access. No new behavior/schema was implemented in this design checkpoint; the slices listed below have since landed.
+- [x] PR #79 was open at the time of this entry (independently reviewed, green in GitHub CI); it has since merged into `dev` (2026-11). Its test counts and compiled-stack assertions are evidence for that patch only, not for later slices. Its Docker verification supersedes the earlier unavailable-daemon checkpoint.
+- [ ] ~~Land PR #79~~ (merged) and deliver the approved feature as small tested migration/API/UI slices; Phase E slices E1, paper/audience/roster and scoped allocations (preview, confirm, history; #85) are on `dev`; staff physical-result entry, the guided workflow and the dashboard audit remain.
 - [ ] After the current exam/marking work, [issue #81](https://github.com/DimathJayasinghe/LMS/issues/81) covers all five role dashboards: real backend wiring, correct privileges, navigation, loading/error/empty states and end-to-end outcomes. Sparse dashboards do not justify copying another role's privileges.
 - [ ] Separate results-SMS duplication/settings bypass is tracked in [issue #80](https://github.com/DimathJayasinghe/LMS/issues/80).
+
 ### 2026-09-06 — Owner decisions and submission integrity hardening
 
 - [x] Owner confirmed 1,200 students, physical-center paper groups/results in online academic records, markers working across subjects/courses, and activity/error logging. Proceed with privilege and usability review.

@@ -10,10 +10,12 @@
 
 **Spec:** [`2026-09-06-customizable-exam-marking-design.md`](../specs/2026-09-06-customizable-exam-marking-design.md)
 
+> **Status 2026-11-19.** Tasks 0-3 are **delivered and merged** into `dev` (PR #79 and the marker-group, paper/audience/roster and scoped-allocation slices, #85 included); their checkbox steps below are kept as the historical record and must not be re-run. **Remaining work starts at Task 4** (staff-entered physical results and immutable academic evidence), then Tasks 5-6. Names that changed during delivery: error `STALE_MARKER_ALLOCATION` is `MARKER_ALLOCATION_STALE`; `MARKER_NOT_ASSIGNED_TO_AUDIENCE` is `MARKER_NOT_ASSIGNED`; model `ExamMarkerAssignmentRevision` is `MarkerAllocationRevision` (the `allAudiences` flag is on `MarkerAssignment`); request field `selections` is `allocations`; files are `marker-allocation.*`, not `exam-marker-allocation.*`; the `PUT /markers` `Idempotency-Key` must be a UUID. The authoritative API is `context/api_endpoints/exams.endpoints.md`. New tables from this plan (including the planned `AcademicEvent`) must also carry `organizationId`, `org/<organizationId>/` storage-key prefixes and organization-scoped idempotency once the tenant foundation lands ([14-multi-tenancy-readiness.md](../../../context/documents/14-multi-tenancy-readiness.md) §3.2, §7).
+
 ## Global Constraints
 
-- Land green, independently reviewed PR #79 before rebasing implementation work on `dev`; never weaken its enrollment, INCLASS, upload or unpublished-result protections.
-- Branch each task from current `dev`; one task/PR, Conventional Commit, green local/CI gates and review before squash-merge into `dev`; preserve merged branches.
+- PR #79 is merged; never weaken its enrollment, INCLASS, upload or unpublished-result protections.
+- Branch each task from current `dev`; one task/PR, Conventional Commit, green local/CI gates and review before squash-merge into `dev`; delete the branch after merge ([11-git-and-naming.md](../../../context/documents/11-git-and-naming.md) §1.4).
 - Routes → controllers → services; only services import Prisma. All course-scoped reads and writes call `assertCourseAccess`; route role checks are not authorization proof.
 - `SUPER_ADMIN` has global academic oversight; owning `TEACHER` manages owned-course groups/instances only; `ADMIN`, `MARKER`, and `STUDENT` cannot configure groups, rosters or allocations.
 - For new scoped instances, missing participant/audience/grant is deny-by-default. Legacy exams retain legacy whole-course eligibility and legacy whole-exam assignment until explicitly migrated through a safe feature flow.
@@ -199,7 +201,7 @@ Extend the exam/submission access helper: if `paperRevisionId` is null, retain t
 
 - [ ] **Step 5: Verify fresh and upgrade paths**
 
-Run focused tests, all backend lint/type/build, fresh migration deploy and a legacy fixture upgraded from the six existing migrations. Confirm legacy exam IDs/submissions/marks read unchanged and new scoped instance creation cannot fall back to course-wide enrollment.
+Run focused tests, all backend lint/type/build, fresh migration deploy and a legacy fixture upgraded from the existing migration history. Confirm legacy exam IDs/submissions/marks read unchanged and new scoped instance creation cannot fall back to course-wide enrollment.
 
 - [ ] **Step 6: Commit and PR**
 
@@ -338,7 +340,7 @@ Run:
 cd frontend && npm test -- --maxWorkers=2 && npm run lint && npx tsc --noEmit && npm run build
 ```
 
-Expected: existing 105 tests remain green plus new workflow coverage; build has no SSR access errors.
+Expected: all existing frontend tests remain green plus new workflow coverage; build has no SSR access errors.
 
 - [ ] **Step 6: Commit and PR**
 

@@ -119,11 +119,11 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-EXM-03 | Server-timed exams | Done | 02 §5.3 |
 | R-EXM-04 | Anti-cheat (shuffle, tab-switch detection) | Planned | Roadmap P2 "Academic integrity" |
 | R-EXM-05 | Reusable question bank by unit/difficulty/past paper | Planned | Roadmap P1 |
-| R-EXM-06 | Marking workflow, marker groups | Done / Partial | Exact assignment done; groups E1 done; allocation snapshots (E2) next |
+| R-EXM-06 | Marking workflow, marker groups | Done / Partial | Exact assignment done; groups E1 done; scoped allocations with preview/confirm/history (E2, #85) done; physical-result entry next |
 | R-EXM-07 | Physical-paper marks entered by staff | Planned | Tracker 2026-09-06: Phase E must add the staff API |
 | R-EXM-08 | Rankings and percentiles | Planned | Roadmap P1 "Gradebook" |
 | R-EXM-09 | Student progress charts and weak-topic analysis | Planned | Roadmap P2 "Learning analytics" |
-| R-EXM-10 | Shared or separate exam instances per audience | Partial | Exam papers, revisions, audiences and participants are merged on `dev`; the design and delivery plan are described in the 06 tracker (2026-09-06 entries) and live on the `docs/customizable-exam-marking` branch, not yet on `dev` |
+| R-EXM-10 | Shared or separate exam instances per audience | Partial | Exam papers, revisions, audiences and participants are merged on `dev`; the design and delivery plan are in `docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md` and the matching plan; scoped allocations are merged, physical-result entry and the guided workflow remain |
 
 ### 1.8 Communication
 
