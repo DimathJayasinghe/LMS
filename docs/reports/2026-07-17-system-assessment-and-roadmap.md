@@ -1,11 +1,25 @@
-# 13 — System Assessment & Path to Launch
+# System Assessment & Path to Launch (2026-07-17 snapshot)
+
+> **Historical snapshot, superseded 2026-11-19.** Kept as the record of the 2026-07-17 assessment. Do not
+> use it for current status or scope: the launch target is ~1,200 students (not the ~500 MVP stated below),
+> CI exists and gates `dev`/`main`, Zoom stays a launch-readiness item, and the owner decisions of
+> 2026-11-19 (multi-tenant readiness, bank-slip channel, `HYBRID`) postdate it. Findings §3.1-§3.5 were
+> verified against `dev` on 2026-11-19 and are **fixed**: exam list/detail have role gates and scoped marker
+> access, payment and user mutations carry `Idempotency-Key`, `access.service.test.ts` exists, PayHere
+> signatures use `timingSafeEqual`, and the timetable no longer hard-deletes. Current sources of truth:
+> [06-progress-tracker.md](../../context/documents/06-progress-tracker.md),
+> [13-product-roadmap.md](../../context/documents/13-product-roadmap.md),
+> [15-requirements-traceability.md](../../context/documents/15-requirements-traceability.md),
+> the [2026-08-20 gap analysis](./2026-08-20-full-system-gap-analysis.md) and the
+> [production delivery baseline](../plans/2026-09-06-production-delivery-baseline.md).
+
 
 > A whole-system health assessment and a sequenced roadmap toward the project's goal. Written
 > 2026-07-17, verified against the code on `dev` at that date (not assumed from the other `context/`
-> docs, which drift — see [06-progress-tracker.md](./06-progress-tracker.md)'s standing note). Where
+> docs, which drift — see [06-progress-tracker.md](../../context/documents/06-progress-tracker.md)'s standing note). Where
 > this doc names a file/line, it was checked. This is the strategic layer: it says **what** to do,
 > **in what order**, and **why**. Each significant workstream still gets its own spec → plan per the
-> repo's flow ([04-ai-workflow-rules.md](./04-ai-workflow-rules.md)); this doc is the map those specs
+> repo's flow ([04-ai-workflow-rules.md](../../context/documents/04-ai-workflow-rules.md)); this doc is the map those specs
 > hang off.
 >
 > **MVP scope (owner decision, 2026-07-17):** the **first launch targets ~500 students max**, not
@@ -55,7 +69,7 @@ real conditions.**
 
 ## 2. The goal, and the gap to it
 
-From [01-project-overview.md](./01-project-overview.md): a **low-cost, simple-to-operate, secure**
+From [01-project-overview.md](../../context/documents/01-project-overview.md): a **low-cost, simple-to-operate, secure**
 LMS for **one institution, ~1,200 students, on one ~$5–12/mo VPS**, where **Redis caching absorbs
 the result-release read spike** so no cluster is needed. Content (paid video + live) is protected;
 exams are secure; payments are reliable; attendance is automated.
@@ -154,7 +168,7 @@ it doesn't claim a caching layer that doesn't exist. Load-bearing for the *scali
 MVP one.
 
 ### 4.3 The `Permission` model is documented-but-dead
-[01-project-overview.md](./01-project-overview.md) §3 and §7 repeatedly present per-user `Permission`
+[01-project-overview.md](../../context/documents/01-project-overview.md) §3 and §7 repeatedly present per-user `Permission`
 overrides as the mechanism for "fine-grained exceptions beyond a role." The `Permission` model exists
 in `schema.prisma:136` — and is **consumed by zero code** (no service or middleware references it).
 Either a real feature is missing (some flows genuinely need per-user grants) or the model is dead
@@ -268,7 +282,7 @@ students costs more than any missing screen.
 1. **Provision production** (Phase 10): VPS + Docker Compose, DNS + Let's Encrypt TLS, assemble the
    real `.env` (Bunny/R2 creds already in hand), wire Sentry projects.
 2. **Finish the backup story**: off-site `rclone` target + healthcheck + one full restore drill
-   ([12](./12-data-backup-and-recovery.md)) before cutover.
+   ([12](../../context/documents/12-data-backup-and-recovery.md)) before cutover.
 3. **Backfill the remaining service tests** (§6) and decide the `Permission` model's fate (§4.3).
 4. **Attendance reconciliation** ("Sync" button, §5) — needed the first time a webhook is missed in
    prod.
@@ -307,5 +321,5 @@ live classes as a P2 fast-follow) and **choosing/provisioning the VPS** (P1.1). 
 in hand and verified, so nothing else is credential-blocked for the MVP.
 
 > This document is a snapshot. As P0/P1 items close, update
-> [06-progress-tracker.md](./06-progress-tracker.md) (the living status) and revise the tables here
+> [06-progress-tracker.md](../../context/documents/06-progress-tracker.md) (the living status) and revise the tables here
 > so §2's gap list shrinks visibly toward the goal.
