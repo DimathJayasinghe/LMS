@@ -1066,6 +1066,6 @@ Rows 1–11 above are historical and have been applied. The rows below are the *
 | 17 | `Role` has no guardian role; no guardian-student link | `GuardianLink` and a read-only guardian role | Roadmap P1; not yet designed in detail |
 | 18 | `User` has no school, A/L batch, stream or medium; `Course` has no capacity or medium | Add optional profile and class attributes | [15](./15-requirements-traceability.md) R-STU-01, R-STU-04 |
 | 19 | `NotificationType` has three values | Add slip submitted/rejected, fee reminder, absence alert | Payment channels design §3.5 |
-| 20 | `generateBunnyStreamUrl` (IP-bound HLS token) still exported but unused | Delete | Dead code left by the 2026-07 move to the embed player |
+| 20 | ~~`generateBunnyStreamUrl` (IP-bound HLS token) still exported but unused~~ | Done 2026-11-19 | Deleted; the `hls.js` frontend dependency was removed in the same change |
 
 > After changing the schema, run `npx prisma migrate dev --name align_to_design_doc`, review the SQL, and update the affected services/guards in the same PR.
