@@ -68,6 +68,14 @@ model Loose {
 		expect(checks[0]!.sql).toContain('IS DISTINCT FROM');
 	});
 
+	it('derives a check for every tenant-to-tenant foreign key in the real schema', () => {
+		// Every `fields:` relation except the organization link must yield a check, so a relation line the
+		// parser cannot read (for example a future multi-line @relation) fails here instead of being skipped.
+		const relations = schema.split('\n').filter((line) => /@relation\(.*fields:/.test(line) && !/organization\s+Organization\?/.test(line));
+		const selfOrOwnerless = relations.length - buildIntegrityChecks(schema).length;
+		expect(selfOrOwnerless).toBe(0);
+	});
+
 	it('derives checks for the real schema', () => {
 		const checks = buildIntegrityChecks(schema);
 		expect(checks.length).toBeGreaterThan(30);

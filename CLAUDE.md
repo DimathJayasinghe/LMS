@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 of 8 is implemented**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
+A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
 `frontend/` (Next.js) and `backend/` (Express) — no npm workspace, no root `package.json`; `cd` into
 each separately. Designed to run on **one small VPS** via Docker Compose: no Kubernetes, no
 auto-scaling, no multi-instance anything. The backend API is deliberately kept **stateless** anyway

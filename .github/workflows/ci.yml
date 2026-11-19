@@ -97,6 +97,7 @@ jobs:
           npx prisma db execute --file prisma/seed-legacy-exam-fixture.sql
           npx prisma migrate deploy
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+          npx tsx src/scripts/check-tenant-integrity.ts
           npx prisma db execute --file prisma/verify-legacy-exam-fixture.sql
 
       - name: Lint
