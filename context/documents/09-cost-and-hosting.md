@@ -48,12 +48,20 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
 | **Fixed baseline** | | | **≈ $6–15 / month** |
 
 **Cost controls built into the design:**
-- Bunny **IP-bound tokens** + enrolled/paid gating stop the "leaked link → 5,000 viewers → surprise bandwidth bill" scenario.
+- Bunny **token-authenticated embed URLs** + enrolled/paid gating limit the "leaked link → 5,000 viewers → surprise bandwidth bill" scenario. The token expires after 4 hours (`BUNNY_TOKEN_TTL_SECONDS`) but is **not bound to an IP address**, so a leaked URL can be replayed from anywhere until it expires. Recommended hardening (not yet done): restrict allowed referrers/domains on the Bunny library, shorten the TTL toward the longest lesson length, and set a Bunny bandwidth alert.
 - Cloudflare R2 has **zero egress fees** — downloads don't rack up transfer costs.
 - SMS is a **BullMQ job**, so a result release sends in the background and can be batched/capped.
 - Redis caching keeps DB load low so the single box comfortably absorbs read-heavy spikes (result releases).
 - Self-hosting Postgres removes the managed-DB bill and the free-tier cold-start problem entirely — the only
   DB cost is a few cents of off-site backup storage.
+
+### 2.1 When there is more than one organization
+
+The table above is the cost of **one** organization. Decided 2026-11-19: the code becomes multi-tenant ready ([14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md)), but no second organization is planned yet.
+
+- **Shared across organizations:** the VPS, Postgres, Redis, nginx, the R2 bucket (organization-prefixed keys) and Sentry.
+- **Per organization, billed to that organization:** its Bunny library and bandwidth, its PayHere merchant and fees, its Zoom licence, its SMS credits and sender ID. Provider credentials live in encrypted per-organization settings, not in the shared `.env`.
+- **Capacity is not additive for free.** All organizations share one box, so combined students, concurrent readers and live-class load must be load-tested together before a second customer is onboarded. The supported scale remains ~1,200 students on one VPS until a measurement says otherwise.
 
 ---
 
@@ -123,7 +131,7 @@ Most security here costs nothing but discipline:
 - Secrets only in `backend/.env` on the box (Docker `env_file`), never in git.
 - Helmet + strict CORS + Redis-backed rate limiting (auth 10/min/IP).
 - JWT in HTTP-only cookies; refresh tokens hashed + rotated with reuse detection.
-- Content gated per enrollment + paid month; Bunny IP-bound tokens + watermark; server-signed Zoom join.
+- Content gated per enrollment + paid month; Bunny token-authenticated embed (+ MediaCage DRM where enabled) + watermark; server-signed Zoom join.
 - Cloudflare proxy in front of the VPS = free WAF + DDoS absorption.
 - Audit log on every privileged mutation.
 

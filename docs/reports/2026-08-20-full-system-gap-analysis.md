@@ -8,6 +8,16 @@ front-desk staff, and one super administrator
 **Evidence reviewed:** repository source, Prisma schema, API contracts, product/architecture docs,
 frontend routes, test inventory, migrations, Docker Compose runtime, and the existing product roadmap
 
+> **Addendum 2026-11-19.** This audit targets a *single-institution* LMS and its phase letters (A–I)
+> remain valid. It does not cover three owner decisions made later: multi-tenant readiness, a
+> bank-transfer payment channel, and `HYBRID` enrollment. Those are specified in
+> [14-multi-tenancy-readiness.md](../../context/documents/14-multi-tenancy-readiness.md) and
+> [the payment channels and HYBRID design](../superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md),
+> and every requirement is mapped to a status in
+> [15-requirements-traceability.md](../../context/documents/15-requirements-traceability.md).
+> References below to "single-institution" mean "one organization" under the new terminology.
+> Phase E status below ("implementation not started") is stale: Phase E slice E1 is merged on `dev`; see [06-implementation-tracker.md](../../context/documents/06-implementation-tracker.md) for current status.
+
 ## 1. Executive assessment
 
 The project has a strong operational core: authenticated role-based access, teacher-owned classes,

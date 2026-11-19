@@ -213,10 +213,12 @@ decrypt → restore into a scratch DB → verify row count — is validated in C
 ## 11. Optional upgrade path — Point-in-Time Recovery (PITR)
 
 Nightly logical dumps (this system) give RPO ≈ 24h and are simple, portable, and encryptable — the right default
-for a single institute. If you later need **near-zero RPO** (recover to any second), add **WAL archiving**:
+for a single organization. If you later need **near-zero RPO** (recover to any second), add **WAL archiving**:
 enable `archive_mode`, ship WAL segments off-site continuously (e.g. via `pgBackRest` or `wal-g`), and keep a
 base backup. This is more moving parts and cost; adopt it only when losing a day of data becomes unacceptable.
 Until then, keep the dumps **and** lower the interval if you want a tighter RPO.
+
+**Multi-tenancy note (decided 2026-11-19, [14](./14-multi-tenancy-readiness.md) §12):** these dumps cover the whole database. With several organizations in one shared schema, restoring *one* organization after a mistake is not a standard `pg_restore`; a tenant export/import tool (or, for a customer with strict needs, a dedicated database) is a prerequisite for onboarding a second organization. Until then there is exactly one organization and this runbook applies unchanged.
 
 ---
 

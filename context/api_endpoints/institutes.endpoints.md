@@ -1,7 +1,7 @@
 # Institutes API Endpoints
 
 Pre-configured **physical centers** (Super-Admin allowlist). Students register a
-per-institute barcode during account setup. Not a tenant boundary — one LMS.
+per-institute barcode during account setup. An institute is a **branch inside an organization** and is not a tenant boundary (the tenant is the `Organization`; see `documents/14-multi-tenancy-readiness.md`). Once organizations exist, `name` and `code` are unique per organization.
 
 ## Base URL
 

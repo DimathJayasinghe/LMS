@@ -8,11 +8,22 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase E — reusable marker-group backend foundation |
-| **Last Updated** | 2026-09-06 |
-| **Last Completed Task** | Submission access/privacy fixes independently reviewed; 295 backend tests and 21 isolated compiled HTTP/database/SSR assertions passed. |
-| **Next Task** | Use marker groups in the exam allocation preview/snapshot slice; then add accountable physical-paper result entry. |
+| **Current Phase** | Requirements and docs alignment (multi-tenancy, payment channels, HYBRID enrollment), then code alignment; Phase E marker groups and exam papers/audiences are merged |
+| **Last Updated** | 2026-11-19 |
+| **Last Completed Task** | Owner decisions of 2026-11-19 recorded in docs: [14 multi-tenancy ADR](./14-multi-tenancy-readiness.md), [15 requirements traceability](./15-requirements-traceability.md), and the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md). No code changed. |
+| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → Phase E allocation preview/snapshot slice and accountable physical-paper result entry → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
+
+### 2026-11-19 — Requirements alignment: multi-tenancy, payment channels, class types
+
+- [x] **Owner decisions recorded** (rationale in the Decisions Log): deploy for one organization but build tenant-ready; tenant is `Organization`, `SUPER_ADMIN` owns one organization, `PLATFORM_ADMIN` name reserved; three class types via a planned `HYBRID` enrollment; three payment channels including a planned staff-approved bank-slip channel; stay on Express + Next.js (no NestJS rewrite); Bunny Stream remains the video provider.
+- [x] Added [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md): data-model changes, per-organization uniques, provider configuration, webhook resolution, isolation strategy, key spaces, and the M1–M8 migration plan.
+- [x] Added [15-requirements-traceability.md](./15-requirements-traceability.md): every requirement from the review mapped to Done / Partial / Planned / Gap / Deferred / Decide, including where the generic list conflicts with earlier decisions.
+- [x] Added the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
+- [x] Corrected doc drift found while checking source: playback is a **token-authenticated embed with a 4-hour, non-IP-bound token** (docs, `CLAUDE.md` and the hosting doc said IP-bound HLS); the described player "black-screen detection" does not exist; `generateBunnyStreamUrl` is dead code; `07-implementation-plan.md` is the original build order, not a current plan.
+- [x] **Decided later the same day:** a `PHYSICAL`-only enrollment loses live/recording access unless the student is `HYBRID` or the session opts in via a new `ClassSession.onlineForPhysical` flag (behaviour change; needs a rollout report); the first organization migration uses placeholder slug `default` / code `DEF`, renamed before launch.
+- [ ] **Still open:** (1) one fee for all modes or per-mode fees; (2) keep existing `LMS-<index>` QR values when the organization prefix is introduced; (3) is a tenant export/restore tool required before a second customer; (4) Sinhala/Tamil UI at launch or after; (5) are one-way WhatsApp notifications acceptable.
+- [ ] Code alignment has not started. Cleanups already identified: delete `generateBunnyStreamUrl`; remove the `hls.js` frontend dependency, which nothing imports any more (the `resend` dependency noted in the 2026-07-09 decision is already gone).
 
 ### 2026-09-06 — Owner decisions and submission integrity hardening
 
@@ -314,7 +325,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement barcode scanning attendance endpoint
 - [x] Implement Zoom webhook handler (upsert attendance)
 - [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
-- [x] Implement Bunny.net video token generation (IP-bound)
+- [x] Implement Bunny.net video token generation (IP-bound) *(superseded 2026-07-11: signed embed token, not IP-bound; see 02 §7.1)*
 - [x] Build class schedule page (student view) — `(app)/timetable/page.tsx`
 - [x] Build attendance scanner/report page — `(app)/attendance/page.tsx` keeps the working SUPER_ADMIN/ADMIN entrance scanner (institute→class→session, wedge/camera QR, live roster, manual fallback) and now gives SUPER_ADMIN/TEACHER an ownership-scoped session roster + Zoom reconciliation preview/apply view (2026-08-17). MARKER remains intentionally unsupported.
 - [ ] Build video player component with DRM black-screen detection — `components/features/VideoPlayer.tsx` (187 lines) plays video but has **no watermark overlay and no black-screen detection**; `02-architecture.md §7.1` describes these as if built for VOD — that description is aspirational/stale for the watermark specifically, don't trust it without checking the component
@@ -482,6 +493,14 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2026-07-10 | **Notification bell: full persisted inbox, not an ephemeral toast** | User explicitly chose the bigger option over the lighter SSE-only recommendation — wanted unread counts, mark-as-read, and history, not just live pop-ups |
 | 2026-07-10 | **Notification channels: IN_APP + SMS only, no EMAIL toggle** | Matches the existing "email out of scope for v1" decision — a toggle with no sender behind it would be a dead control. `NotificationChannel` enum is structured to extend cleanly when email infra exists |
 | 2026-07-10 | **Notification settings are SUPER_ADMIN-only, not ADMIN** | Consistent with the audit-log-access decision the same session — front-desk doesn't get to decide whether students get contacted, only the owner does |
+| 2026-11-19 | **Stay on Express + Next.js; no NestJS migration** | The backend already has strict route/controller/service layering, a separate BullMQ worker, idempotent signed webhooks, and 27 service modules, most with colocated Vitest suites. A framework rewrite would add cost without adding capability. |
+| 2026-11-19 | **Multi-tenant ready, single-tenant deployed**; tenant = `Organization`; shared schema with `organizationId` | Reverses the "multi-tenancy out of scope" row in 01 §6. Pre-launch is the cheapest time to add tenancy; database-per-tenant stays as an escape hatch. See [14](./14-multi-tenancy-readiness.md). |
+| 2026-11-19 | **`SUPER_ADMIN` = owner of one organization; `PLATFORM_ADMIN` name reserved, not implemented** | Avoids a second role remap later (the ADMIN/STAFF rename was painful) without building a platform console now. |
+| 2026-11-19 | **`Institute` keeps meaning "physical branch"** | Not renamed; the tenant term is `Organization`. |
+| 2026-11-19 | **Three payment channels into one ledger**: platform (PayHere), front desk/branch (`ENTRANCE`), bank transfer + staff-approved slip (`BANK_TRANSFER`, planned) | Keeps `@@unique([enrollmentId, paymentMonth])`; slips live in a separate append-only `PaymentSlip` table. See the payment design §3. |
+| 2026-11-19 | **Physical-only students do not get live/recorded access** unless `HYBRID` or the session sets `onlineForPhysical` | Today's gate ignores `classType`; the owner chose to tie online access to the enrollment type. Behaviour change for existing students, so enforcement needs a prior usage report and announcement. |
+| 2026-11-19 | **Add `HYBRID` enrollment (planned)**; one active enrollment per student per course | One fee, both modes; stops double billing from holding `ONLINE` and `PHYSICAL` enrollments. See the payment design §4. |
+| 2026-11-19 | **Bunny Stream stays the video provider** | Token-authenticated embed is built; MediaCage DRM is enabled per library and must be verified. Wrapped behind a provider interface during ADR 14 M4. |
 | 2026-07-10 | **Consolidated payment SMS into NotificationService.dispatch(), removed the old per-controller helpers** | `payment.controller.ts` already had `sendPaymentConfirmationSms`/`sendPaymentOverrideSms` calling `SmsNotificationService.sendSms` directly, with no settings gate and at risk of double-sending once the new dispatch-based calls were added in the service layer. Removed the controller-level versions; `NotificationService.dispatch` is now the only path, and it respects the super-admin toggle. `sendBulkPaymentSms` (bulk upload) was left as the pre-existing no-op — it never sent anything before this change either, wiring it up needs `bulkUploadPayments` to expose per-row recipients first |
 
 ---
@@ -494,7 +513,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Zoom webhook missed during server restart | Ownership-scoped preview/apply reconciliation plus SUPER_ADMIN/TEACHER "Sync" UI; provider retry monitoring still remains | 🟡 Reconciliation done 2026-08-17; staging provider proof and retry alerting remain |
 | JWT expiry during long exam | Silent refresh token rotation | 🟡 Partial — reactive refresh-on-401 exists (`frontend/lib/api.ts`, single retry); no proactive/background rotation ahead of the 15-min expiry |
 | R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement (confirmed absent 2026-07-15 — NIC/exam-paper/answer-PDF uploaders are single presign→PUT→confirm, no resume path) |
-| Video piracy (leaked stream link) | Bunny token-authenticated embed + MediaCage DRM, enrolled/paid gating, per-student watermark overlay | ✅ Done (2026-07-11, PR #56 — see `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`) |
+| Video piracy (leaked stream link) | Bunny token-authenticated embed (4-hour, not IP-bound), enrolled/paid gating, per-student watermark overlay; MediaCage DRM is a Bunny library setting | 🟡 Code done (2026-07-11, PR #56 — see `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`). Library DRM setting and a valid Bunny key are **unverified** (roadmap P0 records a malformed key). Consider a shorter TTL and referrer restrictions (09 §2) |
+| **New 2026-11-19:** A missing tenant filter leaks one organization's data to another once more than one organization exists | Scoped Prisma client, registry test, isolation test suite, raw-SQL ban, integrity check (ADR 14 §6) | ⬜ Planned; not applicable while there is one organization |
+| **New 2026-11-19:** Bank-slip fraud (reused or forged slips, one transfer credited twice) | Staff approval, unique approved reference per organization, audited file access, no auto-unlock from a pending slip (payment design §3.3) | ⬜ Planned |
 | Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ✅ Done |
 | DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ Not planned — Web Meeting SDK has no OS-level capture-blocking; CLAUDE.md documents this as an **accepted limitation**, not a bug to fix |
 | Single VPS is a single point of failure | Self-hosted Postgres on a persistent volume + the `backup` service (verified, encrypted, **off-site** dumps) + nightly Redis snapshot; scripted rebuild + restore runbook ([12](./12-data-backup-and-recovery.md)) | 🟡 Backup engine built & validated; configure off-site + drill before cutover |

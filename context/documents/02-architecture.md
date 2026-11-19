@@ -2,7 +2,7 @@
 
 > Defines the technology stack, system topology, layer boundaries, and **invariants** the codebase must never violate.
 >
-> **Guiding principle: lowest cost, lowest complexity, still secure and reliable.** For ~1,200 students this system runs comfortably on **one small VPS**. We do **not** use Kubernetes, auto-scaling, or multi-instance load balancing — those add cost and operational burden this scale does not need. We keep the code stateless anyway (see §5.1) because it is nearly free discipline that leaves the door open to scale later.
+> **Guiding principle: lowest cost, lowest complexity, still secure and reliable.** For ~1,200 students this system is designed to run on **one small VPS**. We do **not** use Kubernetes, auto-scaling, or multi-instance load balancing — those add cost and operational burden this scale does not need. We keep the code stateless anyway (see §5.1) because it is nearly free discipline that leaves the door open to scale later.
 
 ---
 
@@ -65,20 +65,20 @@
 
 | Layer | Technology | Role |
 |-------|-----------|------|
-| **Frontend** | Next.js 14+ (App Router) + TypeScript | SSR, client UI, SEO |
+| **Frontend** | Next.js 16 (App Router) + React 19 + TypeScript | SSR, client UI, SEO |
 | **State Management** | Zustand + React Query (TanStack Query) | Cross-tab sync, server-state caching |
 | **Form Handling** | React Hook Form + Zod | Validation on client and server |
 | **Styling** | Tailwind CSS | Utility-first CSS framework |
-| **Backend API** | Node.js + Express.js + TypeScript | Stateless REST API (Route → Controller → Service) |
+| **Backend API** | Node.js + Express 5 + TypeScript | Stateless REST API (Route → Controller → Service). **Staying on Express** is a recorded decision (2026-11-19): the strict layering, separate BullMQ worker, idempotent webhooks and 27 service modules (most with colocated Vitest suites) already provide what a framework migration would, so no NestJS rewrite is planned |
 | **Real-Time** | Server-Sent Events (SSE) | One-way push to clients (results, timers, attendance) |
 | **Auth** | JWT (access + refresh tokens in HTTP-only cookies) | Stateless session management |
 | **Database** | PostgreSQL 16 (self-hosted in Compose, `pgdata` volume) | Relational source of truth |
-| **ORM** | Prisma | Type-safe queries, migrations |
+| **ORM** | Prisma 7 | Type-safe queries, migrations; a tenant-scoping client extension is planned ([14](./14-multi-tenancy-readiness.md) §6) |
 | **Connection Pooling** | Prisma client pool (add pgbouncer only if `max_connections` is ever exceeded) | Keeps Postgres connection count safe |
 | **Cache / Pub-Sub / Queue** | Redis (self-hosted in Compose) | Result cache, rate-limit store, BullMQ backbone, SSE fan-out |
 | **Task Queue** | BullMQ | Background jobs (SMS, cleanup, cron) on a separate worker process |
 | **File Storage** | Cloudflare R2 | Zero-egress S3-compatible; presigned URL uploads |
-| **Video CDN** | Bunny.net (Bunny Stream) | HLS VOD with IP-bound tokens |
+| **Video CDN** | Bunny.net (Bunny Stream) | HLS VOD through Bunny's token-authenticated embed player; MediaCage DRM where enabled on the library |
 | **Live Classes** | Zoom Web SDK + Zoom API webhooks | Browser-embedded live sessions; attendance via webhook |
 | **Payments** | PayHere | Sri Lankan payment gateway; webhook-confirmed |
 | **SMS** | Notify.lk (Lite plan) | Student notifications |
@@ -206,6 +206,18 @@ These rules **must never be violated**. Every code review checks against this li
 - Webhook signatures are verified before processing (Zoom HMAC + timestamp; PayHere hash).
 - External services are configured with retry policies; Admin "Sync" buttons exist as manual reconciliation fallbacks.
 
+### 5.9 Tenant Scoping (target invariant — not yet implemented)
+
+Decided 2026-11-19; implementation order is the M1–M8 plan in [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md).
+Once its foundation steps land, every review also checks:
+
+- Every tenant-owned table carries `organizationId`, and the tenant-model registry test is green.
+- Services reach the database only through the **scoped Prisma client** built from the authenticated actor's organization; a client-supplied `organizationId` is never trusted.
+- Provider credentials, R2 keys, Redis keys, SSE channels and job payloads are organization-scoped; webhooks identify the organization before verifying signatures.
+- A table-driven tenant-isolation test covers every new route.
+
+Until then the system has exactly one implicit organization, and new code should not add anything that would block these steps (for example new global uniques on user-visible values, or hand-built storage and cache keys).
+
 ---
 
 ## 6. DNS & Hosting Layout
@@ -219,6 +231,7 @@ These rules **must never be violated**. Every code review checks against this li
 - **Frontend**: `CNAME` for `@` / `www` → Vercel.
 - **Backend**: `A` record for `api` → the VPS public IP. Proxy through Cloudflare (orange cloud) for a free CDN + DDoS shield if desired.
 - **TLS**: nginx terminates TLS on the VPS using a free Let's Encrypt certificate (auto-renewed). Vercel handles frontend TLS automatically.
+- **Future tenants**: each organization is reached at `<slug>.<platform-domain>` (wildcard DNS and certificate). The current single-domain deployment keeps working because unmatched hosts resolve to the default organization ([14](./14-multi-tenancy-readiness.md) §5).
 
 ---
 
@@ -235,7 +248,7 @@ These rules **must never be violated**. Every code review checks against this li
 | HTTP Hardening | Helmet.js on all responses |
 | CORS | Strict origin whitelist (`academylms.com` only), `credentials: true` |
 | Secrets | Kept in `backend/.env` on the VPS (never committed); loaded via Docker `env_file` |
-| DRM / Anti-piracy | IP-bound Bunny.net tokens; black-screen detection UI |
+| DRM / Anti-piracy | Bunny token-authenticated embed (signed URL, 4-hour TTL) + MediaCage DRM where the library enables it + per-student watermark; no black-screen detection exists in the player |
 | File Security | Time-limited presigned URLs; no public R2 bucket access |
 | Audit | Every privileged mutation writes an `AuditLog` row (actor, role, IP, user-agent, before/after) |
 
@@ -248,10 +261,11 @@ Teachers deliver classes **live through the site** and publish **recorded classe
 - Access decisions live in the service layer — no signed URL or SDK signature is ever handed out without passing the gate.
 
 **Recorded classes (Bunny.net Stream, embedded in the site):**
-- Playback uses **short-lived, IP-bound signed tokens** generated server-side (bound to `req.ip`). A leaked URL fails from any other IP with `403`.
-- HLS chunked delivery; **no public Bunny library**; the raw `bunnyVideoId` is never exposed to the client without a fresh token.
-- **Per-student watermark overlay** (student index number + name) rendered over the player — a cheap, strong deterrent against screen-record redistribution.
-- DRM/HDCP is on; the player detects the "innocent black screen" (frame rate 0 with audio) and shows guidance rather than flooding support.
+- Playback uses Bunny's **token-authenticated iframe embed**. The backend (`getSignedBunnyEmbedUrl` in `utils/bunny.ts`) signs `SHA256(tokenKey + videoId + expires)` with the library's token authentication key and returns an embed URL that expires after `BUNNY_TOKEN_TTL_SECONDS` (4 hours). A URL that has expired, or that was altered, is refused by Bunny. **The token is not bound to an IP address**: an earlier design bound HLS tokens to `req.ip`, and that function (`generateBunnyStreamUrl`) is now unused and should be deleted in the next code-alignment pass.
+- **No public Bunny library**; the raw `bunnyVideoId` is never exposed to the client without a fresh token, and the token is only issued after the access gate passes and the video is `READY`.
+- **DRM**: MediaCage DRM is a library-level setting in the Bunny dashboard ("enable if the plan allows" in the July design). It cannot be confirmed from code, so treat it as unverified until checked in staging. Token protection works without it. The Bunny key currently configured is documented as invalid, so real playback has not been proven end to end.
+- **Per-student watermark overlay** (student name + index number) rendered over the player and repositioned on an interval — a deterrent against screen-record redistribution, not a guarantee.
+- Webhooks from Bunny are verified by HMAC over the raw body using the read-only API key (see `verifyBunnyWebhookSignature`).
 
 **Live classes (Zoom Meeting SDK, embedded in the site — implemented 2026-07-10):**
 - Teachers **schedule through the site**: `POST .../live/schedule` calls Zoom's REST API (Server-to-Server
