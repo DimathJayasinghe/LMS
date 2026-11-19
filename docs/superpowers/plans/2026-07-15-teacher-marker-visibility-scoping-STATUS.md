@@ -47,7 +47,7 @@ task, two-stage review between tasks.
 - `assertCourseAccess`/`AuthenticatedUser` are already imported in `exam.service.ts`,
   `video.service.ts`, and `class-session.service.ts` — no import changes needed there. Only
   `submission.service.ts` needs both added (Task 3, Step 3).
-- Never delete `feature/teacher-marker-visibility-scoping` after merge (repo convention).
+- ~~Never delete `feature/teacher-marker-visibility-scoping` after merge (repo convention).~~ Superseded 2026-11-19: branches are now deleted after merge (see `context/documents/11-git-and-naming.md` §1.4).
 - Both Task 3-review comment nits are now resolved (fixed during Task 5): the stale
   `submission.service.ts:397` comment and the misleading/inconsistent test comments in
   `submission.service.test.ts` (fixed twice — Task 5's implementer introduced a new inaccuracy on

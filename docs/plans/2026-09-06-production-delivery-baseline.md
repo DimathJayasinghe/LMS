@@ -152,7 +152,10 @@ Its E5 instruction to push `dev` is superseded by the standing branch/PR workflo
 After the owner sets the release boundary, split accepted items into vertical slices: standalone
 assignments; moderation/result history/appeals; gradebook/rubrics/question bank; fair-access payment
 exceptions; calendar/communication; guardian access; analytics. Preserve documented deferrals for
-native apps, multi-tenancy, and optional AI unless the owner explicitly changes them.
+native apps and optional AI unless the owner explicitly changes them. **Multi-tenancy is no longer a
+deferral:** on 2026-11-19 the owner decided to build the codebase tenant-ready (deployed for one
+organization first); see [14-multi-tenancy-readiness.md](../../context/documents/14-multi-tenancy-readiness.md)
+and [15-requirements-traceability.md](../../context/documents/15-requirements-traceability.md).
 See [product roadmap](../../context/documents/13-product-roadmap.md) and
 [phases F–I](../reports/2026-08-20-full-system-gap-analysis.md) for the existing inventory.
 
