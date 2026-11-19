@@ -142,6 +142,8 @@ Today every provider credential is a single process-wide environment variable va
 | Bank transfer details | none | Account name, number, bank, branch, shown to students on the slip form |
 | Storage | `R2_*`: a private bucket plus a public display-asset bucket (`R2_PUBLIC_BUCKET_NAME`, `R2_PUBLIC_URL`) | Both buckets are shared, with a per-organization key prefix (§7); a dedicated bucket is an optional override |
 
+Provider **drivers** (`STORAGE_DRIVER`, `SMS_DRIVER` and the planned video, payment and live-class drivers in [16-local-development.md](./16-local-development.md)) are a process-wide deployment choice, not per-organization configuration. `OrganizationIntegration` will supply credentials for the real drivers only; a local or mock driver is never selectable per organization and is refused when `NODE_ENV=production`.
+
 ### 4.1 Storage design
 
 - A new `OrganizationIntegration` table: `organizationId`, `provider` (enum), `config` (JSON of

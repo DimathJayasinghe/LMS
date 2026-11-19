@@ -183,6 +183,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-OPS-04 | Staff payroll | Deferred | Not part of an LMS |
 | R-OPS-05 | Helpdesk / complaints | Gap | Not planned |
 | R-OPS-06 | Printable student ID cards | Gap | See R-STU-02 |
+| R-OPS-07 | Run the whole system locally until hosted | Partial | Local storage and SMS drivers done; video, PayHere and Zoom stand-ins planned ([16-local-development.md](./16-local-development.md)). No DRM locally |
 
 ### 1.13 Nice-to-have
 

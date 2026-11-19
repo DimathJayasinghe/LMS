@@ -14,6 +14,15 @@
 | **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → Phase E allocation preview/snapshot slice and accountable physical-paper result entry → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
 
+### 2026-11-19 — Local offline development with provider drivers
+
+- [x] Owner request: until hosted, run everything locally in Docker through adapters configured by environment. Design in [16-local-development.md](./16-local-development.md): drivers default to the real providers, are implemented inside the existing utilities, and are refused when `NODE_ENV=production`.
+- [x] **Storage** (`STORAGE_DRIVER=local`): RustFS S3-compatible container, path-style addressing, separate browser-facing presign endpoint (`R2_PRESIGN_ENDPOINT`), bucket bootstrap with CORS and a public-read bucket via `docker-compose.local.yml` and `docker/local/storage-init.sh`. Verified manually on 2026-11-19 against the real backend image in Docker (presign, browser PUT from the host, backend HEAD confirm, public read); unit tests cover URL shape and driver selection only. The MinIO Docker Hub image no longer exists, hence RustFS.
+- [x] **SMS** (`SMS_DRIVER=log`): the worker logs the message and marks `SmsLog` `SENT`.
+- [ ] **Video** (`VIDEO_DRIVER=local`): contract emulation with no DRM; TUS upload, signed webhook to the existing route, minimal player page. The nginx `X-Frame-Options DENY` header must not block the local player.
+- [ ] **PayHere** local mock checkout that reuses `utils/payhere.ts` signing; **Zoom** mock meeting creation (joining needs real Zoom).
+- [ ] Known gap: `next/image` has no `images.remotePatterns`, so remote banner URLs are blocked by Next regardless of driver.
+
 ### 2026-11-19 — Git workflow rules and branch cleanup
 
 - [x] Rewrote [11-git-and-naming.md](./11-git-and-naming.md): protected `dev`/`main`, no long-lived lanes, `type/kebab-scope` names without personal prefixes, **delete branches after merge** (reverses the 2026-07-10 rule), stacked branches, worktree policy, stale-branch policy, release and hotfix flow, PR checklist, cleanup runbook, AI-agent session rules. `.worktrees/` is now gitignored.

@@ -62,9 +62,16 @@ For ngrok: set `NGROK_AUTHTOKEN` (+ optional reserved `NGROK_DOMAIN`) in `backen
 URLs are `https://<ngrok-domain>/api/{videos/bunny-webhook, attendance/zoom-webhook, payments/payhere/notify}`.
 See the appendix in [`context/documents/09-cost-and-hosting.md`](./context/documents/09-cost-and-hosting.md).
 
+**Option A2 — fully offline** (no Cloudflare/Bunny/Notify.lk accounts): `cp backend/.env.local.example backend/.env`, then
+`docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. File storage runs in a local
+S3-compatible container and SMS is logged instead of sent. What is and is not emulated (no DRM locally):
+[`16-local-development.md`](./context/documents/16-local-development.md).
+
 **Option B — run the apps directly** (fast UI iteration with hot-reload):
 
 ```bash
+# Optional: use the offline local drivers while running on the host. Start only the dependencies first:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis storage storage-init
 cd backend && npm install && npx prisma generate && npm run dev
 cd frontend && npm install && npm run dev
 ```
@@ -89,7 +96,7 @@ Full runbook and monthly cost breakdown: [`context/documents/09-cost-and-hosting
 
 ## Docs
 
-Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`. For where the product stands against the full requirement list see [`15-requirements-traceability.md`](./context/documents/15-requirements-traceability.md); the multi-tenancy plan is [`14-multi-tenancy-readiness.md`](./context/documents/14-multi-tenancy-readiness.md); the payment-channel and `HYBRID` design is in [`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`](./docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
+Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`. For where the product stands against the full requirement list see [`15-requirements-traceability.md`](./context/documents/15-requirements-traceability.md); the multi-tenancy plan is [`14-multi-tenancy-readiness.md`](./context/documents/14-multi-tenancy-readiness.md); local offline setup and provider drivers are in [`16-local-development.md`](./context/documents/16-local-development.md); the payment-channel and `HYBRID` design is in [`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`](./docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
 
 ## License
 
