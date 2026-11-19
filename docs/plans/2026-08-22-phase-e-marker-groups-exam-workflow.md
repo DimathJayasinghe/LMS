@@ -112,6 +112,16 @@ All routes require authentication. Mutation routes require `Idempotency-Key`.
   digest, group/individual sources, and required reason; replace rows plus append a revision atomically.
 - `GET /api/exams/:id/markers/history` — assignment revision history for super-admin/owning teacher.
 
+For scoped instances, confirmation materializes only exact marker/audience grants. The digest covers the pinned paper revision, audience/roster revisions and versions, group membership revisions, active marker state, explicit direct/group sources, broad-versus-selected choice, and the displayed current diff. Changed evidence produces `409 MARKER_ALLOCATION_STALE`; unavailable sources also fail fresh validation. No missing audience is a whole-exam fallback. Legacy null-paper-revision exams retain their historical whole-exam marker assignments.
+
+Task 3 repair (2026-09-07): preview, scoped PUT, and history now follow the specified `/markers` routes.
+Assignment and audience composite foreign keys share `examId`. Revisions retain source, before/after,
+version evidence and actor/exam-scoped idempotency keys; retries recheck ownership. Marker grade
+responses recheck exact audience access before replay and use actor/resource-bound cache keys.
+Allocation and isolated HTTP tests cover source/version staleness, replacement, revocation, counts,
+new signed URLs, and answer redaction. Live PostgreSQL constraint/immutable-evidence proof remains a
+CI gate; no local Docker run is attempted.
+
 The legacy `POST /api/exams/:id/assign-markers` should be deprecated after all callers migrate; do not
 remove it in the same change unless repository-wide usage and compatibility tests prove it safe.
 

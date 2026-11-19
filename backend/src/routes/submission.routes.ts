@@ -4,7 +4,7 @@ import * as SubmissionController from '@/controllers/submission.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
-import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import { checkActorIdempotency, checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
   startSubmissionSchema,
   completeSubmissionSchema,
@@ -81,7 +81,9 @@ submissionRoutes.patch(
   requireRole(Role.MARKER),
   validateParams(submissionIdParamSchema),
   validateBody(submitMarksSchema),
-  checkIdempotency,
+  // Revalidate the exact audience before a cached response can expose answers.
+  SubmissionController.authorizeMarks,
+  checkActorIdempotency,
   SubmissionController.submitMarks,
 );
 

@@ -128,8 +128,8 @@ describe('replaceExamMarkers — ownership and exact-set assignment', () => {
 		});
 		expect(markerAssignmentCreateMany).toHaveBeenCalledWith({
 			data: [
-				{ markerId: 'marker-1', examId: 'exam-1' },
-				{ markerId: 'marker-2', examId: 'exam-1' },
+				{ markerId: 'marker-1', examId: 'exam-1', allAudiences: true },
+				{ markerId: 'marker-2', examId: 'exam-1', allAudiences: true },
 			],
 			skipDuplicates: true,
 		});
@@ -202,7 +202,10 @@ describe('listExams — MARKER + ADMIN authorization', () => {
 		await listExams({ status: 'all' }, { userId: 'm1', role: Role.MARKER });
 
 		const call = examFindMany.mock.calls[0]![0];
-		expect(call.where.markerAssignments).toEqual({ some: { markerId: 'm1' } });
+		// Scoped exams only list for a marker who holds at least one audience grant (legacy exams: any assignment).
+		expect(call.where.markerAssignments).toEqual({
+			some: { markerId: 'm1', OR: [{ exam: { paperRevisionId: null } }, { audienceGrants: { some: {} } }] },
+		});
 	});
 
 	it('denies front-desk ADMIN with 403 FORBIDDEN, never querying', async () => {

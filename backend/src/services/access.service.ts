@@ -95,11 +95,55 @@ export const assertStudentExamStartAccess = async (
 export const assertMarkerAssignedToExam = async (
   markerId: string,
   examId: string,
+  audienceId?: string,
 ): Promise<void> => {
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+    select: { id: true, paperRevisionId: true },
+  });
+  if (!exam) {
+    throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+  }
+
+  // A NULL paper revision is the deliberately preserved legacy contract: its
+  // MarkerAssignment is a whole-exam grant. Scoped instances are deny-by-
+  // default. List/detail callers may establish that at least one exact grant
+  // exists, but every answer query still supplies its own grant-bound audience
+  // predicate; group membership never appears in this check.
+  if (exam.paperRevisionId) {
+    if (audienceId) return assertMarkerAssignedToExamAudience(markerId, examId, audienceId);
+    const assignment = await prisma.markerAssignment.findFirst({
+      where: {
+        markerId,
+        examId,
+        marker: { role: Role.MARKER, deletedAt: null },
+        audienceGrants: { some: { examId } },
+      },
+      select: { id: true },
+    });
+    if (assignment) return;
+    throw new AppError('MARKER_NOT_ASSIGNED', 403, 'You are not assigned to mark this exam audience.');
+  }
+
   const assignment = await prisma.markerAssignment.findUnique({
     where: { markerId_examId: { markerId, examId } },
+    select: { id: true, marker: { select: { role: true, deletedAt: true } } },
   });
-  if (!assignment) {
+  if (!assignment || assignment.marker.role !== Role.MARKER || assignment.marker.deletedAt) {
     throw new AppError('MARKER_NOT_ASSIGNED', 403, 'You are not assigned to mark this exam.');
   }
+};
+
+/** Answer-bearing callers must supply an exact audience, never optional scope. */
+export const assertMarkerAssignedToExamAudience = async (
+  markerId: string,
+  examId: string,
+  audienceId: string,
+): Promise<void> => {
+  if (!audienceId) throw new AppError('MARKER_NOT_ASSIGNED', 403, 'An exact exam audience is required.');
+  const assignment = await prisma.markerAssignment.findFirst({
+    where: { markerId, examId, marker: { role: Role.MARKER, deletedAt: null }, audienceGrants: { some: { examId, audienceId } } },
+    select: { id: true },
+  });
+  if (!assignment) throw new AppError('MARKER_NOT_ASSIGNED', 403, 'You are not assigned to mark this exam audience.');
 };

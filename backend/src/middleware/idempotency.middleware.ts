@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { createHash } from 'node:crypto';
 import { prisma } from '../config/database';
 import { redis } from '../config/redis';
 import { logger } from '../config/logger';
@@ -43,15 +44,16 @@ const LOCK_PREFIX = 'idempotency:lock:';
 // 5 minutes is generous; most requests complete in < 1 second.
 const LOCK_TTL_MS = 5 * 60 * 1000;
 
-export const checkIdempotency = async (
+const runIdempotency = async (
   req: Request,
   res: Response,
   next: NextFunction,
+  namespace?: string,
 ): Promise<void> => {
-  const key = req.headers[IDEMPOTENCY_KEY_HEADER];
+  const requestKey = req.headers[IDEMPOTENCY_KEY_HEADER];
 
   // No key provided — reject. High-stakes routes MUST have an idempotency key.
-  if (!key || typeof key !== 'string') {
+  if (!requestKey || typeof requestKey !== 'string') {
     res.status(400).json({
       status: 'error',
       message: `Missing required header: ${IDEMPOTENCY_KEY_HEADER}`,
@@ -60,13 +62,15 @@ export const checkIdempotency = async (
   }
 
   // Validate UUID format (36 chars with hyphens)
-  if (!UUID_REGEX.test(key)) {
+  if (!UUID_REGEX.test(requestKey)) {
     res.status(400).json({
       status: 'error',
       message: 'Idempotency key must be a valid UUID.',
     });
     return;
   }
+
+  const key = namespace ? createHash('sha256').update(JSON.stringify([namespace, requestKey])).digest('hex') : requestKey;
 
   try {
     // ─── Step 1: Check Postgres for a completed (cached) response ─────
@@ -163,3 +167,10 @@ export const checkIdempotency = async (
     next();
   }
 };
+
+export const checkIdempotency = (req: Request, res: Response, next: NextFunction): Promise<void> =>
+  runIdempotency(req, res, next);
+
+/** Answer-bearing responses must never replay across actors or resources. */
+export const checkActorIdempotency = (req: Request, res: Response, next: NextFunction): Promise<void> =>
+  runIdempotency(req, res, next, JSON.stringify([req.user!.userId, req.method, req.originalUrl]));

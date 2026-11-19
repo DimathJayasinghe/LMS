@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { Role } from '@prisma/client';
 import * as ExamController from '@/controllers/exam.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
@@ -14,6 +15,8 @@ import {
 	examPaperConfirmSchema,
 	listExamsQuerySchema,
 	updateExamSchema,
+	previewMarkerAllocationsSchema,
+	confirmMarkerAllocationsSchema,
 } from '@/schemas/exam.schema';
 
 export const examRoutes = Router();
@@ -36,13 +39,45 @@ examRoutes.get(
 	ExamController.listMarkers,
 );
 
+examRoutes.post(
+	'/:id/markers/preview',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	validateBody(previewMarkerAllocationsSchema),
+	ExamController.previewMarkerAllocations,
+);
+
+examRoutes.get(
+	'/:id/markers/history',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateParams(examIdParamSchema),
+	ExamController.listMarkerAllocationHistory,
+);
+
+/* The PUT handler accepts legacy { markerIds } only for NULL-paperRevision
+ * exams; scoped instances require confirmation fields and reject that legacy
+ * form in the service. */
 examRoutes.put(
 	'/:id/markers',
 	verifyToken,
 	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateParams(examIdParamSchema),
-	validateBody(replaceMarkersSchema),
-	checkIdempotency,
+	validateBody(confirmMarkerAllocationsSchema.or(replaceMarkersSchema)),
+	ExamController.authorizeLegacyMarkerReplacement,
+	// Scoped confirmations deduplicate durably inside the authorized transaction.
+	(req, res, next) => {
+		if (!Array.isArray(req.body.allocations)) {
+			void checkIdempotency(req, res, next);
+			return;
+		}
+		if (!z.string().uuid().safeParse(req.get('Idempotency-Key')).success) {
+			res.status(400).json({ status: 'error', message: 'Idempotency-Key must be a valid UUID.' });
+			return;
+		}
+		next();
+	},
 	ExamController.replaceMarkers,
 );
 

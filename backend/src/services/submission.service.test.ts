@@ -5,26 +5,30 @@ import { AppError } from '@/utils/app-error';
 const {
 	examFindUnique,
 	markerAssignmentFindUnique,
+	markerAssignmentFindFirst,
 	submissionFindMany,
 	submissionFindUnique,
 	submissionUpdate,
 	assertCourseAccess,
+	assertMarkerAssignedToExam,
 	broadcastResultsPublished,
 } =
 	vi.hoisted(() => ({
 		examFindUnique: vi.fn(),
 		markerAssignmentFindUnique: vi.fn(),
+		markerAssignmentFindFirst: vi.fn(),
 		submissionFindMany: vi.fn(),
 		submissionFindUnique: vi.fn(),
 		submissionUpdate: vi.fn(),
 		assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
+		assertMarkerAssignedToExam: vi.fn(),
 		broadcastResultsPublished: vi.fn(),
 	}));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		exam: { findUnique: examFindUnique },
-		markerAssignment: { findUnique: markerAssignmentFindUnique },
+		markerAssignment: { findUnique: markerAssignmentFindUnique, findFirst: markerAssignmentFindFirst },
 		submission: {
 			findMany: submissionFindMany,
 			findUnique: submissionFindUnique,
@@ -34,6 +38,12 @@ vi.mock('@/config/database', () => ({
 }));
 
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
+vi.mock('@/services/access.service', () => ({
+  assertMarkerAssignedToExam,
+  assertMarkerAssignedToExamAudience: vi.fn(),
+  assertStudentContentAccess: vi.fn(),
+  assertStudentExamStartAccess: vi.fn(),
+}));
 vi.mock('@/services/stream.service', () => ({ broadcastResultsPublished }));
 vi.mock('@/services/notification.service', () => ({ dispatch: vi.fn() }));
 vi.mock('@/utils/r2', () => ({
@@ -70,8 +80,10 @@ const query = { status: 'all' as const, graded: 'all' as const };
 beforeEach(() => {
 	vi.clearAllMocks();
 	assertCourseAccess.mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' });
+	assertMarkerAssignedToExam.mockResolvedValue(undefined);
 	submissionFindMany.mockResolvedValue([]);
 	broadcastResultsPublished.mockResolvedValue(undefined);
+	markerAssignmentFindFirst.mockResolvedValue({ id: 'assignment-1' });
 });
 
 const publishedSubmission = {
@@ -98,9 +110,14 @@ const publishedSubmission = {
 };
 
 describe('published-result immutability and correction', () => {
+	it.each([{ examParticipants: [] }, { examParticipants: [{ examId: 'exam-1', audienceId: undefined }] }, { examParticipants: [{ examId: 'other-exam', audienceId: 'audience-a' }] }])('denies scoped grading without a usable participant audience: %j', async ({ examParticipants }) => {
+		submissionFindUnique.mockResolvedValueOnce({ ...publishedSubmission, exam: { ...publishedSubmission.exam, isPublished: false, paperRevisionId: 'paper' }, user: { examParticipants } });
+		submissionUpdate.mockResolvedValueOnce(publishedSubmission);
+		await expect(submitMarks('submission-1', { marks: 75 }, 'marker-1')).rejects.toMatchObject({ statusCode: 403 });
+		expect(submissionUpdate).not.toHaveBeenCalled();
+	});
 	it('locks assigned markers out once results are published', async () => {
 		submissionFindUnique.mockResolvedValueOnce(publishedSubmission);
-		markerAssignmentFindUnique.mockResolvedValueOnce({ markerId: 'marker-1', examId: 'exam-1' });
 
 		await expect(
 			submitMarks('submission-1', { marks: 75 }, 'marker-1'),
@@ -186,21 +203,37 @@ describe('listSubmissions — TEACHER course-ownership scoping', () => {
 });
 
 describe('listSubmissions — MARKER assignment gate is unaffected by the new TEACHER check', () => {
-	it('calls ensureMarkerAssigned for a MARKER and never calls assertCourseAccess', async () => {
-		examFindUnique.mockResolvedValueOnce(examRow);
-		markerAssignmentFindUnique.mockResolvedValueOnce({ markerId: 'marker-1', examId: 'exam-1' });
+	it('query-scopes a scoped marker list to its granted participant audiences', async () => {
+		examFindUnique.mockResolvedValue({ ...examRow, paperRevisionId: 'revision-1' });
 
 		await listSubmissions('exam-1', query, marker);
 
-		expect(markerAssignmentFindUnique).toHaveBeenCalledWith({
-			where: { markerId_examId: { markerId: 'marker-1', examId: 'exam-1' } },
-		});
+		expect(submissionFindMany).toHaveBeenCalledWith(expect.objectContaining({
+			where: expect.objectContaining({
+				user: {
+					examParticipants: {
+						some: {
+							examId: 'exam-1',
+							audience: { markerAssignmentAudiences: { some: { examId: 'exam-1', assignment: { markerId: 'marker-1' } } } },
+						},
+					},
+				},
+			}),
+		}));
+	});
+
+	it('calls ensureMarkerAssigned for a MARKER and never calls assertCourseAccess', async () => {
+		examFindUnique.mockResolvedValueOnce(examRow);
+
+		await listSubmissions('exam-1', query, marker);
+
+		expect(assertMarkerAssignedToExam).toHaveBeenCalledWith('marker-1', 'exam-1');
 		expect(assertCourseAccess).not.toHaveBeenCalled();
 	});
 
 	it('still rejects an unassigned MARKER with MARKER_NOT_ASSIGNED', async () => {
 		examFindUnique.mockResolvedValueOnce(examRow);
-		markerAssignmentFindUnique.mockResolvedValueOnce(null);
+		assertMarkerAssignedToExam.mockRejectedValueOnce(new AppError('MARKER_NOT_ASSIGNED', 403, 'Not assigned'));
 
 		await expect(listSubmissions('exam-1', query, marker)).rejects.toMatchObject({
 			code: 'MARKER_NOT_ASSIGNED',
@@ -217,7 +250,7 @@ describe('listSubmissions — MARKER assignment gate is unaffected by the new TE
 		// It does not by itself prove the if-blocks are independent (a TEACHER actor
 		// behaves the same under either an if/else or two independent ifs) — see the
 		// SUPER_ADMIN test above for the assertion that actually distinguishes the two.
-		expect(markerAssignmentFindUnique).not.toHaveBeenCalled();
+		expect(assertMarkerAssignedToExam).not.toHaveBeenCalled();
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', teacher);
 	});
 });
