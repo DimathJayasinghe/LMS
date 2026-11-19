@@ -21,7 +21,7 @@
 - [x] **SMS** (`SMS_DRIVER=log`): the worker logs the message and marks `SmsLog` `SENT`.
 - [ ] **Video** (`VIDEO_DRIVER=local`): contract emulation with no DRM; TUS upload, signed webhook to the existing route, minimal player page. The nginx `X-Frame-Options DENY` header must not block the local player.
 - [ ] **PayHere** local mock checkout that reuses `utils/payhere.ts` signing; **Zoom** mock meeting creation (joining needs real Zoom).
-- [ ] Known gap: `next/image` has no `images.remotePatterns`, so remote banner URLs are blocked by Next regardless of driver.
+- [x] `next/image` banner gap resolved: banners render `unoptimized`, so no `images.remotePatterns` entry is needed (see the code-alignment entry below).
 
 ### 2026-11-19 — Git workflow rules and branch cleanup
 
@@ -38,7 +38,8 @@
 - [x] Corrected doc drift found while checking source: playback is a **token-authenticated embed with a 4-hour, non-IP-bound token** (docs, `CLAUDE.md` and the hosting doc said IP-bound HLS); the described player "black-screen detection" does not exist; `generateBunnyStreamUrl` is dead code; `07-implementation-plan.md` is the original build order, not a current plan.
 - [x] **Decided later the same day:** a `PHYSICAL`-only enrollment loses live/recording access unless the student is `HYBRID` or the session opts in via a new `ClassSession.onlineForPhysical` flag (behaviour change; needs a rollout report); the first organization migration uses placeholder slug `default` / code `DEF`, renamed before launch.
 - [ ] **Still open:** (1) one fee for all modes or per-mode fees; (2) keep existing `LMS-<index>` QR values when the organization prefix is introduced; (3) is a tenant export/restore tool required before a second customer; (4) Sinhala/Tamil UI at launch or after; (5) are one-way WhatsApp notifications acceptable.
-- [ ] Code alignment has not started. Cleanups already identified: delete `generateBunnyStreamUrl`; remove the `hls.js` frontend dependency, which nothing imports any more (the `resend` dependency noted in the 2026-07-09 decision is already gone).
+- [x] Code alignment step 1 (2026-11-19): deleted the dead `generateBunnyStreamUrl`, removed the unused `hls.js` dependency, and set `unoptimized` on course banner images (the app had no `images.remotePatterns`, so remote banner URLs were blocked; banners are admin-uploaded and size-capped, so the optimizer is not needed).
+- [ ] Remaining code alignment, in order: tenant foundation (ADR 14 M1–M3), then the items in the **Next Task** row above.
 
 ### 2026-09-06 — Configurable exam scope and dashboard follow-up
 

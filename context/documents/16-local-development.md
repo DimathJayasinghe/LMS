@@ -66,9 +66,7 @@ Verified manually on 2026-11-19 against the real backend image in Docker (not an
 `PUT` with an `Origin` header, backend confirm (a `HeadObject` over the in-network endpoint), and
 anonymous read of the public object all succeeded.
 
-Known gap: the frontend renders course banners with `next/image` and `next.config.ts` has no
-`images.remotePatterns`, so remote banner URLs (R2 today, local storage tomorrow) are not allowed by
-Next. This predates the local driver; fixing it is a separate small change.
+Course banners render with `next/image` set to `unoptimized`, so remote banner URLs (R2 or local storage) need no `images.remotePatterns` entry.
 
 ### 2.2 SMS (`SMS_DRIVER=log`)
 
