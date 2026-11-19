@@ -141,6 +141,8 @@ See [02-architecture.md §7](./02-architecture.md#7-security-model) for the full
 
 ## Appendix — Local development: whole app in Compose behind one ngrok URL (DEV ONLY)
 
+> For a fully **offline** setup that needs no provider accounts (local S3-compatible storage, logged SMS) use the overlay described in [16-local-development.md](./16-local-development.md). The ngrok tunnel below is only needed when a real provider sandbox must call back into your machine (Bunny, Zoom or PayHere webhooks).
+
 Production keeps the **split**: frontend on Vercel, API/worker/db on the VPS (above). But for
 local development — especially exercising **external webhooks** (Bunny, Zoom, PayHere) that must
 reach `localhost` — it's convenient to run *everything* in Compose and expose it on a single public

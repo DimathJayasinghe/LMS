@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import { SMS_DRIVERS, STORAGE_DRIVERS, findLocalDrivers } from './drivers';
 
 dotenv.config();
 
@@ -30,12 +31,21 @@ const envSchema = z.object({
   // Frontend URL (CORS)
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
 
+  // Provider drivers — default to the real provider; local stand-ins are for
+  // offline Docker development only and are refused in production (see below).
+  STORAGE_DRIVER: z.enum(STORAGE_DRIVERS).default('r2'),
+  SMS_DRIVER: z.enum(SMS_DRIVERS).default('notify'),
+
   // Cloudflare R2 (Exam PDFs)
   // Optional at boot — validated at runtime when presigned URLs are generated.
   R2_ACCOUNT_ID: z.string().default(''),
   R2_ACCESS_KEY_ID: z.string().default(''),
   R2_SECRET_ACCESS_KEY: z.string().default(''),
   R2_ENDPOINT: z.string().default(''),
+  // Browser-reachable S3 endpoint used ONLY to sign presigned URLs (local driver:
+  // the server reaches storage at http://storage:9000, the browser at http://localhost:9000).
+  // Empty means "same as R2_ENDPOINT".
+  R2_PRESIGN_ENDPOINT: z.string().default(''),
   R2_BUCKET_NAME: z.string().default(''),
   R2_PUBLIC_URL: z.string().default(''),
   R2_PUBLIC_BUCKET_NAME: z.string().default(''),
@@ -107,6 +117,12 @@ export const env = parsed.data;
 
 // Enforce full external service configuration in production
 if (env.NODE_ENV === 'production') {
+  const localDrivers = findLocalDrivers(env);
+  if (localDrivers.length > 0) {
+    console.error('❌ Local/mock provider drivers are not allowed in production:', localDrivers);
+    process.exit(1);
+  }
+
   const missing: string[] = [];
 
   const hasR2Endpoint = Boolean(env.R2_ENDPOINT || env.R2_ACCOUNT_ID);

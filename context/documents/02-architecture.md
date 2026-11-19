@@ -256,6 +256,8 @@ Until then the system has exactly one implicit organization, and new code should
 
 Teachers deliver classes **live through the site** and publish **recorded classes through the site**. Both are premium content the institution pays to produce, so both are access-gated and piracy-hardened. **Content is never public** — every request is authorized per student, per course.
 
+> **Local development:** DRM exists only with a real Bunny Stream library. The offline stack replaces Bunny with a local video driver that emulates the upload/webhook/embed contract and has **no copy protection** ([16-local-development.md](./16-local-development.md)). Verify DRM and token behaviour against real Bunny before launch.
+
 **Access gate (applies to both live and recorded):**
 - The requesting user must be authenticated, have an **active `Enrollment`** in the course, and have the **current month paid** (`Payment.status = SUCCESS` for `paymentMonth`). The service layer checks this before issuing any stream token.
 - Access decisions live in the service layer — no signed URL or SDK signature is ever handed out without passing the gate.
