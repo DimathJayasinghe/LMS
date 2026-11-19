@@ -139,7 +139,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
   (`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`). Today the
   content gate ignores `Enrollment.classType`.
 - Requirement-by-requirement status lives in `context/documents/15-requirements-traceability.md`.
-- Offline local development uses provider **drivers** (`STORAGE_DRIVER`, `SMS_DRIVER`, more planned) that default to the real providers and are refused when `NODE_ENV=production`; run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. See `context/documents/16-local-development.md`. Local video has no DRM.
+- Offline local development uses provider **drivers** (`STORAGE_DRIVER`, `SMS_DRIVER`, more planned) that default to the real providers and are refused when `NODE_ENV=production`; run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. See `context/documents/16-local-development.md`. A local video driver is planned and will have no DRM.
 
 ### Invariants (see `context/documents/02-architecture.md §5` for the full list)
 

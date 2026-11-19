@@ -26,6 +26,7 @@ describe('r2 presigning', () => {
 		const url = new URL(await createR2PresignedPutUrl('org/a/file.pdf', 'application/pdf', 300));
 
 		expect(url.host).toBe('lms-private.acct.r2.cloudflarestorage.com');
+		expect(url.searchParams.get('X-Amz-Credential')).toContain('/auto/s3/aws4_request');
 		expect(url.pathname).toBe('/org/a/file.pdf');
 	});
 
@@ -39,6 +40,7 @@ describe('r2 presigning', () => {
 		const put = new URL(await createR2PresignedPutUrl('org/a/file.pdf', 'application/pdf', 300));
 		expect(put.origin).toBe('http://localhost:9000');
 		expect(put.pathname).toBe('/lms-private/org/a/file.pdf');
+		expect(put.searchParams.get('X-Amz-Credential')).toContain('/us-east-1/s3/aws4_request');
 
 		const get = new URL(await createR2PresignedGetUrl('org/a/file.pdf', 300));
 		expect(get.origin).toBe('http://localhost:9000');

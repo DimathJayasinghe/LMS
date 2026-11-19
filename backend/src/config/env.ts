@@ -123,6 +123,11 @@ if (env.NODE_ENV === 'production') {
     process.exit(1);
   }
 
+  if (env.R2_PRESIGN_ENDPOINT) {
+    console.error('❌ R2_PRESIGN_ENDPOINT is for the local storage driver and must be unset in production.');
+    process.exit(1);
+  }
+
   const missing: string[] = [];
 
   const hasR2Endpoint = Boolean(env.R2_ENDPOINT || env.R2_ACCOUNT_ID);

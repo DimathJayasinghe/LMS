@@ -19,8 +19,9 @@ services:
       RUSTFS_ADDRESS: ":9000"
       RUSTFS_CONSOLE_ENABLE: "false"
     ports:
-      # Published because browsers upload straight to storage with presigned URLs.
-      - "9000:9000"
+      # Published (loopback only: the credentials are committed dev values) because browsers
+      # upload straight to storage with presigned URLs.
+      - "127.0.0.1:9000:9000"
     volumes:
       - storage-data:/data
     networks:

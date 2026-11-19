@@ -59,9 +59,10 @@ next two pull requests add them and update this table.
 | Addressing | Path-style (`http://host:9000/<bucket>/<key>`), region `us-east-1`; R2 keeps virtual-host style and region `auto` |
 | Two endpoints | `R2_ENDPOINT=http://storage:9000` is what the backend uses for HEAD/GET/DELETE inside Docker. `R2_PRESIGN_ENDPOINT=http://localhost:9000` is the host the browser calls; presigned URLs are signed for that host because a signature covers the host. Empty `R2_PRESIGN_ENDPOINT` means "same as `R2_ENDPOINT`" (this is also the production behaviour) |
 | Public URLs | `R2_PUBLIC_URL=http://localhost:9000/lms-public` |
+| Network | Port 9000 is bound to `127.0.0.1` only, because the credentials are committed dev values |
 | Credentials | Fixed local-only values in the overlay and `backend/.env.local.example` |
 
-Verified on 2026-11-19 against the real backend code: login, presign an avatar upload, browser-style
+Verified manually on 2026-11-19 against the real backend image in Docker (not an automated test): login, presign an avatar upload, browser-style
 `PUT` with an `Origin` header, backend confirm (a `HeadObject` over the in-network endpoint), and
 anonymous read of the public object all succeeded.
 

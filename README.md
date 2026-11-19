@@ -70,6 +70,8 @@ S3-compatible container and SMS is logged instead of sent. What is and is not em
 **Option B — run the apps directly** (fast UI iteration with hot-reload):
 
 ```bash
+# Optional: use the offline local drivers while running on the host. Start only the dependencies first:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis storage storage-init
 cd backend && npm install && npx prisma generate && npm run dev
 cd frontend && npm install && npm run dev
 ```
