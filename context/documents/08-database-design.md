@@ -5,7 +5,7 @@
 >
 > **This document is the schema source of truth.** Where the current `backend/prisma/schema.prisma` differs, the code must be migrated to match (see [§12 Code Drift](#12-code-drift--required-migrations)). No production data exists yet, so these are safe pre-launch changes.
 >
-> **Tenancy (decided 2026-11-19, not yet migrated):** every tenant-owned table will carry `organizationId`, and several global uniques become per-organization. The model blocks in §4 show the schema **without** these tenancy columns (and some predate later columns, noted where known — `backend/prisma/schema.prisma` is authoritative for what exists today); the exact additions and constraint changes are listed once in [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md) §3 and in [§12 Code Drift](#12-code-drift--required-migrations) rather than repeated on every model. Planned models below are marked **(planned)**.
+> **Tenancy (decided 2026-11-19; step M1 migrated):** every model now carries a nullable `organizationId` (default: the `default` organization) with an `Organization` relation and index; `NOT NULL`, the scoped client and the per-organization uniques are M2–M3. Several global uniques will become per-organization. The model blocks in §4 show the schema **without** these tenancy columns (and some predate later columns, noted where known — `backend/prisma/schema.prisma` is authoritative for what exists today); the exact additions and constraint changes are listed once in [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md) §3 and in [§12 Code Drift](#12-code-drift--required-migrations) rather than repeated on every model. Planned models below are marked **(planned)**.
 
 ---
 
@@ -1058,7 +1058,7 @@ Rows 1–11 above are historical and have been applied. The rows below are the *
 
 | # | Current code | Target | Notes |
 | --- | --- | --- | --- |
-| 12 | No `Organization`; no `organizationId` anywhere | `Organization` table, default row, `organizationId` on every tenant-owned table | ADR 14 steps M1–M3 |
+| 12 | ~~No `Organization`; no `organizationId` anywhere~~ **M1 done 2026-11-19** (table, default row, nullable `organizationId` + index + `Restrict` FK on all 35 models); M2 scoped client and M3 `NOT NULL`/per-organization uniques remain | `Organization` table, default row, `organizationId` on every tenant-owned table | ADR 14 steps M1–M3 |
 | 13 | Global uniques: `User.email/nic/barcode`, `Subject.name`, `Institute.name/code`, `Payment.payhereId`, `IdempotencyRecord.key`, `NotificationSetting(type, channel)` | Per-organization composites | ADR 14 §3.3; `User.indexNumber` stays global |
 | 14 | `ClassType { ONLINE, PHYSICAL }`; `Enrollment` unique on `(userId, courseId, classType)`; no per-session online flag | Add `HYBRID`; one active enrollment per `(userId, courseId)` via a nullable `activeKey @unique`; add `ClassSession.onlineForPhysical Boolean @default(false)` | HYBRID design §4 |
 | 15 | `PaymentMethod` lacks bank transfer; no slip table | `BANK_TRANSFER` + `PaymentSlip` + `PaymentSlipStatus` | Payment channels design §3 |
