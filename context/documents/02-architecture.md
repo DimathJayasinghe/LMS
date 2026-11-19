@@ -206,7 +206,7 @@ These rules **must never be violated**. Every code review checks against this li
 - Webhook signatures are verified before processing (Zoom HMAC + timestamp; PayHere hash).
 - External services are configured with retry policies; Admin "Sync" buttons exist as manual reconciliation fallbacks.
 
-### 5.9 Tenant Scoping (target invariant — not yet implemented)
+### 5.9 Tenant Scoping (target invariant — M1 foundation implemented, scoping not yet)
 
 Decided 2026-11-19; implementation order is the M1–M8 plan in [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md).
 Once its foundation steps land, every review also checks:
@@ -216,7 +216,7 @@ Once its foundation steps land, every review also checks:
 - Provider credentials, R2 keys, Redis keys, SSE channels and job payloads are organization-scoped; webhooks identify the organization before verifying signatures.
 - A table-driven tenant-isolation test covers every new route.
 
-Until then the system has exactly one implicit organization, and new code should not add anything that would block these steps (for example new global uniques on user-visible values, or hand-built storage and cache keys).
+M1 (2026-11-19) added the `Organization` table, the default row and a nullable `organizationId` on every model, with a registry test and a CI tenant integrity check. Until M2–M3 land the system has exactly one organization and no query filters by it, and new code should not add anything that would block these steps (for example new global uniques on user-visible values, or hand-built storage and cache keys).
 
 ---
 

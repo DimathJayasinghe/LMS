@@ -118,6 +118,56 @@ enum NotificationChannel {
 
 // ─────────────────────────────── IDENTITY ───────────────────────────────
 
+model Organization {
+  id       String  @id @default(uuid())
+  name     String
+  slug     String  @unique // subdomain / URL key
+  code     String  @unique // short prefix for human-facing IDs
+  isActive Boolean @default(true)
+  timezone String  @default("Asia/Colombo")
+  locale   String  @default("en") // default UI language: en | si | ta
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Back-relations: every other model is tenant-owned.
+  users                       User[]
+  permissions                 Permission[]
+  refreshTokens               RefreshToken[]
+  idempotencyRecords          IdempotencyRecord[]
+  subjects                    Subject[]
+  courses                     Course[]
+  subjectTeachers             SubjectTeacher[]
+  courseContentProgresses     CourseContentProgress[]
+  courseModules               CourseModule[]
+  courseMaterials             CourseMaterial[]
+  enrollments                 Enrollment[]
+  payments                    Payment[]
+  paymentAdjustments          PaymentAdjustment[]
+  classSessions               ClassSession[]
+  attendances                 Attendance[]
+  videoRecordings             VideoRecording[]
+  exams                       Exam[]
+  examPapers                  ExamPaper[]
+  examPaperRevisions          ExamPaperRevision[]
+  examAudiences               ExamAudience[]
+  examParticipants            ExamParticipant[]
+  submissions                 Submission[]
+  markerAssignments           MarkerAssignment[]
+  markerAssignmentAudiences   MarkerAssignmentAudience[]
+  markerAllocationRevisions   MarkerAllocationRevision[]
+  markerGroups                MarkerGroup[]
+  markerGroupMembers          MarkerGroupMember[]
+  markerGroupMembershipEvents MarkerGroupMembershipEvent[]
+  auditLogs                   AuditLog[]
+  smsLogs                     SmsLog[]
+  notifications               Notification[]
+  notificationSettings        NotificationSetting[]
+  institutes                  Institute[]
+  timetableSlots              TimetableSlot[]
+  studentBarcodes             StudentBarcode[]
+}
+
 model User {
   id          String    @id @default(uuid())
   indexNumber Int       @unique @default(autoincrement())
@@ -170,10 +220,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([email])
   @@index([nic])
   @@index([barcode])
   @@index([role])
+  @@index([organizationId])
 }
 
 model Permission {
@@ -186,7 +241,12 @@ model Permission {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([userId])
+  @@index([organizationId])
 }
 
 model RefreshToken {
@@ -197,8 +257,13 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([userId])
   @@index([expiresAt])
+  @@index([organizationId])
 }
 
 model IdempotencyRecord {
@@ -209,8 +274,13 @@ model IdempotencyRecord {
   responseBody Json
   createdAt    DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([key])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 // ─────────────────────────── ACADEMIC HIERARCHY ───────────────────────────
@@ -228,7 +298,12 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([isActive])
+  @@index([organizationId])
 }
 
 model Course {
@@ -265,11 +340,16 @@ model Course {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([subjectId, name, year])
   @@index([subjectId])
   @@index([teacherId])
   @@index([year])
   @@index([isActive])
+  @@index([organizationId])
 }
 
 // SUPER_ADMIN-controlled teaching scope. A teacher may create courses only
@@ -286,9 +366,14 @@ model SubjectTeacher {
 
   assignedAt DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([subjectId, teacherId])
   @@index([subjectId])
   @@index([teacherId])
+  @@index([organizationId])
 }
 
 // Student-specific read marker for course content. Absence means the student
@@ -305,9 +390,14 @@ model CourseContentProgress {
   lastSeenAt DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([userId, courseId])
   @@index([userId])
   @@index([courseId])
+  @@index([organizationId])
 }
 
 // Ordered learning units. Students only receive PUBLISHED modules whose
@@ -329,9 +419,14 @@ model CourseModule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([courseId, position])
   @@index([courseId, status, releaseAt])
   @@index([deletedAt])
+  @@index([organizationId])
 }
 
 // Private R2-backed resources. objectKey is never exposed in list responses;
@@ -356,8 +451,13 @@ model CourseMaterial {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([moduleId, position])
   @@index([deletedAt])
+  @@index([organizationId])
 }
 
 model Enrollment {
@@ -376,10 +476,15 @@ model Enrollment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([userId, courseId, classType])
   @@index([userId])
   @@index([courseId])
   @@index([classType])
+  @@index([organizationId])
 }
 
 model Payment {
@@ -410,12 +515,17 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([enrollmentId, paymentMonth])
   @@index([enrollmentId])
   @@index([status])
   @@index([method])
   @@index([paymentMonth])
   @@index([collectedAtInstituteId])
+  @@index([organizationId])
 }
 
 model PaymentAdjustment {
@@ -437,9 +547,14 @@ model PaymentAdjustment {
 
   createdAt DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([paymentId, createdAt])
   @@index([createdById])
   @@index([type])
+  @@index([organizationId])
 }
 
 model ClassSession {
@@ -468,11 +583,16 @@ model ClassSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([timetableSlotId, date]) // idempotent generation: one session per slot per occurrence
   @@index([courseId])
   @@index([courseId, classType])
   @@index([date])
   @@index([deletedAt])
+  @@index([organizationId])
 }
 
 model Attendance {
@@ -490,9 +610,14 @@ model Attendance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([userId, classSessionId])
   @@index([userId])
   @@index([classSessionId])
+  @@index([organizationId])
 }
 
 model VideoRecording {
@@ -511,8 +636,13 @@ model VideoRecording {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([classSessionId])
   @@index([bunnyVideoId])
+  @@index([organizationId])
 }
 
 model Exam {
@@ -543,15 +673,19 @@ model Exam {
 
   deletedAt DateTime?
 
-  submissions       Submission[]
-  markerAssignments MarkerAssignment[]
+  submissions               Submission[]
+  markerAssignments         MarkerAssignment[]
   markerAssignmentAudiences MarkerAssignmentAudience[]
   markerAllocationRevisions MarkerAllocationRevision[]
-  audiences         ExamAudience[]
-  participants      ExamParticipant[]
+  audiences                 ExamAudience[]
+  participants              ExamParticipant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([courseId])
   @@index([startTime])
@@ -559,6 +693,7 @@ model Exam {
   @@index([deletedAt])
   @@index([type])
   @@index([paperRevisionId])
+  @@index([organizationId])
 }
 
 model ExamPaper {
@@ -572,8 +707,13 @@ model ExamPaper {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([courseId])
   @@index([createdById])
+  @@index([organizationId])
 }
 
 model ExamPaperRevision {
@@ -590,26 +730,36 @@ model ExamPaperRevision {
   instances         Exam[]
   createdAt         DateTime  @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([paperId, version])
   @@index([paperId])
+  @@index([organizationId])
 }
 
 model ExamAudience {
-  id           String                   @id @default(uuid())
-  examId       String
-  exam         Exam                     @relation(fields: [examId], references: [id], onDelete: Restrict)
-  label        String
-  deliveryMode ExamAudienceDeliveryMode
-  instituteId  String?
-  institute    Institute?               @relation(fields: [instituteId], references: [id], onDelete: Restrict)
-  participants ExamParticipant[]
+  id                        String                     @id @default(uuid())
+  examId                    String
+  exam                      Exam                       @relation(fields: [examId], references: [id], onDelete: Restrict)
+  label                     String
+  deliveryMode              ExamAudienceDeliveryMode
+  instituteId               String?
+  institute                 Institute?                 @relation(fields: [instituteId], references: [id], onDelete: Restrict)
+  participants              ExamParticipant[]
   markerAssignmentAudiences MarkerAssignmentAudience[]
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([id, examId])
   @@index([examId])
   @@index([instituteId])
+  @@index([organizationId])
 }
 
 model ExamParticipant {
@@ -622,9 +772,14 @@ model ExamParticipant {
   user       User         @relation(fields: [userId], references: [id], onDelete: Restrict)
   createdAt  DateTime     @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([examId, userId])
   @@index([audienceId, examId])
   @@index([userId])
+  @@index([organizationId])
 }
 
 model Submission {
@@ -646,10 +801,15 @@ model Submission {
   gradedAt    DateTime?
   updatedAt   DateTime  @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([userId, examId])
   @@index([userId])
   @@index([examId])
   @@index([status])
+  @@index([organizationId])
 }
 
 model MarkerAssignment {
@@ -661,64 +821,79 @@ model MarkerAssignment {
   examId String
   exam   Exam   @relation(fields: [examId], references: [id], onDelete: Restrict)
 
-  assignedAt DateTime @default(now())
-  allAudiences Boolean @default(false)
+  assignedAt   DateTime @default(now())
+  allAudiences Boolean  @default(false)
 
   // Scoped instances resolve every confirmed allocation to these exact,
   // audience-bound grants. Legacy instances intentionally retain their
   // whole-exam assignment without grant rows.
   audienceGrants MarkerAssignmentAudience[]
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([markerId, examId])
   @@unique([id, examId])
   @@index([markerId])
   @@index([examId])
+  @@index([organizationId])
 }
 
 model MarkerAssignmentAudience {
   id String @id @default(uuid())
 
   assignmentId String
-  assignment MarkerAssignment @relation(fields: [assignmentId, examId], references: [id, examId], onDelete: Restrict)
+  assignment   MarkerAssignment @relation(fields: [assignmentId, examId], references: [id, examId], onDelete: Restrict)
 
   // `examId` is duplicated so PostgreSQL can bind the grant to an audience of
   // the same instance through the composite audience foreign key.
-  examId String
-  exam Exam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  examId     String
+  exam       Exam         @relation(fields: [examId], references: [id], onDelete: Restrict)
   audienceId String
-  audience ExamAudience @relation(fields: [audienceId, examId], references: [id, examId], onDelete: Restrict)
+  audience   ExamAudience @relation(fields: [audienceId, examId], references: [id, examId], onDelete: Restrict)
 
   createdAt DateTime @default(now())
-  source Json @default("[]")
+  source    Json     @default("[]")
+
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([assignmentId, audienceId])
   @@index([examId, audienceId])
+  @@index([organizationId])
 }
 
 // Immutable academic evidence for each confirmed scoped allocation. The JSON
 // snapshots make revocation auditable without allowing historical group edits
 // to alter confirmed marker/audience grants.
 model MarkerAllocationRevision {
-  id String @id @default(uuid())
-  examId String
-  exam Exam @relation(fields: [examId], references: [id], onDelete: Restrict)
-  revision Int
-  reason String
-  digest String
-  beforeState Json
-  afterState Json
-  sourceState Json @default("[]")
-  evidenceState Json @default("{}")
-  requestState Json @default("{}")
+  id             String   @id @default(uuid())
+  examId         String
+  exam           Exam     @relation(fields: [examId], references: [id], onDelete: Restrict)
+  revision       Int
+  reason         String
+  digest         String
+  beforeState    Json
+  afterState     Json
+  sourceState    Json     @default("[]")
+  evidenceState  Json     @default("{}")
+  requestState   Json     @default("{}")
   idempotencyKey String?
-  actorId String
-  actor User @relation("MarkerAllocationActor", fields: [actorId], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now())
+  actorId        String
+  actor          User     @relation("MarkerAllocationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt      DateTime @default(now())
+
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([examId, revision])
   @@unique([examId, actorId, idempotencyKey])
   @@index([examId, createdAt])
   @@index([actorId])
+  @@index([organizationId])
 }
 
 // The migration enforces that every scope selects exactly one target relation.
@@ -749,12 +924,17 @@ model MarkerGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([courseId])
   @@index([subjectId])
   @@index([instituteId])
   @@index([createdById])
   @@index([isActive])
   @@index([deletedAt])
+  @@index([organizationId])
 }
 
 // Removed membership rows remain available for reactivation; append-only events
@@ -776,10 +956,15 @@ model MarkerGroupMember {
   removedBy   User?     @relation("MarkerGroupMemberRemovedBy", fields: [removedById], references: [id], onDelete: Restrict)
   removedAt   DateTime?
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([groupId, markerId])
   @@index([groupId])
   @@index([markerId])
   @@index([removedAt])
+  @@index([organizationId])
 }
 
 model MarkerGroupMembershipEvent {
@@ -798,9 +983,14 @@ model MarkerGroupMembershipEvent {
 
   createdAt DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([groupId, createdAt])
   @@index([markerId])
   @@index([actorId])
+  @@index([organizationId])
 }
 
 model AuditLog {
@@ -820,10 +1010,15 @@ model AuditLog {
 
   createdAt DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([actorId])
   @@index([action])
   @@index([targetType, targetId])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model SmsLog {
@@ -840,9 +1035,14 @@ model SmsLog {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 // Per-user in-app notification inbox. Written by NotificationService.dispatch(),
@@ -861,8 +1061,13 @@ model Notification {
 
   createdAt DateTime @default(now())
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([userId, isRead])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 // Super-admin-configurable on/off switch per (scenario, channel). One row per
@@ -877,7 +1082,12 @@ model NotificationSetting {
 
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([type, channel])
+  @@index([organizationId])
 }
 
 // ─────────────────────── PHYSICAL INSTITUTES ───────────────────────
@@ -898,7 +1108,12 @@ model Institute {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([isActive])
+  @@index([organizationId])
 }
 
 // ─────────────────────────── TIMETABLE ───────────────────────────
@@ -926,10 +1141,15 @@ model TimetableSlot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([courseId])
   @@index([instituteId])
   @@index([dayOfWeek])
   @@index([isActive])
+  @@index([organizationId])
 }
 
 model StudentBarcode {
@@ -945,8 +1165,13 @@ model StudentBarcode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
+  organizationId String?       @default("00000000-0000-4000-8000-000000000001")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@unique([instituteId, barcode]) // unique WITHIN an institute (not globally)
   @@unique([userId, instituteId]) // one barcode per student per institute
   @@index([userId])
   @@index([instituteId])
+  @@index([organizationId])
 }

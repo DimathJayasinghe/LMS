@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19, **not yet implemented** — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
+A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
 `frontend/` (Next.js) and `backend/` (Express) — no npm workspace, no root `package.json`; `cd` into
 each separately. Designed to run on **one small VPS** via Docker Compose: no Kubernetes, no
 auto-scaling, no multi-instance anything. The backend API is deliberately kept **stateless** anyway
@@ -130,10 +130,12 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 - **Organization** is the tenant (a tuition institute as a customer). **Institute** means a *physical
   branch* inside an organization and is not a tenant. `SUPER_ADMIN` owns one organization; the name
   `PLATFORM_ADMIN` is reserved for a future SaaS operator and is not in the `Role` enum.
-- There is no `Organization` table yet. Until the foundation steps in `14-multi-tenancy-readiness.md §11`
-  land, do not add new global uniques on user-visible values, hand-built R2/Redis keys, or new
-  provider-credential reads from `env`; after they land, every tenant-owned table needs
-  `organizationId` and the scoped Prisma client.
+- The `Organization` table and a nullable `organizationId` (default: the one `default`/`DEF` organization) exist
+  on every model since M1; the scoped Prisma client, JWT context and `NOT NULL` constraints (M2–M3) do not yet.
+  Until `14-multi-tenancy-readiness.md §11` M2–M3 land, do not add new global uniques on user-visible values,
+  hand-built R2/Redis keys, or new provider-credential reads from `env`. Every new model must declare
+  `organizationId` + the `Organization` relation + `@@index([organizationId])` (the registry test in
+  `backend/src/utils/tenant-integrity.test.ts` fails otherwise), and CI runs the tenant integrity check.
 - **Stack decision:** stay on Express + Next.js. A NestJS rewrite was considered and rejected.
 - **Planned, not built:** `HYBRID` enrollment and a bank-slip payment channel
   (`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`). Today the

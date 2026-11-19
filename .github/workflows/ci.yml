@@ -69,6 +69,9 @@ jobs:
       - name: Require zero migration drift
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
+      - name: Verify tenant integrity (every row has an organization matching its parent)
+        run: npx tsx src/scripts/check-tenant-integrity.ts
+
       - name: Verify immutable marker-group membership events
         run: npx prisma db execute --file prisma/verify-marker-group-membership-event-immutability.sql
 
@@ -94,6 +97,7 @@ jobs:
           npx prisma db execute --file prisma/seed-legacy-exam-fixture.sql
           npx prisma migrate deploy
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+          npx tsx src/scripts/check-tenant-integrity.ts
           npx prisma db execute --file prisma/verify-legacy-exam-fixture.sql
 
       - name: Lint

@@ -276,13 +276,15 @@ organizations must be load-tested together before a second customer is onboarded
 
 ## 11. Migration plan (expand → backfill → contract)
 
+**Status 2026-11-19: M1 is implemented.** Migration `20261119091314_tenant_foundation_organization` creates `Organization`, inserts the default row (`id 00000000-0000-4000-8000-000000000001`, slug `default`, code `DEF`, placeholders to rename before launch) and adds `organizationId` to all 35 models as a nullable column with that id as the **column default**. Existing rows are backfilled by `ADD COLUMN … DEFAULT`, which does not rewrite rows or fire the immutability triggers on the evidence tables, and new rows land in the default organization until M2 sets the value explicitly. The default is dropped in M3 together with `NOT NULL`. Deploy note: the migration holds `ACCESS EXCLUSIVE` locks on every table until it commits, so stop the backend and worker before `prisma migrate deploy` (the stack is small enough that this takes seconds). CI runs the integrity check on both the fresh database and the legacy-adoption database, which is the only one with pre-existing rows. Guards: `backend/src/utils/tenant-integrity.test.ts` (every model is tenant-owned, indexed and `Restrict`) and `backend/src/scripts/check-tenant-integrity.ts` (CI step; child organization must equal parent organization, no null organization).
+
 Each step is its own PR, passes the production-Docker gate in the gap analysis §9, and keeps the app
 working at every step.
 
 | Step | Change | Acceptance |
 |---|---|---|
 | **M0** | Merge this ADR and the docs alignment | Owner reviews |
-| **M1 Foundation** | Add `Organization`; insert the default row; add **nullable** `organizationId` + FK + index to every tenant-owned table (including the already-merged Phase E tables); backfill every row to the default organization | Fresh and upgrade migrations at zero drift; integrity check passes |
+| **M1 Foundation** (**Done 2026-11-19**) | Add `Organization`; insert the default row; add **nullable** `organizationId` + FK + index to every tenant-owned table (including the already-merged Phase E tables); backfill every row to the default organization | Fresh and upgrade migrations at zero drift; integrity check passes |
 | **M2 Context** | Add `organizationId` to `AuthenticatedUser`/JWT; tenant-resolution middleware with default-organization fallback; scoped Prisma client + registry test; services switch to the scoped client | Every existing test passes; new registry test passes; cross-tenant isolation tests added for existing services |
 | **M3 Constrain** | Make `organizationId` `NOT NULL`; swap the uniques in §3.3; per-organization `IdempotencyRecord`/`NotificationSetting` | Migration refuses to run if any row has a null organization |
 | **M4 Providers** | `OrganizationIntegration` + encryption + resolver with env fallback; refactor `bunny`, `zoom`, `payhere`, SMS and R2 utilities; webhook organization resolution (§4.2) | Webhook tests for unknown organization, wrong secret and cross-organization replay |

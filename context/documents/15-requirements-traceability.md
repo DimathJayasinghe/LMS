@@ -164,7 +164,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 |---|---|---|---|
 | R-NFR-01 | Mobile-first responsive web | Partial | Responsive; PWA planned (P2); native app Deferred |
 | R-NFR-02 | Capacity | Decide | Documented target is ~1,200 students on one VPS; no load test evidence ([production delivery baseline](../../docs/plans/2026-09-06-production-delivery-baseline.md), owner clarification). See §2 |
-| R-NFR-03 | Multi-tenant ready | Planned | ADR 14 |
+| R-NFR-03 | Multi-tenant ready | Partial | ADR 14. M1 done (Organization table, nullable `organizationId` everywhere, registry test, CI integrity check); M2–M8 planned |
 | R-NFR-04 | Offline-tolerant UX | Gap | Roadmap mentions selected offline downloads only |
 | R-NFR-05 | Backups and recovery | Partial | Scheduled verified dumps; encryption, off-site copy and restore drill outstanding (P0) |
 | R-NFR-06 | OTP/2FA login | Gap | Not built; propose roadmap P2 |

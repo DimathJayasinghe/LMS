@@ -11,7 +11,7 @@
 | **Current Phase** | Requirements and docs alignment (multi-tenancy, payment channels, HYBRID enrollment), then code alignment; Phase E marker groups and exam papers/audiences are merged |
 | **Last Updated** | 2026-11-19 |
 | **Last Completed Task** | Owner decisions of 2026-11-19 recorded in docs: [14 multi-tenancy ADR](./14-multi-tenancy-readiness.md), [15 requirements traceability](./15-requirements-traceability.md), and the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md). No code changed. |
-| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → accountable physical-paper result entry (Phase E Task 4; scoped allocations are merged in #85) → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
+| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: ADR 14 M2–M3 (M1 done) → accountable physical-paper result entry (Phase E Task 4; scoped allocations are merged in #85) → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
 
 ### 2026-11-19 — Local offline development with provider drivers
@@ -39,7 +39,8 @@
 - [x] **Decided later the same day:** a `PHYSICAL`-only enrollment loses live/recording access unless the student is `HYBRID` or the session opts in via a new `ClassSession.onlineForPhysical` flag (behaviour change; needs a rollout report); the first organization migration uses placeholder slug `default` / code `DEF`, renamed before launch.
 - [ ] **Still open:** (1) one fee for all modes or per-mode fees; (2) keep existing `LMS-<index>` QR values when the organization prefix is introduced; (3) is a tenant export/restore tool required before a second customer; (4) Sinhala/Tamil UI at launch or after; (5) are one-way WhatsApp notifications acceptable.
 - [x] Code alignment step 1 (2026-11-19): deleted the dead `generateBunnyStreamUrl`, removed the unused `hls.js` dependency, and set `unoptimized` on course banner images (the app had no `images.remotePatterns`, so remote banner URLs were blocked; banners are admin-uploaded and size-capped, so the optimizer is not needed).
-- [ ] Remaining code alignment, in order: tenant foundation (ADR 14 M1–M3), then the items in the **Next Task** row above.
+- [x] **M1 tenant foundation** (2026-11-19, ADR 14 §11): `Organization` table + default row, nullable defaulted `organizationId` with FK/index on all 35 models, registry test, tenant integrity script wired into CI. No query is scoped by it yet (M2).
+- [ ] Remaining code alignment, in order: ADR 14 M2–M3, then the items in the **Next Task** row above.
 
 ### 2026-09-06 — Configurable exam scope and dashboard follow-up
 
