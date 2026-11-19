@@ -6,6 +6,7 @@ import type { Payment } from "@/lib/types";
 const base: Payment = {
   id: "pay-123",
   amount: "2500.00",
+  refundedAmount: "0.00",
   status: "SUCCESS",
   method: "ONLINE",
   payhereId: "payhere_abc",

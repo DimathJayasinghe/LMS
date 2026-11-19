@@ -1,4 +1,4 @@
-import { Prisma, Role } from '@prisma/client';
+import { ClassType, Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { COLOMBO_UTC_OFFSET_MIN } from '@/utils/constants';
@@ -6,6 +6,7 @@ import type { AuthenticatedUser } from '@/types/auth.types';
 import { assertCourseAccess } from '@/services/class.service';
 import type {
   CreateTimetableSlotInput,
+  ListUpcomingSessionsQuery,
   ListTimetableQuery,
   PublicUpcomingQuery,
   UpdateTimetableSlotInput,
@@ -18,13 +19,104 @@ const slotSelect = {
   startTime: true,
   durationMinutes: true,
   classType: true,
-  zoomLink: true,
   isActive: true,
   courseId: true,
   instituteId: true,
   createdAt: true,
   updatedAt: true,
+  course: { select: { name: true, year: true } },
+  institute: { select: { name: true } },
 } satisfies Prisma.TimetableSlotSelect;
+
+const assertTimetableViewer = (actor: AuthenticatedUser): void => {
+  if (actor.role === Role.MARKER) {
+    throw new AppError('FORBIDDEN', 403, 'Markers do not have access to course timetables.');
+  }
+};
+
+const slotScope = (actor: AuthenticatedUser): Prisma.TimetableSlotWhereInput => {
+  assertTimetableViewer(actor);
+  if (actor.role === Role.SUPER_ADMIN || actor.role === Role.ADMIN) return {};
+  if (actor.role === Role.TEACHER) return { course: { teacherId: actor.userId } };
+  return {
+    isActive: true,
+    OR: [
+      {
+        classType: null,
+        course: { enrollments: { some: { userId: actor.userId, isActive: true } } },
+      },
+      {
+        classType: ClassType.ONLINE,
+        course: { enrollments: { some: { userId: actor.userId, isActive: true, classType: ClassType.ONLINE } } },
+      },
+      {
+        classType: ClassType.PHYSICAL,
+        course: { enrollments: { some: { userId: actor.userId, isActive: true, classType: ClassType.PHYSICAL } } },
+      },
+    ],
+  };
+};
+
+const minutesFromMidnight = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number) as [number, number];
+  return hours * 60 + minutes;
+};
+
+const assertFitsWithinDay = (startTime: string, durationMinutes: number): void => {
+  if (minutesFromMidnight(startTime) + durationMinutes > 24 * 60) {
+    throw new AppError('INVALID_SLOT_RANGE', 400, 'A timetable slot cannot continue past midnight.');
+  }
+};
+
+const assertNoConflict = async (candidate: {
+  id?: string;
+  courseId: string;
+  teacherId: string;
+  instituteId: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  durationMinutes: number;
+  isActive: boolean;
+}): Promise<void> => {
+  if (!candidate.isActive) return;
+  const slots = await prisma.timetableSlot.findMany({
+    where: {
+      dayOfWeek: candidate.dayOfWeek,
+      isActive: true,
+      ...(candidate.id ? { id: { not: candidate.id } } : {}),
+      OR: [
+        { courseId: candidate.courseId },
+        { course: { teacherId: candidate.teacherId } },
+        ...(candidate.instituteId ? [{ instituteId: candidate.instituteId }] : []),
+      ],
+    },
+    select: {
+      startTime: true,
+      durationMinutes: true,
+      courseId: true,
+      instituteId: true,
+      course: { select: { teacherId: true } },
+    },
+  });
+  const start = minutesFromMidnight(candidate.startTime);
+  const end = start + candidate.durationMinutes;
+  const conflict = slots.find((slot) => {
+    const otherStart = minutesFromMidnight(slot.startTime);
+    const overlaps = start < otherStart + slot.durationMinutes && otherStart < end;
+    return overlaps && (
+      slot.courseId === candidate.courseId ||
+      slot.course.teacherId === candidate.teacherId ||
+      (candidate.instituteId !== null && slot.instituteId === candidate.instituteId)
+    );
+  });
+  if (conflict) {
+    throw new AppError(
+      'TIMETABLE_CONFLICT',
+      409,
+      'This time overlaps an active slot for the same class, teacher, or institute.',
+    );
+  }
+};
 
 const assertInstituteExists = async (instituteId: string): Promise<void> => {
   const institute = await prisma.institute.findUnique({ where: { id: instituteId }, select: { id: true } });
@@ -32,8 +124,19 @@ const assertInstituteExists = async (instituteId: string): Promise<void> => {
 };
 
 export const createSlot = async (input: CreateTimetableSlotInput, actor: AuthenticatedUser) => {
-  await assertCourseAccess(input.courseId, actor); // course exists + teacher owns it (ADMIN/SUPER bypass)
+  const course = await assertCourseAccess(input.courseId, actor); // course exists + teacher owns it (ADMIN/SUPER bypass)
   if (input.instituteId) await assertInstituteExists(input.instituteId);
+  const durationMinutes = input.durationMinutes ?? 60;
+  assertFitsWithinDay(input.startTime, durationMinutes);
+  await assertNoConflict({
+    courseId: input.courseId,
+    teacherId: course.teacherId,
+    instituteId: input.instituteId ?? null,
+    dayOfWeek: input.dayOfWeek,
+    startTime: input.startTime,
+    durationMinutes,
+    isActive: input.isActive ?? true,
+  });
 
   return prisma.timetableSlot.create({
     data: {
@@ -42,9 +145,8 @@ export const createSlot = async (input: CreateTimetableSlotInput, actor: Authent
       title: input.title ?? null,
       dayOfWeek: input.dayOfWeek,
       startTime: input.startTime,
-      durationMinutes: input.durationMinutes ?? 60,
+      durationMinutes,
       classType: input.classType ?? null,
-      zoomLink: input.zoomLink ?? null,
       isActive: input.isActive ?? true,
     },
     select: slotSelect,
@@ -56,7 +158,7 @@ export const listSlots = async (query: ListTimetableQuery, actor: AuthenticatedU
     ...(query.courseId ? { courseId: query.courseId } : {}),
     ...(query.instituteId ? { instituteId: query.instituteId } : {}),
     ...(query.dayOfWeek !== undefined ? { dayOfWeek: query.dayOfWeek } : {}),
-    ...(actor.role === Role.SUPER_ADMIN ? {} : { isActive: true }),
+    ...slotScope(actor),
   };
 
   return prisma.timetableSlot.findMany({
@@ -66,27 +168,44 @@ export const listSlots = async (query: ListTimetableQuery, actor: AuthenticatedU
   });
 };
 
-export const getSlotById = async (id: string) => {
-  const slot = await prisma.timetableSlot.findUnique({ where: { id }, select: slotSelect });
+export const getSlotById = async (id: string, actor: AuthenticatedUser) => {
+  const slot = await prisma.timetableSlot.findFirst({ where: { id, ...slotScope(actor) }, select: slotSelect });
   if (!slot) throw new AppError('SLOT_NOT_FOUND', 404, 'Timetable slot not found.');
   return slot;
 };
 
 export const updateSlot = async (id: string, input: UpdateTimetableSlotInput, actor: AuthenticatedUser) => {
-  const existing = await prisma.timetableSlot.findUnique({ where: { id }, select: { id: true, courseId: true } });
+  const existing = await prisma.timetableSlot.findUnique({
+    where: { id },
+    select: {
+      id: true, courseId: true, instituteId: true, dayOfWeek: true, startTime: true,
+      durationMinutes: true, isActive: true,
+    },
+  });
   if (!existing) throw new AppError('SLOT_NOT_FOUND', 404, 'Timetable slot not found.');
-  await assertCourseAccess(existing.courseId, actor);
+  const course = await assertCourseAccess(existing.courseId, actor);
   if (input.instituteId) await assertInstituteExists(input.instituteId);
+  const next = {
+    id,
+    courseId: existing.courseId,
+    teacherId: course.teacherId,
+    instituteId: input.instituteId === undefined ? existing.instituteId : input.instituteId,
+    dayOfWeek: input.dayOfWeek ?? existing.dayOfWeek,
+    startTime: input.startTime ?? existing.startTime,
+    durationMinutes: input.durationMinutes ?? existing.durationMinutes,
+    isActive: input.isActive ?? existing.isActive,
+  };
+  assertFitsWithinDay(next.startTime, next.durationMinutes);
+  await assertNoConflict(next);
 
   return prisma.timetableSlot.update({
     where: { id },
     data: {
-      title: input.title ?? undefined,
+      title: input.title === undefined ? undefined : input.title,
       dayOfWeek: input.dayOfWeek,
       startTime: input.startTime,
       durationMinutes: input.durationMinutes,
       classType: input.classType === undefined ? undefined : input.classType,
-      zoomLink: input.zoomLink === undefined ? undefined : input.zoomLink,
       isActive: input.isActive,
       instituteId: input.instituteId === undefined ? undefined : input.instituteId,
     },
@@ -98,8 +217,58 @@ export const deleteSlot = async (id: string, actor: AuthenticatedUser): Promise<
   const existing = await prisma.timetableSlot.findUnique({ where: { id }, select: { id: true, courseId: true } });
   if (!existing) throw new AppError('SLOT_NOT_FOUND', 404, 'Timetable slot not found.');
   await assertCourseAccess(existing.courseId, actor);
-  // Generated sessions keep (onDelete: SetNull nulls their timetableSlotId).
-  await prisma.timetableSlot.delete({ where: { id } });
+  // Keep the template and its generated-session links so disabling/restoring is
+  // safe and repeatable. Session generation already ignores inactive slots.
+  await prisma.timetableSlot.update({
+    where: { id },
+    data: { isActive: false },
+  });
+};
+
+const sessionScope = (actor: AuthenticatedUser): Prisma.ClassSessionWhereInput => {
+  assertTimetableViewer(actor);
+  if (actor.role === Role.SUPER_ADMIN || actor.role === Role.ADMIN) return {};
+  if (actor.role === Role.TEACHER) return { course: { teacherId: actor.userId } };
+  return {
+    OR: [
+      {
+        classType: null,
+        course: { enrollments: { some: { userId: actor.userId, isActive: true } } },
+      },
+      {
+        classType: ClassType.ONLINE,
+        course: { enrollments: { some: { userId: actor.userId, isActive: true, classType: ClassType.ONLINE } } },
+      },
+      {
+        classType: ClassType.PHYSICAL,
+        course: { enrollments: { some: { userId: actor.userId, isActive: true, classType: ClassType.PHYSICAL } } },
+      },
+    ],
+  };
+};
+
+export const listUpcomingSessions = async (query: ListUpcomingSessionsQuery, actor: AuthenticatedUser) => {
+  return prisma.classSession.findMany({
+    where: {
+      date: { gte: query.from, lte: query.to },
+      deletedAt: null,
+      AND: [{ course: { isActive: true } }, sessionScope(actor)],
+    },
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      durationMinutes: true,
+      classType: true,
+      courseId: true,
+      zoomMeetingId: true,
+      course: { select: { name: true, year: true } },
+    },
+    orderBy: { date: 'asc' },
+  }).then((sessions) => sessions.map(({ zoomMeetingId, ...session }) => ({
+    ...session,
+    liveScheduled: Boolean(zoomMeetingId),
+  })));
 };
 
 // ─── Public upcoming timetable (marketing page, unauthenticated) ───────
@@ -167,9 +336,13 @@ const occurrences = (from: Date, to: Date, dayOfWeek: number, startTime: string)
 export const generateSessions = async (
   from: Date,
   to: Date,
+  actor?: AuthenticatedUser,
 ): Promise<{ created: number; skipped: number }> => {
   const slots = await prisma.timetableSlot.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(actor?.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
+    },
     select: {
       id: true,
       title: true,
@@ -177,7 +350,6 @@ export const generateSessions = async (
       startTime: true,
       durationMinutes: true,
       classType: true,
-      zoomLink: true,
       courseId: true,
       course: { select: { name: true, year: true } },
     },
@@ -203,7 +375,6 @@ export const generateSessions = async (
           classType: slot.classType,
           date,
           durationMinutes: slot.durationMinutes,
-          zoomLink: slot.zoomLink,
           courseId: slot.courseId,
           timetableSlotId: slot.id,
         },
@@ -213,4 +384,39 @@ export const generateSessions = async (
   }
 
   return { created, skipped };
+};
+
+export const previewGeneration = async (from: Date, to: Date, actor: AuthenticatedUser) => {
+  const slots = await prisma.timetableSlot.findMany({
+    where: {
+      isActive: true,
+      ...(actor.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
+    },
+    select: {
+      id: true, title: true, dayOfWeek: true, startTime: true, courseId: true,
+      course: { select: { name: true, year: true } },
+    },
+  });
+  const rows = [];
+  for (const slot of slots) {
+    for (const date of occurrences(from, to, slot.dayOfWeek, slot.startTime)) {
+      const existing = await prisma.classSession.findUnique({
+        where: { timetableSlotId_date: { timetableSlotId: slot.id, date } },
+        select: { id: true },
+      });
+      rows.push({
+        timetableSlotId: slot.id,
+        courseId: slot.courseId,
+        course: slot.course,
+        title: slot.title ?? `${slot.course.name} ${slot.course.year}`,
+        date,
+        status: existing ? 'EXISTS' as const : 'CREATE' as const,
+      });
+    }
+  }
+  return {
+    rows,
+    createCount: rows.filter((row) => row.status === 'CREATE').length,
+    existingCount: rows.filter((row) => row.status === 'EXISTS').length,
+  };
 };

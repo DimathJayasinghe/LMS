@@ -63,19 +63,20 @@ noted in the frontend roadmap as a real future phase, not built now.
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
 | `POST` | `/schedule` | `TEACHER` (course owner), `SUPER_ADMIN` | Creates the Zoom meeting via the REST API; persists `zoomMeetingId`/`zoomLink`/`zoomPassword` on the session. |
-| `POST` | `/token` | Any authenticated | Mints a fresh join (student) or host (staff) Meeting SDK JWT. |
+| `POST` | `/token` | `STUDENT` (enrolled+paid), `TEACHER` (owner), `SUPER_ADMIN` | Mints a fresh join or host Meeting SDK JWT; `ADMIN`/`MARKER` receive 403. |
 
 ---
 
 ## `POST /schedule`
 
 **Request**: no body (uses the session's title/date/duration).
+Requires an `Idempotency-Key` UUID so a client retry cannot create two provider meetings.
 
 **Success (201)**
 ```json
 {
   "status": "success",
-  "data": { "sessionId": "uuid", "zoomMeetingId": "123456789", "joinUrl": "https://zoom.us/j/..." },
+  "data": { "sessionId": "uuid", "liveScheduled": true },
   "message": "Live class scheduled."
 }
 ```
@@ -94,7 +95,8 @@ noted in the frontend roadmap as a real future phase, not built now.
 ## `POST /token`
 
 **Request**: no body — role is derived from the caller (`TEACHER`/`SUPER_ADMIN` who owns the course → host;
-everyone else → participant, gated on enrollment+payment).
+`STUDENT` → participant, gated on enrollment+payment). `ADMIN` and `MARKER` are explicitly denied
+before token throttling or credential work.
 
 **Success (200)**
 ```json

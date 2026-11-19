@@ -13,6 +13,12 @@ export const listUsersQuerySchema = z.object({
 
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 
+export const academicStaffQuerySchema = z.object({
+	role: z.enum([Role.TEACHER, Role.MARKER]),
+});
+
+export type AcademicStaffQuery = z.infer<typeof academicStaffQuerySchema>;
+
 // ─── Params ────────────────────────────────────────────────
 export const userIdParamSchema = z.object({
 	id: z.string().uuid(),

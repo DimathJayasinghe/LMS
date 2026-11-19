@@ -118,6 +118,11 @@ Returned in list and detail endpoints:
 | PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
 | GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
+| GET | `/academic-staff?role=TEACHER|MARKER` | SUPER_ADMIN; TEACHER for MARKER only | Minimal active staff directory (id/name/role only). |
+
+`GET /academic-staff` intentionally excludes email, phone, NIC, account status metadata, and other
+PII. SUPER_ADMIN uses it for subject/course ownership; an owning TEACHER may request only MARKER
+rows for exam assignment.
 
 ## Endpoint Details
 
@@ -226,6 +231,9 @@ field, returning `instituteId: null`.
 
 Updates the user's role. ADMIN only.
 
+**Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
+keys return 400; replaying the same key returns the original stored response.
+
 **Request body**
 
 ```json
@@ -254,6 +262,9 @@ Updates the user's role. ADMIN only.
 ### PATCH `/:id/status`
 
 Activates or deactivates a user.
+
+**Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
+keys return 400; replaying the same key returns the original stored response.
 
 > **Privileged-target guard (fixed 2026-07-10):** an `ADMIN` (front-desk) actor can no longer
 > change the status of an `ADMIN` or `SUPER_ADMIN` target — only `SUPER_ADMIN` can. Previously
@@ -291,6 +302,9 @@ Activates or deactivates a user.
 ### PATCH `/:id/barcode`
 
 Assigns a barcode to a user.
+
+**Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
+keys return 400; replaying the same key returns the original stored response.
 
 **Request body**
 

@@ -1,11 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { MonthPicker } from "./_components/MonthPicker";
 import { CourseBreakdownChart, MethodDonut, RevenueTrendChart } from "./_components/ReportCharts";
 import { api } from "@/lib/api";
 import { formatLkr, monthLabel, METHOD_LABELS } from "@/lib/reports";
-import type { ApiSuccess, FinancialReport, User } from "@/lib/types";
+import type { AcademicStaff, ApiList, ApiSuccess, Course, FinancialReport, User } from "@/lib/types";
 
 export const metadata = { title: "Financial reports · LMS" };
 
@@ -46,7 +45,7 @@ function ChartCard({
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; teacherId?: string; courseId?: string }>;
 }) {
   const cookie = (await cookies()).toString();
   const sp = await searchParams;
@@ -57,13 +56,24 @@ export default async function ReportsPage({
   } catch {
     redirect("/auth/login");
   }
-  // Financial totals across every course/student — super-admin only. Front-desk
-  // ADMIN is bounced here and again by the backend (requireRole SUPER_ADMIN).
-  if (viewer.role !== "SUPER_ADMIN") redirect("/dashboard");
+  if (viewer.role !== "SUPER_ADMIN" && viewer.role !== "TEACHER") redirect("/dashboard");
 
-  const qs = sp.month ? `?month=${encodeURIComponent(sp.month)}` : "";
-  const report = (await api.get<ApiSuccess<FinancialReport>>(`/payments/reports${qs}`, { cookie }))
-    .data;
+  const courses = (await api.get<ApiList<Course>>("/classes", { cookie })).data;
+  const teachers = viewer.role === "SUPER_ADMIN"
+    ? (await api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie })).data
+    : [];
+  const visibleCourses = viewer.role === "SUPER_ADMIN" && sp.teacherId
+    ? courses.filter((course) => course.teacherId === sp.teacherId)
+    : courses;
+  const selectedCourseId = sp.courseId && visibleCourses.some((course) => course.id === sp.courseId)
+    ? sp.courseId
+    : undefined;
+  const query = new URLSearchParams();
+  if (sp.month) query.set("month", sp.month);
+  if (viewer.role === "SUPER_ADMIN" && sp.teacherId) query.set("teacherId", sp.teacherId);
+  if (selectedCourseId) query.set("courseId", selectedCourseId);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const report = (await api.get<ApiSuccess<FinancialReport>>(`/payments/reports${suffix}`, { cookie })).data;
 
   const thisMonth = report.trend.at(-1);
   const collected = thisMonth?.collected ?? "0";
@@ -73,24 +83,62 @@ export default async function ReportsPage({
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Financial reports"
-        description="Revenue trends, course and method breakdowns, and outstanding fees."
+        description={viewer.role === "TEACHER"
+          ? "Aggregate income and outstanding fees for your classes. Student payment details remain private."
+          : "Revenue trends by teacher, class, and payment method, with outstanding fee totals."}
       />
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Showing <span className="font-medium text-foreground">{monthLabel(report.month)}</span>
         </p>
-        <MonthPicker month={report.month} current={currentMonth()} />
       </div>
+
+      <form method="get" className="mb-6 grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm text-foreground">
+          <span className="mb-1 block font-medium">Month</span>
+          <input
+            type="month"
+            name="month"
+            defaultValue={sp.month ?? report.month ?? currentMonth()}
+            max={currentMonth()}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3"
+          />
+        </label>
+        {viewer.role === "SUPER_ADMIN" && (
+          <label className="text-sm text-foreground">
+            <span className="mb-1 block font-medium">Teacher</span>
+            <select name="teacherId" defaultValue={sp.teacherId ?? ""} className="h-10 w-full rounded-lg border border-border bg-background px-3">
+              <option value="">All teachers</option>
+              {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label className="text-sm text-foreground">
+          <span className="mb-1 block font-medium">Class</span>
+          <select name="courseId" defaultValue={selectedCourseId ?? ""} className="h-10 w-full rounded-lg border border-border bg-background px-3">
+            <option value="">All classes</option>
+            {visibleCourses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.name}{course.year ? ` · ${course.year}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-end gap-2">
+          <button type="submit" className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">Apply filters</button>
+          <a href="/admin/reports" className="inline-flex h-10 items-center rounded-lg border border-border px-4 text-sm text-foreground">Reset</a>
+        </div>
+      </form>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatTile
-          label="Collected this month"
+          label="Collected in selected month"
           value={formatLkr(collected)}
           hint={`${paidCount} payment${paidCount === 1 ? "" : "s"}`}
         />
         <StatTile
-          label="Outstanding this month"
+          label="Outstanding in selected month"
           value={formatLkr(report.outstanding.expected)}
           hint={`${report.outstanding.count} enrolment${
             report.outstanding.count === 1 ? "" : "s"
@@ -102,6 +150,29 @@ export default async function ReportsPage({
           hint="with at least one payment"
         />
       </div>
+
+      {viewer.role === "SUPER_ADMIN" && (
+        <section className="mb-4 rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-base font-semibold text-foreground">By teacher</h2>
+          <p className="mb-3 text-sm text-muted-foreground">Collected totals for the selected month and filters.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-muted-foreground"><th className="py-1 pr-4 font-medium">Teacher</th><th className="py-1 pr-4 font-medium">Payments</th><th className="py-1 text-right font-medium">Collected</th></tr></thead>
+              <tbody>
+                {report.byTeacher.length === 0 ? (
+                  <tr><td colSpan={3} className="py-2 text-muted-foreground">No teacher revenue this month.</td></tr>
+                ) : report.byTeacher.map((teacher) => (
+                  <tr key={teacher.teacherId} className="border-t border-border">
+                    <td className="py-1 pr-4 text-foreground">{teacher.name}</td>
+                    <td className="py-1 pr-4 tabular-nums text-muted-foreground">{teacher.paidCount}</td>
+                    <td className="py-1 text-right tabular-nums text-foreground">{formatLkr(teacher.collected)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <div className="space-y-4">
         <ChartCard

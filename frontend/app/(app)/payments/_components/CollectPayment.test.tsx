@@ -56,6 +56,7 @@ const enrollment: Enrollment = {
 const paymentFixture = (overrides: Partial<Payment> = {}): Payment => ({
   id: "p1",
   amount: "2500.00",
+  refundedAmount: "0.00",
   status: "SUCCESS",
   method: "ENTRANCE",
   paymentMonth: "2026-07",
@@ -109,6 +110,20 @@ async function selectStudentByName(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("CollectPayment — search → select → collect", () => {
+  it("cancels a pending search when the query becomes too short", async () => {
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment />);
+
+    const input = screen.getByLabelText("Search student");
+    await user.type(input, "Ni");
+    await user.clear(input);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it("collects the current outstanding month with the pre-filled amount", async () => {
     post.mockResolvedValueOnce({ data: paymentFixture() });
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });

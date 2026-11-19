@@ -106,6 +106,18 @@ export interface Subject {
   updatedAt: string;
 }
 
+export interface AcademicStaff {
+  id: string;
+  name: string;
+  role: "TEACHER" | "MARKER";
+}
+
+export interface SubjectTeacherAssignment {
+  teacherId: string;
+  assignedAt: string;
+  teacher: AcademicStaff;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -117,9 +129,57 @@ export interface Course {
   subjectId: string;
   teacherId: string;
   bannerUrl?: string | null;
+  bannerAlt?: string | null;
   backdropUrl?: string | null;
+  backdropAlt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CourseAssetUploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
+  requiredWidth: number;
+  requiredHeight: number;
+  maxSizeBytes: number;
+}
+
+export type CourseModuleStatus = "DRAFT" | "PUBLISHED";
+
+export interface CourseMaterial {
+  id: string;
+  type: "FILE";
+  title: string;
+  description: string | null;
+  position: number;
+  fileName: string | null;
+  contentType: string | null;
+  sizeBytes: number | null;
+  downloadable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  description: string | null;
+  position: number;
+  status: CourseModuleStatus;
+  releaseAt: string | null;
+  courseId: string;
+  materials: CourseMaterial[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseMaterialUploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
+  maxSizeBytes: number;
 }
 
 export type ClassType = "ONLINE" | "PHYSICAL" | null;
@@ -135,8 +195,8 @@ export interface ClassSession {
   classType: ClassType;
   date: string;
   durationMinutes: number;
-  zoomLink?: string | null;
   zoomMeetingId?: string | null;
+  liveScheduled: boolean;
   courseId: string;
   deletedAt?: string | null;
   createdAt: string;
@@ -167,6 +227,16 @@ export interface Enrollment {
   course: EnrollmentCourse;
 }
 
+export interface LearningEnrollment extends Enrollment {
+  learning: {
+    newLessonCount: number;
+    latestLessonAt: string | null;
+    upcomingSessionCount: number;
+    nextSessionAt: string | null;
+    lastSeenAt: string;
+  };
+}
+
 export interface TimetableSlot {
   id: string;
   title?: string | null;
@@ -174,12 +244,24 @@ export interface TimetableSlot {
   startTime: string; // "HH:mm", Asia/Colombo
   durationMinutes: number;
   classType: ClassType;
-  zoomLink?: string | null;
   isActive: boolean;
   courseId: string;
   instituteId?: string | null;
   createdAt: string;
   updatedAt: string;
+  course?: { name: string; year: number };
+  institute?: { name: string } | null;
+}
+
+export interface UpcomingTimetableSession {
+  id: string;
+  title: string;
+  date: string;
+  durationMinutes: number;
+  classType: ClassType;
+  courseId: string;
+  liveScheduled: boolean;
+  course: { name: string; year: number };
 }
 
 export interface Institute {
@@ -240,6 +322,12 @@ export interface Exam {
 export interface ExamDetail extends Exam {
   paperPdfUrl: string | null;
   mcqPayload: McqPayload | null;
+}
+
+export interface ExamMarkerAssignment {
+  markerId: string;
+  assignedAt: string;
+  marker: AcademicStaff;
 }
 
 /** Map of question ID → selected option IDs (MCQ). */
@@ -384,8 +472,7 @@ export interface InitiateUploadResult {
 // ── Live classes (Zoom Meeting SDK) ──────────────────────────────────────────
 export interface ScheduleLiveClassResult {
   sessionId: string;
-  zoomMeetingId: string;
-  joinUrl: string;
+  liveScheduled: true;
 }
 
 /**
@@ -407,13 +494,15 @@ export interface LiveClassToken {
 
 // ── Payments & attendance ────────────────────────────────────────────────────
 export type PaymentMethod = "ONLINE" | "ENTRANCE" | "BULK" | "MANUAL";
-export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED";
+export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
 export type AttendanceSource = "QR" | "BARCODE" | "ZOOM_WEBHOOK" | "MANUAL";
+export type PaymentAdjustmentType = "OVERRIDE" | "REFUND";
 
 /** A payment row (see payments.endpoints.md). Matches the service's `paymentSelect`. */
 export interface Payment {
   id: string;
   amount: string; // decimal as string
+  refundedAmount: string; // completed external refunds, decimal as string
   status: PaymentStatus;
   method: PaymentMethod;
   payhereId?: string | null;
@@ -448,14 +537,36 @@ export interface PaymentSummary {
   paidCount: number;
   pendingCount: number;
   failedCount: number;
+  refundedCount: number;
 }
 
-/** GET /payments/reports?month= — super-admin financial report (see payments.endpoints.md). */
+export interface PaymentAdjustment {
+  id: string;
+  type: PaymentAdjustmentType;
+  amount: string | null;
+  statusBefore: PaymentStatus;
+  statusAfter: PaymentStatus;
+  paymentAmountBefore: string;
+  paymentAmountAfter: string;
+  reason: string;
+  externalReference: string | null;
+  createdAt: string;
+  createdBy: { id: string; name: string };
+}
+
+export interface RefundPaymentResult {
+  payment: Pick<Payment, "id" | "amount" | "refundedAmount" | "status">;
+  adjustment: PaymentAdjustment;
+  remainingRefundable: string;
+}
+
+/** GET /payments/reports — global super-admin or own-course teacher aggregates. */
 export interface FinancialReport {
   month: string; // "YYYY-MM"
   /** Exactly 12 entries, oldest→newest, ending at `month`; zero-filled where absent. */
   trend: { month: string; collected: string; paidCount: number }[];
-  byCourse: { courseId: string; name: string; year: number; collected: string; paidCount: number }[];
+  byCourse: { courseId: string; name: string; year: number | null; collected: string; paidCount: number }[];
+  byTeacher: { teacherId: string; name: string; collected: string; paidCount: number }[];
   byMethod: { method: PaymentMethod; collected: string; paidCount: number }[];
   /** Active enrollments with no SUCCESS payment for `month`, and their expected fees. */
   outstanding: { count: number; expected: string };
@@ -494,6 +605,40 @@ export interface AttendanceRecord {
     date: string;
     courseId: string;
   };
+}
+
+export interface AttendanceReconciliation {
+  sessionId: string;
+  zoomMeetingId: string;
+  summary: {
+    zoomRows: number;
+    matchedStudents: number;
+    alreadyRecorded: number;
+    missing: number;
+    unmatched: number;
+    ignored: number;
+  };
+  participants: {
+    userId: string;
+    name: string;
+    email: string;
+    indexNumber: number;
+    firstJoinAt: string;
+    lastLeaveAt: string;
+    durationSeconds: number;
+    occurrences: number;
+    status: "MISSING" | "RECORDED";
+  }[];
+  unmatched: {
+    name: string;
+    email: string | null;
+    reason: "NO_MATCH" | "AMBIGUOUS" | "NOT_ENROLLED";
+    occurrences: number;
+  }[];
+}
+
+export interface AppliedAttendanceReconciliation extends AttendanceReconciliation {
+  applied: number;
 }
 
 // ── Audit log (see audit.endpoints.md) ───────────────────────────────────────
@@ -554,7 +699,9 @@ export interface PublicCourse {
   description: string | null;
   monthlyFee: string;
   bannerUrl: string | null;
+  bannerAlt: string | null;
   backdropUrl: string | null;
+  backdropAlt: string | null;
   subject: { name: string };
   teacher: { name: string };
 }

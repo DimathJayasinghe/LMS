@@ -6,10 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { ExamStatusBadge } from "@/components/features/ExamStatusBadge";
 import { ExamNotice } from "../../exams/[examId]/_components/ExamNotice";
 import { GradeSubmissionRow } from "./_components/GradeSubmissionRow";
+import { MarkerAssignmentPanel } from "./_components/MarkerAssignmentPanel";
 import { PublishResultsButton } from "./_components/PublishResultsButton";
 import { api, ApiError } from "@/lib/api";
 import { examTypeLabel, formatExamWindow, getExamStatus } from "@/lib/exam";
-import type { ApiList, ApiSuccess, ExamDetail, ExamSubmission, User } from "@/lib/types";
+import type {
+  AcademicStaff,
+  ApiList,
+  ApiSuccess,
+  ExamDetail,
+  ExamMarkerAssignment,
+  ExamSubmission,
+  User,
+} from "@/lib/types";
 
 export default async function GradeExamPage({
   params,
@@ -64,6 +73,18 @@ export default async function GradeExamPage({
   const canPublish = user.role === "SUPER_ADMIN" || user.role === "TEACHER";
   const graded = submissions?.filter((s) => s.marks !== null).length ?? 0;
   const total = submissions?.length ?? 0;
+  const [availableMarkers, assignedMarkers] = canPublish
+    ? await Promise.all([
+        api
+          .get<ApiList<AcademicStaff>>("/users/academic-staff?role=MARKER", { cookie })
+          .then((response) => response.data)
+          .catch(() => [] as AcademicStaff[]),
+        api
+          .get<ApiList<ExamMarkerAssignment>>(`/exams/${examId}/markers`, { cookie })
+          .then((response) => response.data)
+          .catch(() => [] as ExamMarkerAssignment[]),
+      ])
+    : [[], []];
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -92,6 +113,13 @@ export default async function GradeExamPage({
         <ExamNotice icon={Ban} title="Not assigned" message={gateError} />
       ) : (
         <>
+          {canPublish && (
+            <MarkerAssignmentPanel
+              examId={examId}
+              markers={availableMarkers}
+              assignments={assignedMarkers}
+            />
+          )}
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-5 py-3">
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{graded}</span> of{" "}
@@ -122,6 +150,7 @@ export default async function GradeExamPage({
                     totalMarks={exam.totalMarks}
                     mcqPayload={exam.mcqPayload}
                     published={exam.isPublished}
+                    viewerRole={user.role}
                   />
                 </li>
               ))}

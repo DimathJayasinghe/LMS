@@ -3,10 +3,13 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { CollectPayment } from "./CollectPayment";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { PaymentOverrideForm } from "./PaymentOverrideForm";
+import { PaymentAdjustmentPanel } from "./PaymentAdjustmentPanel";
 import type { ApiSuccess, BulkUploadResult, Payment, PaymentStatus, PaymentSummary } from "@/lib/types";
 
 interface Props {
@@ -18,6 +21,7 @@ interface Props {
   status: PaymentStatus | "all";
   statuses: PaymentStatus[];
   summary: PaymentSummary | null;
+  canOverride: boolean;
 }
 
 const inputClass =
@@ -32,12 +36,15 @@ export function AdminPayments({
   status,
   statuses,
   summary,
+  canOverride,
 }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [result, setResult] = useState<BulkUploadResult | null>(null);
+  const [selectedOverride, setSelectedOverride] = useState<Payment | null>(null);
+  const [selectedLedger, setSelectedLedger] = useState<Payment | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -65,7 +72,9 @@ export function AdminPayments({
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.upload<ApiSuccess<BulkUploadResult>>("/payments/bulk-upload", form);
+      const res = await api.upload<ApiSuccess<BulkUploadResult>>("/payments/bulk-upload", form, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
       setResult(res.data);
       router.refresh();
     } catch (e) {
@@ -81,12 +90,13 @@ export function AdminPayments({
     { label: "Paid", value: summary?.paidCount ?? "—" },
     { label: "Pending", value: summary?.pendingCount ?? "—" },
     { label: "Failed", value: summary?.failedCount ?? "—" },
+    { label: "Refunded", value: summary?.refundedCount ?? "—" },
   ];
 
   return (
     <div className="space-y-6">
       {/* Month summary */}
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-5">
         {stats.map((s) => (
           <div key={s.label} className="rounded-2xl border border-border bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</p>
@@ -137,6 +147,7 @@ export function AdminPayments({
                 <th className="px-4 py-3 font-medium">Month</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                {canOverride && <th className="px-4 py-3 font-medium">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -153,15 +164,49 @@ export function AdminPayments({
                     <span className="text-muted-foreground"> · {p.enrollment.course.year}</span>
                   </td>
                   <td className="px-4 py-3 tabular-nums text-muted-foreground">{p.paymentMonth}</td>
-                  <td className="px-4 py-3 tabular-nums">{formatCurrency(p.amount)}</td>
+                  <td className="px-4 py-3 tabular-nums">
+                    {formatCurrency(p.amount)}
+                    {Number(p.refundedAmount) > 0 && (
+                      <p className="text-xs text-sky-600">−{formatCurrency(p.refundedAmount)} refunded</p>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <PaymentStatusBadge status={p.status} />
                   </td>
+                  {canOverride && (
+                    <td className="space-y-1 px-4 py-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Override ${p.enrollment.user.name}'s payment`}
+                        onClick={() => { setSelectedLedger(null); setSelectedOverride(p); }}
+                      >
+                        Override
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Refund or view ledger for ${p.enrollment.user.name}`}
+                        onClick={() => { setSelectedOverride(null); setSelectedLedger(p); }}
+                      >
+                        Refund / ledger
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {selectedOverride && (
+        <PaymentOverrideForm payment={selectedOverride} onClose={() => setSelectedOverride(null)} />
+      )}
+      {selectedLedger && (
+        <PaymentAdjustmentPanel payment={selectedLedger} onClose={() => setSelectedLedger(null)} />
       )}
 
       {total > 0 && (
@@ -207,7 +252,7 @@ export function AdminPayments({
           <input
             ref={fileRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             aria-label="Bulk payment file"
             disabled={uploading}
             onChange={(e) => {

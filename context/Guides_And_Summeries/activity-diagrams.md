@@ -354,9 +354,9 @@ sequenceDiagram
     VideoController-->>Client: video response
 
     Client->>VideoController: GET /:id/stream
-    VideoController->>VideoService: generateStreamUrl(id, req.ip)
-    VideoService->>Bunny: generate IP-bound signed HLS URL + embed URL
-    VideoService-->>VideoController: streamUrl + embedUrl + expiresAt
+    VideoController->>VideoService: generateStreamUrl(videoId, actor)
+    VideoService->>Bunny: sign embed URL (token + expiry)
+    VideoService-->>VideoController: embedUrl + watermark + expiresAt
     VideoController-->>Client: stream response
 ```
 

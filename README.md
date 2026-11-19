@@ -1,16 +1,23 @@
 # Academic LMS
 
-Learning Management System for a **single tuition institution** (~1,200 students) with several teachers across multiple subjects. Built to run **cheaply on one small VPS** — no Kubernetes, no auto-scaling.
+[![CI](https://github.com/DimathJayasinghe/LMS/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/DimathJayasinghe/LMS/actions/workflows/ci.yml)
+
+Learning Management System for Sri Lankan tuition institutes (A/L and similar classes). Deployed for **one organization first** (~1,200 students, several teachers across multiple subjects) and being made **multi-tenant ready** so more institutes can be onboarded later. Built to run **cheaply on one small VPS** — no Kubernetes, no auto-scaling.
 
 ## Features
 
+- Super-admin subject-to-teacher assignments and teacher-owned class authoring
+- Teacher session/video management, exact marker assignment, and audited released-result correction
+- Student current-enrollment dashboard with new READY lessons, upcoming sessions, and seen state
+- Role/ownership gates, mutation audit trails, fail-fast migrations, and zero-advisory dependency baseline
+
 - **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — with optional per-user permission overrides
 - **Academic model** — Subject → Course (one teacher) → Class Sessions & Exams; students enrol + pay per course
-- **Classes** — delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes
+- **Classes** — physical, online, or both. Delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes. A `HYBRID` enrollment type (one fee, both modes) is designed but not built
 - **Content protection** — enrolled + paid gating; recorded video via Bunny's **token-authenticated embed player** (MediaCage DRM) + a per-student watermark overlay; server-signed Zoom live join
 - **Exams** — one mixed paper (MCQ + structured + essay) for both online and physical students; submit via MCQ, typed answers, or scanned PDF upload; server-authoritative timers
 - **Marking & Results** — marker assignment, grading, batch result publishing via SSE
-- **Payments** — PayHere **onsite checkout** (in-app modal, no redirect), bulk Excel import, and an admin records/summary dashboard; idempotency keys
+- **Payments** — PayHere **onsite checkout** (in-app modal, no redirect), front-desk/branch cash collection with receipts, bulk Excel import, and an admin records/summary dashboard; idempotency keys. A staff-approved **bank-transfer slip** channel is designed but not built
 - **Notifications** — SMS (Notify.lk), real-time SSE push, BullMQ background jobs
 
 ## Tech Stack
@@ -46,13 +53,25 @@ optional `ngrok` service tunnels it to a public HTTPS URL so Bunny/Zoom/PayHere 
 docker compose up -d --build      # postgres + redis + backend + worker + nginx + frontend + ngrok
 ```
 
+The backend applies checked-in Prisma migrations before it starts. Migration failure is fatal; do not
+use `prisma db push` against a persistent environment. Existing pre-2026-08-20 development databases
+need the one-time adoption procedure in
+[`database_migration_guide.md`](./context/Guides_And_Summeries/database_migration_guide.md#one-time-adoption-for-a-database-previously-managed-by-db-push).
+
 For ngrok: set `NGROK_AUTHTOKEN` (+ optional reserved `NGROK_DOMAIN`) in `backend/.env`. Webhook
 URLs are `https://<ngrok-domain>/api/{videos/bunny-webhook, attendance/zoom-webhook, payments/payhere/notify}`.
 See the appendix in [`context/documents/09-cost-and-hosting.md`](./context/documents/09-cost-and-hosting.md).
 
+**Option A2 — fully offline** (no Cloudflare/Bunny/Notify.lk accounts): `cp backend/.env.local.example backend/.env`, then
+`docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. File storage runs in a local
+S3-compatible container and SMS is logged instead of sent. What is and is not emulated (no DRM locally):
+[`16-local-development.md`](./context/documents/16-local-development.md).
+
 **Option B — run the apps directly** (fast UI iteration with hot-reload):
 
 ```bash
+# Optional: use the offline local drivers while running on the host. Start only the dependencies first:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis storage storage-init
 cd backend && npm install && npx prisma generate && npm run dev
 cd frontend && npm install && npm run dev
 ```
@@ -77,7 +96,7 @@ Full runbook and monthly cost breakdown: [`context/documents/09-cost-and-hosting
 
 ## Docs
 
-Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`.
+Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`. For where the product stands against the full requirement list see [`15-requirements-traceability.md`](./context/documents/15-requirements-traceability.md); the multi-tenancy plan is [`14-multi-tenancy-readiness.md`](./context/documents/14-multi-tenancy-readiness.md); local offline setup and provider drivers are in [`16-local-development.md`](./context/documents/16-local-development.md); the payment-channel and `HYBRID` design is in [`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`](./docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
 
 ## License
 

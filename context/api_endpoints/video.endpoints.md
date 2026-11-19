@@ -75,13 +75,18 @@ Returned by most endpoints:
 
 ## Endpoints Summary
 
+All teacher mutations are ownership-scoped through the recording's class session and course.
+`POST /uploads`, manual `POST /`, `PATCH /:id`, and `DELETE /:id` now emit respectively
+`VIDEO_UPLOAD_INITIATED`, `VIDEO_ATTACHED`, `VIDEO_UPDATED`, and `VIDEO_DELETED`. Upload initiation
+and manual attachment require an `Idempotency-Key`.
+
 | Method | Path | Auth Roles | Description |
 |--------|------|------------|-------------|
 | `POST` | `/uploads` | `TEACHER`, `SUPER_ADMIN` | Start a direct-to-Bunny upload; returns a signed TUS target. |
 | `POST` | `/bunny-webhook` | None (HMAC signature, read-only key) | Bunny's processing-complete/failed callback. |
-| `POST` | `/` | `ADMIN` | Attach an already-on-Bunny video to a class session (legacy manual flow). |
-| `PATCH` | `/:id` | `ADMIN` | Update video title or duration metadata. |
-| `DELETE` | `/:id` | `ADMIN` | Remove the video DB record (Bunny asset untouched). |
+| `POST` | `/` | `TEACHER`, `SUPER_ADMIN` | Attach an already-on-Bunny video to an owned class session (legacy manual flow). |
+| `PATCH` | `/:id` | `TEACHER`, `SUPER_ADMIN` | Update owned video title or duration metadata. |
+| `DELETE` | `/:id` | `TEACHER`, `SUPER_ADMIN` | Remove an owned video DB record (Bunny asset untouched). |
 | `GET` | `/class/:classId` | Any authenticated | List videos for a course (paginated); students see only `READY`. |
 | `GET` | `/:id` | Any authenticated | Get single video metadata. |
 | `GET` | `/:id/stream` | Any authenticated | Get token-authenticated signed embed URL (+ watermark). `409 VIDEO_NOT_READY` if not yet processed. |
@@ -94,7 +99,7 @@ Returned by most endpoints:
 
 Attaches a Bunny Stream video to a class session. The Bunny video must be uploaded to Bunny Stream separately (via the Bunny dashboard or API). This endpoint only records the association in the database.
 
-**Roles:** `ADMIN` only
+**Roles:** `TEACHER` (owned course) or `SUPER_ADMIN`
 
 **Request Body**
 
@@ -130,7 +135,7 @@ Attaches a Bunny Stream video to a class session. The Bunny video must be upload
 |--------|------|-------|
 | 400 | — | Zod validation failure |
 | 401 | — | Not authenticated |
-| 403 | — | Not `ADMIN` |
+| 403 | — | Not an allowed role or not the owning teacher |
 | 404 | `CLASS_SESSION_NOT_FOUND` | Session deleted or does not exist |
 
 ---
@@ -139,7 +144,7 @@ Attaches a Bunny Stream video to a class session. The Bunny video must be upload
 
 Updates a video recording's display metadata. Does **not** touch the Bunny Stream asset.
 
-**Roles:** `ADMIN` only
+**Roles:** `TEACHER` (owned course) or `SUPER_ADMIN`
 
 **Request Body** (all fields optional — send only what changes)
 
@@ -166,7 +171,7 @@ Updates a video recording's display metadata. Does **not** touch the Bunny Strea
 |--------|------|-------|
 | 400 | — | Zod validation failure |
 | 401 | — | Not authenticated |
-| 403 | — | Not `ADMIN` |
+| 403 | — | Not an allowed role or not the owning teacher |
 | 404 | `VIDEO_NOT_FOUND` | Video does not exist |
 
 ---
@@ -175,7 +180,7 @@ Updates a video recording's display metadata. Does **not** touch the Bunny Strea
 
 Removes the `VideoRecording` row from the database. **Does not delete the video from Bunny Stream.** The Bunny asset must be removed manually from the Bunny dashboard if desired.
 
-**Roles:** `ADMIN` only
+**Roles:** `TEACHER` (owned course) or `SUPER_ADMIN`
 
 **Success (200)**
 
@@ -192,7 +197,7 @@ Removes the `VideoRecording` row from the database. **Does not delete the video 
 | Status | Code | Cause |
 |--------|------|-------|
 | 401 | — | Not authenticated |
-| 403 | — | Not `ADMIN` |
+| 403 | — | Not an allowed role or not the owning teacher |
 | 404 | `VIDEO_NOT_FOUND` | Video does not exist |
 
 ---

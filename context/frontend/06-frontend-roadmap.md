@@ -3,9 +3,8 @@
 > The build order and page inventory for the frontend, mirroring the backend's `06-progress-tracker.md`.
 > Keep this current: when a screen is done (per Doc 00 §7), move it to **Done** with the date.
 
-_Last updated: 2026-07-15 (see §2 for the full re-verification pass — every item this doc already
-flagged as open on 2026-07-10 is confirmed still open, unchanged, on 2026-07-15; two new rows
-added to §1 for what shipped since)._
+_Last updated: 2026-08-21. The 2026-07-15 re-verification remains the baseline; subsequent completed
+items are called out with their completion date below._
 
 ---
 
@@ -14,30 +13,31 @@ added to §1 for what shipped since)._
 | Area | Status | Notes |
 |---|---|---|
 | Next.js 16 + Tailwind v4 + shadcn scaffold | ✅ Done | `components/ui/` primitives, `components.json`, tokens in `globals.css`. |
-| Poppins font wired | ✅ Done | `app/layout.tsx` (`--font-poppins`). |
+| Resilient system font stack | ✅ Done | `app/layout.tsx` and `globals.css` use a local system sans stack, avoiding a build-time dependency on Google Fonts. |
 | Marketing landing (`/home`) | ✅ Done | Grid backdrop, pill Nav, hero Header + Rainbow CTA, StudentReviews, CourseCard grid, real LMS Footer. Off `styled-components` → Tailwind + `<Link>`; **all colors on design tokens**, icons on **lucide** (FontAwesome removed). Still uses static demo data (real data on `/classes`). |
 | Auth screens (`/auth/login`, `/auth/signup`) | ✅ Wired | Real login (email+password → `POST /auth/login`) and register (→ `POST /auth/register`); shared `AuthAside`; **show/hide password toggle**; API + field-error mapping; redirect to `/dashboard`. |
 | Root `/` | ✅ Done | Redirects to `/home` (`app/page.tsx`). |
 | API client / auth context | ✅ Done | `lib/env.ts`, `lib/types.ts`, `lib/api.ts` (401→refresh→retry), `lib/hooks/useAuth.tsx` (`AuthProvider`/`useAuth`) mounted in root layout. |
 | Authenticated `(app)` shell | ✅ Done | `app/(app)/layout.tsx` server auth-guard (`/auth/me`, forwarded cookies → redirect to login); `AppShell` (fixed sidebar + mobile drawer + sticky TopBar); role-based `Sidebar` (`lib/nav.ts`), `TopBar` user menu + logout. |
 | Role-aware `/dashboard` | ✅ Done | Moved into `(app)`; greets user + renders role-filtered quick-link cards. |
-| Classes: browse + detail | ✅ Wired | `/classes` server-fetches `GET /classes` (search box → `?search`), subject names from `GET /subjects`, "Enrolled" badges from `GET /enrollments/my`. `/classes/[classId]` shows detail + sessions (gracefully gated on `403 NOT_ENROLLED`) + `EnrollPanel`. |
+| Classes: role-aware workspace | ✅ Wired | Teachers see only owned classes and can create/edit classes for subjects assigned by SUPER_ADMIN. Students see current enrollments separately from discovery, with new-lesson and upcoming-session indicators. `/classes/[classId]` shows detail, sessions, recordings, enrollment controls, and advances the student's persisted seen marker. |
+| Course modules and materials | ✅ Wired | Class detail now provides ordered module creation, draft/publish controls, private PDF/JPG/PNG/WebP upload, removal, and authorized downloads. Students receive only released modules; every download is minted server-side after enrollment and current-payment checks. |
 | Enroll → pay | ✅ Wired | `EnrollPanel` (client): self-enroll (`POST /enrollments`, ONLINE/PHYSICAL), drop (`DELETE /enrollments/:id`), and **pay** via the shared `initiatePayherePayment` (`POST /payments/initiate` with a UUID `Idempotency-Key`) → **onsite checkout** (`startPayherePayment` → PayHere modal on our page; card fields in PayHere's iframe, no PCI; redirect only as fallback). Verified against the sandbox merchant (2026-07-11): the onsite modal opens on-page with the merchant + amount, no navigation away. |
-| Timetable | ✅ Wired | `/timetable` server-fetches `GET /timetable/slots` + `GET /classes`, renders a Monday-first weekly view (time range, course/title, mode badge, Zoom join). |
+| Timetable | ✅ Wired | `/timetable` renders a role/cohort-scoped Monday-first view plus staff slot create/edit/disable/restore, conflict errors, generation preview, and the next 30 days of dated sessions. Online occurrences schedule/start/join through the embedded LMS room; no raw recurring Zoom link is rendered. |
 | Enrollment API (backend) | ✅ Added | `POST/GET/DELETE /api/enrollments` (+ `/my`) — the `Enrollment` model previously had no API; this unblocks the paid flow (see `context/api_endpoints/enrollments.endpoints.md`). |
 | Exams: list + sit + results | ✅ Wired | `/exams` (status filter, type/status badges, "Submitted/Results out" hints), `/exams/[examId]` sit flow: MCQ (checkboxes + visual countdown from server `endTime` + localStorage autosave + cross-tab `BroadcastChannel`), typed **or** PDF-upload written channel, one-shot submit, and a results view (marks/feedback gated on publish). **Backend**: `GET /submissions/mine`, typed `writtenAnswers` on `POST /submissions`, `allowTypedAnswers`/`allowPdfUpload` exposed on exam reads. |
 | Teacher: direct-to-Bunny video upload | ✅ Wired | `/classes/[classId]/videos/new` is now a real file-picker upload (not a manual Bunny-ID paste): `POST /videos/uploads` creates a Bunny video + a `VideoRecording` row (`status: UPLOADING`) and returns a signed **TUS** target; the browser (`tus-js-client`) uploads the file **directly to Bunny** with resumable/progress UI — the file never touches our server. `POST /videos/bunny-webhook` (Bunny → us, secret-query-param verified, idempotent) is the **only** thing that flips a video to `READY`/`FAILED`, so the upload survives the teacher going offline the instant the transfer finishes. Students never see non-`READY` videos; staff see a Processing/Failed badge. Streaming a non-`READY` video returns `409 VIDEO_NOT_READY`. ⚠️ **`BUNNY_API_KEY` in `backend/.env` is a malformed GUID** (confirmed via a real 401 from Bunny's management API) — upload creation is blocked until it's replaced with the real Video Library API key from the Bunny dashboard; this may also affect existing stream-token signing, which was never previously verified against Bunny's live CDN. |
 | Recorded video player | ✅ Wired | Class detail lists **Recordings** (`GET /videos/class/:id`, enrollment-gated); `/classes/[classId]/videos/[videoId]` plays via Bunny's **token-authenticated iframe player** (DRM enforced by Bunny), browser-fetched `GET /videos/:id/stream` (per-viewer gating) returning a signed `embedUrl` + `watermark`, with a repositioning **per-student watermark overlay** and `402 PAYMENT_REQUIRED` / `403 NOT_ENROLLED` / `409 VIDEO_NOT_READY` gates. Switched off the raw-HLS `hls.js` path (2026-07-11): Bunny embed-token auth (`SHA256(tokenKey+videoId+expires)`) replaces the broken IP-bound HLS token; webhook fixed to HMAC-verify (read-only key, raw body) + correct status codes (3/4→READY, 5/8→FAILED). **Watch-attendance (2026-07-12):** the player attaches to Bunny's iframe via **Player.js** and fires `POST /attendance/video` once ≥30s is actually watched (or on `ended`) — verified live (real Bunny player → Player.js event → gated attendance record). Full pipeline (upload→webhook→DRM playback→watch-attendance) verified end-to-end on the real Bunny library. |
 | QR attendance (student) | ✅ Wired | `/attendance` is role-aware: a STUDENT sees a scannable **QR of their `barcode`** (`qrcode.react`) to show at the entrance + their attendance history (`GET /attendance/student/:id`, self-scoped). **Backend**: `/auth/me` now returns `barcode` + `setupCompleted` (it previously stripped them, so a student couldn't read their own code). Added STUDENT to the Attendance nav item. |
-| Staff attendance scanner | ✅ Wired | `/attendance` for **SUPER_ADMIN/ADMIN** (front-desk): pick class (`GET /classes`) → session (`GET /classes/:id/sessions`, newest first, Today tagged) → check students in by **keyboard-wedge** (focused field, scan-gun types code + Enter) **or camera QR** (`@zxing/browser` decode from a styled `<video>`, isolated in `QrCamera`) → `POST /attendance/scan`. Live **roster** seeded from `GET /attendance/session/:id`, updated from each scan response and **deduped by `userId`** (upsert-safe). **Manual mark-by-name** fallback: debounced `GET /users?search=&role=STUDENT` → `POST /attendance/manual`. Scan errors mapped inline (`BARCODE_NOT_FOUND`/`STUDENT_DEACTIVATED`/`INVALID_ROLE_FOR_ATTENDANCE`); camera needs a secure context (HTTPS/localhost) and degrades to the wedge field on deny/insecure. TEACHER/MARKER keep `ComingSoon`. Frontend-only (all endpoints existed; added `@zxing/browser`). Verified: 5 Vitest+RTL tests + `tsc`/build + a headless-Chromium smoke on the live stack (wedge scan → roster, dedup, manual mark, camera toggle opens a fake-device stream, STUDENT sees QR, TEACHER bounced). ⚠️ Full QR-decode-*from camera* isn't driven headless — the decoded-string→submit path is identical to the wedge path, which is covered. |
-| Marking: queue + grade + publish | ✅ Wired | `/submissions` lists gradable exams (active/ended); `/submissions/[examId]` is the grading queue (per-student rows, expand to see typed/MCQ answers or the answer-PDF link, enter marks + feedback → `PATCH /submissions/:id/marks` with an `Idempotency-Key`), plus a **Publish results** action for TEACHER/SUPER_ADMIN (gated until the exam ends). Markers not assigned get a friendly gate. **Backend**: exposed `answers` + `writtenAnswers` on the per-exam submissions list so typed answers are gradable. |
-| Teacher: content authoring | ✅ Wired | On the class detail page, staff get **New session** + **Attach recording** CTAs. `/classes/[classId]/sessions/new` (title, date, duration, mode, Zoom link → `POST /classes/:id/sessions`) and `/classes/[classId]/videos/new` (session picker + title + Bunny video ID + duration → `POST /videos`). Both gated to TEACHER/SUPER_ADMIN. Frontend-only. |
+| Attendance scanner + reporting | ✅ Wired | `/attendance` keeps the **SUPER_ADMIN/ADMIN** entrance scanner: institute → class → session, keyboard-wedge (`BARCODE`) or camera (`QR`), live source-labelled roster, and manual mark-by-name fallback. **SUPER_ADMIN/TEACHER** now also get session reporting plus a completed-meeting Zoom reconciliation preview/apply panel; TEACHER sees only owned courses, and the backend repeats the ownership check. Unknown, conflicting, and not-actively-enrolled identities remain review-only. MARKER stays unsupported. Verified by backend service/utility tests, frontend page/panel tests, full suites, typecheck, lint, and production builds (2026-08-17). |
+| Marking: assign + grade + publish + correct | ✅ Wired | Owning teachers/SUPER_ADMIN replace an exam's exact marker set from `/submissions/[examId]`; assigned markers grade unpublished work; publishing locks marker edits. Owning teachers/SUPER_ADMIN can correct a published result only with a reason, and the backend logs before/after values. All consequential mutations carry idempotency keys. |
+| Teacher: classes and content authoring | ✅ Wired | Teachers create/edit only their own classes and only under SUPER_ADMIN-assigned subjects. Class detail exposes **New session** and **Attach recording** actions; backend ownership checks and audit events repeat the UI gates. SUPER_ADMIN assigns teachers from `/admin/subjects/[subjectId]/teachers`. |
 | Live classes (Zoom Meeting SDK) | ✅ Wired | Every **ONLINE** session on the class detail page gets an in-site CTA (`LiveClassAction`, replacing the old raw `zoomLink` anchor): staff see **Schedule live class** (`POST .../live/schedule`, one-time — provisions a real Zoom meeting) until scheduled, then everyone sees **Start**/**Join**, both routing to `/classes/[classId]/live/[sessionId]` — never zoom.us. That page (`LiveClassRoom`, client) fetches a **fresh, never-cached** join token per visit (`POST .../live/token`), dynamically imports `@zoom/meetingsdk/embedded` (SSR-unsafe), and embeds the meeting via `client.init()`/`client.join()`. Deterrent layers per the endpoint doc's anti-recording section: repositioning watermark (server-derived name + live timestamp, no client-spoofable identity), context-menu suppression, and the backend's meeting-settings lockdown + throttled tokens. Gated errors (`NOT_ENROLLED`/`PAYMENT_REQUIRED`/`LIVE_CLASS_NOT_SCHEDULED`/`TOKEN_RATE_LIMITED`) render friendly states, not crashes; `connection-change` → `Closed` shows an "ended" screen. Packaging note: `@zoom/meetingsdk` peer-pins `react@18.2.0` against this project's `react@19` — installed via a repo `.npmrc` (`legacy-peer-deps=true`); its UMD bundle also statically references the private, unpublished `@zoom/download-manager` (an optional dep of a local-recording-download feature we don't use, since recording is disabled) — aliased to a no-op stub via `turbopack.resolveAlias` in `next.config.ts`, with real `jszip` installed for the bundle's other optional dep. ⚠️ All `ZOOM_*` env vars in `backend/.env` are still placeholders — verified end-to-end via a downstream Prisma fixture (seeding `zoomMeetingId` directly) since the real Zoom API can't be reached yet; blocked on real Server-to-Server OAuth + Meeting SDK credentials (see live-class.endpoints.md's setup checklist). The **Timetable**'s per-slot `zoomLink` (a separate, simpler `TimetableSlot` field for recurring slots) still opens raw zoom.us in a new tab — not yet folded into this in-site flow; flagged as a known follow-up, not done as part of this feature. |
-| Teacher: exam authoring | ✅ Wired | `/exams/new` (TEACHER/SUPER_ADMIN; others redirect): create an exam — title, course, type, window (datetime-local → ISO), total marks, written channels (typed/PDF), a **question-paper PDF upload** (direct-to-R2, server never touches the file — same presigned-PUT pattern as the student answer-PDF channel; retry-safe if only the upload leg fails, never duplicates the exam), and an **MCQ builder** (add questions/options, mark correct). Builds the `mcqPayload` (generated ids) and `POST /exams`. Staff get a **New exam** CTA on `/exams`. Marker assignment deferred (needs user-list access, which TEACHER lacks). Frontend-only (`POST /exams/:id/upload-url` already existed server-side, unwired until now). |
+| Teacher: exam authoring | ✅ Wired | `/exams/new` (TEACHER/SUPER_ADMIN; others redirect) creates exams with typed/PDF channels, direct-to-R2 paper upload, and MCQ authoring. Staff get a **New exam** CTA; marker assignment is now available from the exam's submission workspace using a minimal, role-filtered academic-staff directory. |
 | Admin: user management | ✅ Wired | `/admin/users` (SUPER_ADMIN/ADMIN; others redirect): searchable/filterable (role, status) paginated user table with inline actions — change role (SUPER_ADMIN only), activate/deactivate, assign/edit entrance **barcode**. All via `PATCH /users/:id/{role,status,barcode}`; self-row protected. Frontend-only (endpoints existed). |
 | Admin: subjects & institutes | ✅ Wired | `/admin/subjects` + `/admin/institutes` (**SUPER_ADMIN-only** — stricter than `/admin/users`; ADMIN redirected off both, per the academic-taxonomy/center-allowlist being owner-scoped). Each is a server page (SSR gate + `GET /…?search`) → a single client `*Manager` owning search (`?search` re-fetch), a client-side Active/Inactive/All segmented filter over the SUPER_ADMIN list (which already returns inactive rows — no extra round-trip), inline **create** (toggle form card, `isActive` Switch) and inline **row edit** (one row at a time; opening either collapses the other), and per-row **activate/deactivate** — all `POST`/`PATCH` + `router.refresh()` (server-truth, no optimistic cache). Duplicate name/`code` (409) + validation errors map to inline per-form/per-row text (no toast/modal — none installed). Frontend-only (subject/institute CRUD endpoints existed + tested). **Verified**: 18 Vitest+RTL unit tests (filter, submit-gating, 409→inline, create/edit exclusivity, empty states) + `tsc` + `next build` green, plus a **headless-Chromium UI smoke on the live Docker stack** — create → edit → deactivate (Active hides / All shows "Inactive") → duplicate name/`code` 409 inline, for both resources, and an ADMIN (front-desk) served `/dashboard` at both URLs with no management control (SSR gate holds). `lint` clean on the new files (2 pre-existing errors remain in untouched `Nav.tsx`/`useNotificationStream.ts`). |
-| Payments (student + admin) | ✅ Wired | Role-aware `/payments` (SSR `/auth/me` branch; STUDENT vs SUPER_ADMIN/ADMIN, else redirected). **Student**: per active enrollment a this-month **Pay**/Paid card (Pay → shared `initiatePayherePayment` → **onsite modal** via `startPayherePayment`, redirect fallback) + a status-filterable history table. **Admin**: month **summary** (new `GET /payments/summary?month=` aggregate — SUCCESS total + status counts, Vitest-tested), status/month-filtered paginated records table, and **Excel bulk upload** (`api.upload` multipart → `{total,created,updated,skipped,errors[]}` rendered with per-row errors). Added STUDENT to the `/payments` nav item. **Bug fixed en route**: `/payments/initiate` requires a UUID `Idempotency-Key` (repo invariant) that neither EnrollPanel nor the new page sent — extracted `redirectToPayhere`/`currentPaymentMonth` + a new `initiatePayherePayment` (which mints the key) into `lib/payhere.ts`, so both call sites now complete a real PayHere charge. Verified: 10 Vitest+RTL unit tests + `tsc`/build + a headless-Chromium smoke on the live stack (student Pay → real POST to sandbox.payhere.lk; admin summary/filter/bulk-upload; TEACHER bounced). No more `(app)` route stubs remain. |
-| Admin: financial reports | ✅ Wired | `/admin/reports` (**SUPER_ADMIN-only**; ADMIN redirected — matches the backend's `requireRole(SUPER_ADMIN)` on the endpoint). Server page (SSR `/auth/me` gate) fetches the new `GET /payments/reports?month=YYYY-MM` aggregate → four views built to the **dataviz** skill: three stat tiles (collected this month / outstanding expected+count / courses earning), a 12-month **revenue-trend** bar chart, a per-**course** horizontal bar chart, and a per-**method** donut, plus a collapsible **"View as table"** fallback (accessible/print/CVD-safe). A client `MonthPicker` (`<input type=month>`) pushes `?month=` for server re-fetch. Charts use **Recharts** with every mark driven off `--foreground` (theme-aware — the design system's `--chart-*` grays don't invert, so they'd fail contrast at the ramp ends); the method donut lightness-encodes via `fillOpacity` keyed to **method identity** (`METHOD_OPACITY`, stable under filtering — never repaints by rank) with a legend + values so identity is never shade-alone; recessive grid/axes, 4px rounded bar ends, hover tooltips in popover tokens, empty/zero states. Pure formatters (`formatLkr`/`compactLkr`/`shortMonth`/`monthLabel`/`pct`) extracted to `lib/reports.ts`. Verified: 7 Vitest unit tests (`lib/reports.test.ts`) + `tsc` + `next build` green; live smoke on the Docker stack pending. Frontend-only bar the new endpoint (backend done + Vitest-tested separately). |
+| Payments (student + admin) | ✅ Wired | Role-aware `/payments` (SSR `/auth/me` branch; STUDENT vs SUPER_ADMIN/ADMIN, else redirected). Student Pay/history and admin summary/filter/bulk-upload/entrance collection remain. Added 2026-08-19: SUPER_ADMIN reviewed overrides plus immutable refund/adjustment ledger UI; completed external refunds require proof, use idempotency keys, show gross/refunded amounts, and net financial totals. Front-desk ADMIN receives no financial mutation controls. |
+| Financial reports | ✅ Wired | `/admin/reports` supports `SUPER_ADMIN` global/teacher/class aggregates and `TEACHER` own-class aggregates; front-desk `ADMIN` remains denied. The backend force-replaces teacher scope with the authenticated teacher ID and returns no individual student finance history. The server page provides month/teacher/class filters (teacher filter only for SUPER_ADMIN), teacher/class/method tables and charts, trend, and outstanding totals. Role-scope tests cover query tampering and UI visibility. Production-Docker verification is recorded in the current progress entry. |
 | Profile edit + credential management | ✅ Wired | 2026-07-13, PR #66 — see `docs/superpowers/specs/2026-07-13-profile-edit-credential-management-design.md` for the full design (password-change cooldown, credential forms, avatar upload). |
 | Pay-at-entrance + printable receipts | ✅ Wired | 2026-07-14/15 — `CollectPayment` (search/scan a student by name or barcode → pick enrollment → outstanding month → collect, session summary + print) wired into `/payments` admin view; `PaymentReceipt` + `/payments/[id]` printable receipt with QR, linked from both the collection flow and the student's own payment history. Backend: `POST /payments/collect-entrance`, `GET /users/resolve-barcode`. `QrCamera` promoted from the attendance feature to `components/custom/` for reuse here. |
 | Student account-setup (NIC + barcode) | ✅ Wired | `/auth/account-setup` (STUDENT-only, `auth` route group — not `(app)`): two NIC photo pickers (front/back, direct-to-R2 presigned PUT, same server-never-touches-the-file pattern as exam PDFs) and an optional institute-barcode section (picker from `GET /institutes` + text input for the code the institute already gave the student, add/remove). `(app)/layout.tsx` now redirects an incomplete `STUDENT` here before any other screen renders; a completed student can revisit anytime via the TopBar user menu ("Account setup") to manage institute barcodes. **Backend** (new): `POST /users/me/nic/upload-url`, `GET/POST /users/me/institute-barcodes`, `DELETE .../:barcodeId` — all STUDENT-gated; `setupCompleted` auto-flips server-side once both NIC sides are on file, no admin-approval step (decision 2026-07-10, see `account-setup.endpoints.md`). Also: `User.barcode` (LMS QR) is now **auto-generated at registration** (`LMS-<indexNumber>`), not left null until an admin assigns one. Verified on the running production stack: **26/26** — auto-gen QR, presigned-URL round trip with a **real PUT to R2** (R2 creds are live, unlike Bunny/Zoom's placeholders), `setupCompleted` flip timing, STUDENT-only role gate, per-institute-not-global barcode uniqueness (same value accepted at institute B after being taken at institute A), ownership-scoped delete (404 not 403, cross-student), and the full SSR gate (incomplete→redirected, non-student bounced away, complete→through). `lint` + `tsc` + `next build` green. |
@@ -58,6 +58,10 @@ _Resolved 2026-07-10:_
    tokens (dark-mode safe); fixed invalid Tailwind classes (`w-15`, `-rotate-25`); FontAwesome → lucide (dep removed).
 5. ~~Placeholder `href="#"` links.~~ **Fixed** — `CourseCard`/`Footer` now use real routes (`<Link>`).
 7. ~~Vendored Magic UI lint errors.~~ **Fixed** — scoped `eslint-disable` with justification; `lint` is now clean.
+
+_Resolved 2026-08-17:_
+13. ~~Attendance showed `ComingSoon` for TEACHER.~~ **Fixed** — owning teachers now have session
+    rosters and Zoom reconciliation; MARKER remains intentionally unsupported by the role model.
 
 _Still open (re-verified against real code 2026-07-15 — every item below confirmed unchanged since
 it was first found; none have drifted in either direction):_
@@ -82,11 +86,8 @@ it was first found; none have drifted in either direction):_
 11. **Timetable's per-slot `zoomLink` still opens raw `zoom.us`** in a new tab
     (`app/(app)/timetable/page.tsx`), not routed through the embedded Meeting SDK flow the
     class-detail page uses — confirmed still true 2026-07-15.
-12. **TEACHER course create/edit + timetable-slot authoring UI still doesn't exist** — no
-    `classes/new` route, no timetable-slot-authoring component anywhere — confirmed still true
-    2026-07-15.
-13. **Attendance scanner still shows `ComingSoon` for TEACHER/MARKER** (`app/(app)/attendance/page.tsx`)
-    — confirmed still true 2026-07-15.
+12. **Timetable-slot authoring UI still doesn't exist.** TEACHER course create/edit was completed
+    2026-08-20 with assigned-subject and ownership enforcement; recurring timetable-slot authoring remains.
 14. **All of Phase 9's polish items are still un-started**, confirmed by direct grep 2026-07-15: no
     toast library installed at all, no dark-mode/`next-themes` anywhere, zero `error.tsx`/
     `global-error.tsx` files under `app/`, and only 12 of 32 `page.tsx` routes have a `loading.tsx`
@@ -118,7 +119,7 @@ it was first found; none have drifted in either direction):_
 - ✅ Browse subjects/courses → course detail → **enroll** → **pay** — `/classes`, `/classes/[classId]`,
   `EnrollPanel` (self-enroll + PayHere initiate). Added the backend enrollment endpoints to unblock it.
 - ✅ Timetable view (weekly) — `/timetable`. Class sessions list on the detail page (enrolled-gated).
-- ✅ Recorded **video player** (IP-bound stream token, enrolled+paid gate) — Recordings list on class
+- ✅ Recorded **video player** (signed Bunny embed URL, enrolled+paid gate) — Recordings list on class
   detail + `/classes/[classId]/videos/[videoId]` (`hls.js`, browser-side token fetch).
 - ✅ **Live classes** (Zoom Meeting SDK, embedded in-site) — schedule/start/join CTA on the class detail
   page, `/classes/[classId]/live/[sessionId]` room with watermark + basic UI hardening. Blocked on real
@@ -129,9 +130,8 @@ it was first found; none have drifted in either direction):_
   (barcode QR + history). Added `barcode`/`setupCompleted` to `/auth/me`.
 
 **Phase 4 — Staff / teacher / marker / admin:** 🟡 **In progress (2026-07-10)**
-- 🟡 TEACHER: manage own courses, sessions, timetable slots, videos, exams. ✅ **Exam authoring**
-  (`/exams/new`), ✅ **content authoring** (sessions + attach recordings from the class page). Course
-  create/edit + timetable-slot authoring TBD.
+- 🟡 TEACHER: manage own courses, sessions, videos, exams, marker assignments, and published-result
+  corrections. ✅ Course create/edit, exam authoring, and content authoring. Timetable-slot authoring TBD.
 - ADMIN (front desk): users, enrollment, pay-at-entrance, attendance scanner (camera/QR).
 - ✅ MARKER: submissions queue → grade (marks + feedback) — `/submissions`, `/submissions/[examId]`;
   publish results (TEACHER/SUPER_ADMIN). Exposed `answers`/`writtenAnswers` on the marker list.
@@ -168,6 +168,23 @@ it was first found; none have drifted in either direction):_
 
 _(Move completed items here with date + PR.)_
 
+- 2026-08-20 — **Secure class artwork editor.** `/classes/[classId]/edit` now shows separate banner
+  (1600×600) and backdrop (1920×1080) upload cards with requirements before selection, optional
+  client dimension feedback, preview, accessible image descriptions, replace/remove controls, and
+  visible errors. Arbitrary URL inputs were removed. The browser uses the ownership-scoped
+  presign → direct public-R2 PUT → server-confirm flow; the server remains authoritative for MIME,
+  full-decode, byte, pixel, and exact-dimension checks. New-class UX explains that artwork becomes
+  available after the class has been created. Production headless-Chromium smoke confirmed both
+  visible editors, the exact dimension guidance, accessible fields, absence of URL inputs, and no
+  page errors; positive/negative real-R2 API smoke verified the complete lifecycle.
+
+- 2026-08-17 — **Teacher attendance reporting + Zoom recovery.** `/attendance` now gives an owning
+  TEACHER a course/session picker, source-labelled roster, and read-before-write Zoom difference panel;
+  SUPER_ADMIN gets the same report below the existing entrance scanner. Applying a preview uses a UUID
+  `Idempotency-Key`, refreshes Zoom server-side, inserts only missing active course enrollments, and leaves
+  unknown/conflicting identities for manual review. Added regression coverage for role-scoped page wiring,
+  preview/apply behavior, identity aggregation, enrollment gating, ownership, pagination, and retries.
+
 - 2026-07-10 — Phase 1: **Student account setup** (NIC upload + institute barcodes). `/auth/account-setup`
   (STUDENT-only): two NIC photo pickers (front/back), direct-to-R2 presigned PUT — same pattern as exam
   PDFs, server never touches the file. Optional institute-barcode section (plain text — the student types
@@ -182,9 +199,9 @@ _(Move completed items here with date + PR.)_
   per-institute (not global) barcode uniqueness confirmed both ways (same value rejected at the same
   institute, accepted at a different one), ownership-scoped delete, STUDENT-only role gate, and the full
   SSR flow (incomplete-setup redirect, non-student bounce, complete-setup pass-through). While
-  investigating this, found and documented (not fixed) two related gaps: `POST /attendance/scan` never
-  uses `StudentBarcode`/institute context (only the LMS QR), and `POST /attendance/video` exists
-  server-side but nothing on the frontend calls it — see `attendance.endpoints.md`. `lint` + `tsc` +
+  investigating this, found and documented two related gaps: `POST /attendance/scan` did not use
+  `StudentBarcode`/institute context (fixed 2026-08-13), and `POST /attendance/video` had no frontend
+  caller (fixed 2026-07-12) — see `attendance.endpoints.md`. `lint` + `tsc` +
   `next build` green (24 routes) on both frontend and backend.
 - 2026-07-10 — Phase 4 (part 5): **Direct-to-Bunny video upload**. Teachers now upload the recording file
   itself through the site: `POST /videos/uploads` (new; TEACHER/SUPER_ADMIN) creates the Bunny video +
@@ -234,8 +251,9 @@ _(Move completed items here with date + PR.)_
   (datetime-local → ISO), total marks, written channels (typed/PDF, shown for WRITTEN/HYBRID), and
   `McqBuilder` (client, shown for MCQ/HYBRID — add/remove questions + options, mark correct, per-question
   marks). Client-validates then builds the `mcqPayload` (generated `q*/o*` ids) and `POST /exams`. Added a
-  **New exam** CTA (staff-only) to `/exams` and a role-aware description. Marker assignment deferred (needs
-  `GET /users?role=MARKER`, which TEACHER can't call). New: `lib/roles.ts` unaffected; frontend-only.
+  **New exam** CTA (staff-only) to `/exams` and a role-aware description. Marker assignment was deferred
+  at that time; it was completed on 2026-08-20 using the scoped academic-staff endpoint and exact-set UI.
+  New: `lib/roles.ts` unaffected; frontend-only.
   Verified on the running stack: **7/7** — the form's exact MCQ payload is accepted (201), staff detail
   keeps `isCorrect`, the enrolled student sees it answer-stripped during the window and can submit; plus
   SSR render of the form + staff CTA + student redirect. `lint` + `next build` green (21 routes).
@@ -276,6 +294,10 @@ _(Move completed items here with date + PR.)_
   `402`/`403` gate cards, retry, token-expiry handling, and the HDCP black-screen tip. Added `hls.js` dep,
   `VideoRecording`/`StreamData` types, `lib/video.ts` (`formatDuration`), route `loading.tsx`. Frontend-only
   (no backend change — video endpoints already existed). `lint` + `next build` green (18 routes).
+  *Superseded 2026-07-11:* the player now renders Bunny's token-authenticated iframe embed with a
+  repositioning watermark and no longer uses `hls.js`; the stream is not IP-bound. See
+  `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`. The "HDCP black-screen tip" described
+  above does not exist in the current player.
 - 2026-07-10 — Phase 3 (part 2): **Exams**. `/exams` list (status filter, type/status badges, submission
   hints) + `/exams/[examId]` sit flow (MCQ checkboxes, visual countdown from server `endTime`, localStorage
   autosave + `BroadcastChannel` cross-tab sync, typed **or** PDF-upload written channel, one-shot submit) and a

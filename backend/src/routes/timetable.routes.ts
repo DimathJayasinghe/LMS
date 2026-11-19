@@ -4,10 +4,12 @@ import * as TimetableController from '@/controllers/timetable.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
   createTimetableSlotSchema,
   generateSessionsSchema,
   listTimetableQuerySchema,
+  listUpcomingSessionsQuerySchema,
   publicUpcomingQuerySchema,
   timetableSlotIdParamSchema,
   updateTimetableSlotSchema,
@@ -32,6 +34,7 @@ timetableRoutes.post(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateBody(createTimetableSlotSchema),
+  checkIdempotency,
   TimetableController.createSlot,
 );
 
@@ -41,6 +44,13 @@ timetableRoutes.get(
   verifyToken,
   validateQuery(listTimetableQuerySchema),
   TimetableController.listSlots,
+);
+
+timetableRoutes.get(
+  '/sessions',
+  verifyToken,
+  validateQuery(listUpcomingSessionsQuerySchema),
+  TimetableController.listUpcomingSessions,
 );
 
 timetableRoutes.get(
@@ -56,6 +66,7 @@ timetableRoutes.patch(
   requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(timetableSlotIdParamSchema),
   validateBody(updateTimetableSlotSchema),
+  checkIdempotency,
   TimetableController.updateSlot,
 );
 
@@ -64,14 +75,24 @@ timetableRoutes.delete(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateParams(timetableSlotIdParamSchema),
+  checkIdempotency,
   TimetableController.deleteSlot,
 );
 
 // ─── Manual generation of dated sessions from slots ─────────
 timetableRoutes.post(
+  '/generate/preview',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
+  validateBody(generateSessionsSchema),
+  TimetableController.previewGeneration,
+);
+
+timetableRoutes.post(
   '/generate',
   verifyToken,
-  requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.ADMIN),
   validateBody(generateSessionsSchema),
+  checkIdempotency,
   TimetableController.generateSessions,
 );

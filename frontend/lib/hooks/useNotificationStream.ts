@@ -18,7 +18,10 @@ interface NotificationCreatedPayload {
 
 export function useNotificationStream(onEvent: (payload: NotificationCreatedPayload) => void): void {
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   useEffect(() => {
     const source = new EventSource(`${API_URL}/stream`, { withCredentials: true });

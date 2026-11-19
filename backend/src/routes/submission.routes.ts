@@ -4,11 +4,12 @@ import * as SubmissionController from '@/controllers/submission.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
-import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import { checkActorIdempotency, checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
   startSubmissionSchema,
   completeSubmissionSchema,
   completeSubmissionBodySchema,
+  correctPublishedResultSchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
   listMySubmissionsQuerySchema,
@@ -42,6 +43,16 @@ submissionRoutes.patch(
   SubmissionController.completeSubmission,
 );
 
+submissionRoutes.patch(
+  '/:id/result-correction',
+  verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+  validateParams(submissionIdParamSchema),
+  validateBody(correctPublishedResultSchema),
+  checkIdempotency,
+  SubmissionController.correctPublishedResult,
+);
+
 // ─── List My Submissions (Student) ──────────────────────────
 // A student reads their own submissions; marks/feedback appear once published.
 submissionRoutes.get(
@@ -70,7 +81,9 @@ submissionRoutes.patch(
   requireRole(Role.MARKER),
   validateParams(submissionIdParamSchema),
   validateBody(submitMarksSchema),
-  checkIdempotency,
+  // Revalidate the exact audience before a cached response can expose answers.
+  SubmissionController.authorizeMarks,
+  checkActorIdempotency,
   SubmissionController.submitMarks,
 );
 
@@ -81,5 +94,6 @@ submissionRoutes.post(
   verifyToken,
   requireRole(Role.SUPER_ADMIN, Role.TEACHER),
   validateParams(publishResultsParamsSchema),
+  checkIdempotency,
   SubmissionController.publishResults,
 );

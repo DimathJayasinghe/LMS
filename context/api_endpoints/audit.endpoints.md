@@ -75,6 +75,21 @@ actor do at the time," and `actor.role` for "what can they do now."
 
 ## Writing new audit events
 
+The 2026-08-20 academic-workspace slice added these filterable actions:
+`SUBJECT_TEACHERS_ASSIGNED`, `COURSE_TEACHER_ASSIGNED`, `LIVE_CLASS_SCHEDULED`,
+`VIDEO_UPLOAD_INITIATED`, `VIDEO_ATTACHED`, `VIDEO_UPDATED`, `VIDEO_DELETED`,
+`EXAM_PAPER_ATTACHED`, and `RESULT_CORRECTED`. Corrections include structured before/after values and
+the mandatory reason; teacher/subject/marker replacements include the resulting IDs.
+
+The secure class-artwork slice adds `COURSE_ASSET_UPLOAD_URL`, `COURSE_ASSET_UPDATED`, and
+`COURSE_ASSET_REMOVED`. Metadata records the asset kind and safe upload attributes, never the signed
+PUT URL or a secret. No-op repeated removal does not create a misleading removal event.
+
+The private course-material slice adds `COURSE_MODULE_CREATED`, `COURSE_MODULE_UPDATED`,
+`COURSE_MODULE_REMOVED`, `COURSE_MATERIAL_UPLOAD_URL`, `COURSE_MATERIAL_ATTACHED`,
+`COURSE_MATERIAL_UPDATED`, `COURSE_MATERIAL_REMOVED`, and `COURSE_MATERIAL_DOWNLOADED`.
+Download events record only course/module/material IDs; signed URLs and R2 keys are excluded.
+
 Any privileged mutation should call `AuditService.log(...)` from the controller layer (fire-and-
 forget — never blocks the response, write failures are logged not thrown). See
 `backend/src/services/audit.service.ts` and the `AUDIT_ACTION` constant map. When adding a new

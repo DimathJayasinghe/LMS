@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as PaymentService from '@/services/payment.service';
+import * as PaymentAdjustmentService from '@/services/payment-adjustment.service';
 import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import { env } from '@/config/env';
@@ -16,6 +17,7 @@ import {
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
 	financialReportQuerySchema,
+	refundPaymentSchema,
 } from '@/schemas/payment.schema';
 import { getCurrentPaymentMonth } from '@/services/access.service';
 
@@ -71,8 +73,12 @@ export const getPaymentsSummary = asyncHandler(async (req: Request, res: Respons
 });
 
 export const getFinancialReport = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-	const { month } = financialReportQuerySchema.parse(req.query);
-	const data = await PaymentService.getFinancialReport(month ?? getCurrentPaymentMonth());
+	const query = financialReportQuerySchema.parse(req.query);
+	const data = await PaymentService.getFinancialReport(
+		query.month ?? getCurrentPaymentMonth(),
+		query,
+		req.user!,
+	);
 
 	res.status(200).json({
 		status: 'success',
@@ -148,6 +154,42 @@ export const overridePayment = asyncHandler(
 			status: 'success',
 			data: payment,
 			message: 'Payment updated successfully.',
+		});
+	},
+);
+
+export const listPaymentAdjustments = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const { id } = paymentIdParamSchema.parse(req.params);
+		const adjustments = await PaymentAdjustmentService.listPaymentAdjustments(id, req.user!);
+		res.status(200).json({ status: 'success', data: adjustments, count: adjustments.length });
+	},
+);
+
+export const refundPayment = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const { id } = paymentIdParamSchema.parse(req.params);
+		const input = refundPaymentSchema.parse(req.body);
+		const result = await PaymentAdjustmentService.refundPayment(id, input, req.user!);
+
+		void AuditService.log({
+			action: AUDIT_ACTION.PAYMENT_REFUNDED,
+			description: `Completed refund recorded for ${input.amount.toFixed(2)}`,
+			targetType: 'Payment',
+			targetId: id,
+			metadata: {
+				adjustmentId: result.adjustment.id,
+				amount: input.amount.toFixed(2),
+				externalReference: input.externalReference,
+				remainingRefundable: result.remainingRefundable,
+			},
+			context: extractAuditContext(req),
+		});
+
+		res.status(201).json({
+			status: 'success',
+			data: result,
+			message: 'Completed refund recorded.',
 		});
 	},
 );
@@ -237,4 +279,3 @@ const sendBulkPaymentSms = async (): Promise<void> => {
 	// Future: Track affected enrollment IDs during bulkUploadPayments
 	// and send SMS to each student with their payment details.
 };
-

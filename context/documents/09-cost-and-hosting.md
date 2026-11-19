@@ -48,12 +48,20 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
 | **Fixed baseline** | | | **≈ $6–15 / month** |
 
 **Cost controls built into the design:**
-- Bunny **IP-bound tokens** + enrolled/paid gating stop the "leaked link → 5,000 viewers → surprise bandwidth bill" scenario.
+- Bunny **token-authenticated embed URLs** + enrolled/paid gating limit the "leaked link → 5,000 viewers → surprise bandwidth bill" scenario. The token expires after 4 hours (`BUNNY_TOKEN_TTL_SECONDS`) but is **not bound to an IP address**, so a leaked URL can be replayed from anywhere until it expires. Recommended hardening (not yet done): restrict allowed referrers/domains on the Bunny library, shorten the TTL toward the longest lesson length, and set a Bunny bandwidth alert.
 - Cloudflare R2 has **zero egress fees** — downloads don't rack up transfer costs.
 - SMS is a **BullMQ job**, so a result release sends in the background and can be batched/capped.
 - Redis caching keeps DB load low so the single box comfortably absorbs read-heavy spikes (result releases).
 - Self-hosting Postgres removes the managed-DB bill and the free-tier cold-start problem entirely — the only
   DB cost is a few cents of off-site backup storage.
+
+### 2.1 When there is more than one organization
+
+The table above is the cost of **one** organization. Decided 2026-11-19: the code becomes multi-tenant ready ([14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md)), but no second organization is planned yet.
+
+- **Shared across organizations:** the VPS, Postgres, Redis, nginx, the R2 bucket (organization-prefixed keys) and Sentry.
+- **Per organization, billed to that organization:** its Bunny library and bandwidth, its PayHere merchant and fees, its Zoom licence, its SMS credits and sender ID. Provider credentials live in encrypted per-organization settings, not in the shared `.env`.
+- **Capacity is not additive for free.** All organizations share one box, so combined students, concurrent readers and live-class load must be load-tested together before a second customer is onboarded. The supported scale remains ~1,200 students on one VPS until a measurement says otherwise.
 
 ---
 
@@ -79,8 +87,9 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
 4. Clone the repo; create `backend/.env` (never commit it) — set a **strong `POSTGRES_PASSWORD`**, a
    `BACKUP_ENCRYPTION_PASSPHRASE`, and (recommended) `BACKUP_RCLONE_REMOTE` for off-site backups.
 5. Issue a Let's Encrypt cert for nginx (certbot or an nginx-companion container); enable auto-renew.
-6. `docker compose up -d --build` — this also brings up Postgres (fresh `pgdata` volume) and the backup service.
-7. Apply the schema: `docker compose exec backend npx prisma migrate deploy` (first boot only / after schema changes).
+6. `docker compose up -d --build` — this brings up Postgres and backups; the API applies checked-in
+   migrations before it starts and fails fast if they cannot be applied.
+7. Verify `docker compose logs backend` and `docker compose exec backend npx prisma migrate status`.
 8. Configure off-site + run one restore drill (see [12 §5, §8](./12-data-backup-and-recovery.md)).
 
 **Each deploy:**
@@ -88,9 +97,12 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
 cd /srv/lms && git pull && docker compose up -d --build && docker compose ps
 ```
 
+Databases created by the pre-2026-08-20 `db push` entrypoint require the one-time baseline-adoption
+sequence in `context/Guides_And_Summeries/database_migration_guide.md` **before** the new API image starts.
+
 **GitHub Actions (recommended):** on merge to `main`, run build + tests, then SSH to the VPS and run the deploy line above. Zero secrets in the repo — use Actions secrets for the SSH key.
 
-**Services in `docker-compose.yml`:** `postgres` (self-hosted DB on the `pgdata` volume, not exposed to the host), `nginx` (TLS + reverse proxy → API), `backend` (Express API), `worker` (BullMQ), `redis`, and `backup` (scheduled encrypted dumps → `./backups` + off-site). Migrations run **in-container** (`docker compose exec backend npx prisma migrate deploy`) since the DB has no host port.
+**Services in `docker-compose.yml`:** `postgres` (self-hosted DB on the `pgdata` volume, not exposed to the host), `nginx` (TLS + reverse proxy → API), `backend` (Express API), `worker` (BullMQ), `redis`, and `backup` (scheduled encrypted dumps → `./backups` + off-site). The backend entrypoint runs migrations in-container before serving traffic; the worker never runs them.
 
 ---
 
@@ -119,7 +131,7 @@ Most security here costs nothing but discipline:
 - Secrets only in `backend/.env` on the box (Docker `env_file`), never in git.
 - Helmet + strict CORS + Redis-backed rate limiting (auth 10/min/IP).
 - JWT in HTTP-only cookies; refresh tokens hashed + rotated with reuse detection.
-- Content gated per enrollment + paid month; Bunny IP-bound tokens + watermark; server-signed Zoom join.
+- Content gated per enrollment + paid month; Bunny token-authenticated embed (+ MediaCage DRM where enabled) + watermark; server-signed Zoom join.
 - Cloudflare proxy in front of the VPS = free WAF + DDoS absorption.
 - Audit log on every privileged mutation.
 
@@ -128,6 +140,8 @@ See [02-architecture.md §7](./02-architecture.md#7-security-model) for the full
 ---
 
 ## Appendix — Local development: whole app in Compose behind one ngrok URL (DEV ONLY)
+
+> For a fully **offline** setup that needs no provider accounts (local S3-compatible storage, logged SMS) use the overlay described in [16-local-development.md](./16-local-development.md). The ngrok tunnel below is only needed when a real provider sandbox must call back into your machine (Bunny, Zoom or PayHere webhooks).
 
 Production keeps the **split**: frontend on Vercel, API/worker/db on the VPS (above). But for
 local development — especially exercising **external webhooks** (Bunny, Zoom, PayHere) that must

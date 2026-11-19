@@ -39,3 +39,17 @@ export const generatePayhereSignature = (input: PayhereSignatureInput): string =
 	const raw = `${input.merchantId}${input.orderId}${input.payhereAmount}${input.payhereCurrency}${input.statusCode}${hashedSecret}`;
 	return md5(raw).toUpperCase();
 };
+
+export const isPayhereSignatureValid = (
+	expectedSignature: string,
+	receivedSignature: string,
+): boolean => {
+	const expected = Buffer.from(expectedSignature, 'utf8');
+	const received = Buffer.from(receivedSignature.toUpperCase(), 'utf8');
+
+	if (expected.length !== received.length) {
+		return false;
+	}
+
+	return crypto.timingSafeEqual(expected, received);
+};

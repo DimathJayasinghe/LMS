@@ -5,8 +5,10 @@ import * as ProfileController from '@/controllers/profile.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
     assignBarcodeSchema,
+    academicStaffQuerySchema,
     createStudentBarcodeSchema,
     listUsersQuerySchema,
     nicUploadUrlSchema,
@@ -139,6 +141,16 @@ userRoutes.get(
     UserController.resolveBarcode,
 );
 
+// Minimal academic directory: SUPER_ADMIN selects teachers/markers; TEACHER
+// may list markers for exams. No email, phone, NIC, or account metadata leaks.
+userRoutes.get(
+    '/academic-staff',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+    validateQuery(academicStaffQuerySchema),
+    UserController.listAcademicStaff,
+);
+
 // GET /api/users/:id — Get user by id (Admin + Staff)
 userRoutes.get(
     '/:id',
@@ -155,6 +167,7 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateRoleSchema),
+    checkIdempotency,
     UserController.updateRole,
 );
 
@@ -165,6 +178,7 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateStatusSchema),
+    checkIdempotency,
     UserController.updateStatus,
 );
 
@@ -175,5 +189,6 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(assignBarcodeSchema),
+    checkIdempotency,
     UserController.assignBarcode,
 );

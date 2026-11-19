@@ -10,6 +10,7 @@ import { env } from '@/config/env';
 import { AppError } from '@/utils/app-error';
 
 let r2Client: S3Client | null = null;
+let r2PresignClient: S3Client | null = null;
 
 const ensureR2Configured = (): void => {
   const hasCredentials = Boolean(env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY);
@@ -39,23 +40,50 @@ const ensureR2Configured = (): void => {
   }
 };
 
+const buildClient = (endpoint: string): S3Client =>
+  new S3Client({
+    // The local S3 server (STORAGE_DRIVER=local) is addressed path-style on a plain host name;
+    // R2 uses virtual-host style and the "auto" region.
+    region: env.STORAGE_DRIVER === 'local' ? 'us-east-1' : 'auto',
+    endpoint,
+    forcePathStyle: env.STORAGE_DRIVER === 'local',
+    credentials: {
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+
+const resolveEndpoint = (): string =>
+  env.R2_ENDPOINT || `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+
+/** Client for server-side reads/writes (HEAD, GET, DELETE) — uses the in-network endpoint. */
 const getR2Client = (): S3Client => {
   ensureR2Configured();
 
   if (!r2Client) {
-    const endpoint = env.R2_ENDPOINT || `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-
-    r2Client = new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: {
-        accessKeyId: env.R2_ACCESS_KEY_ID,
-        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-      },
-    });
+    r2Client = buildClient(resolveEndpoint());
   }
 
   return r2Client;
+};
+
+/**
+ * Client used only to sign URLs handed to the browser. A signature covers the host, so a
+ * presigned URL must be signed for the host the browser will call. With the local driver that
+ * differs from the in-network endpoint; on R2 both are the same.
+ */
+const getR2PresignClient = (): S3Client => {
+  ensureR2Configured();
+
+  if (!env.R2_PRESIGN_ENDPOINT) {
+    return getR2Client();
+  }
+
+  if (!r2PresignClient) {
+    r2PresignClient = buildClient(env.R2_PRESIGN_ENDPOINT);
+  }
+
+  return r2PresignClient;
 };
 
 export const createR2PresignedPutUrl = async (
@@ -64,7 +92,7 @@ export const createR2PresignedPutUrl = async (
   expiresInSeconds: number,
   bucket: string = env.R2_BUCKET_NAME,
 ): Promise<string> => {
-  const client = getR2Client();
+  const client = getR2PresignClient();
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: key,
@@ -77,11 +105,15 @@ export const createR2PresignedPutUrl = async (
 export const createR2PresignedGetUrl = async (
   key: string,
   expiresInSeconds: number,
+  downloadName?: string,
 ): Promise<string> => {
-  const client = getR2Client();
+  const client = getR2PresignClient();
   const command = new GetObjectCommand({
     Bucket: env.R2_BUCKET_NAME,
     Key: key,
+    ...(downloadName
+      ? { ResponseContentDisposition: `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"` }
+      : {}),
   });
 
   return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
@@ -115,18 +147,46 @@ export const r2HeadObject = async (
 };
 
 /**
- * Resolves the *public* avatar bucket + its public base URL. Avatars are served
- * from a separate public bucket (the main bucket is private — NIC/exam PDFs), so
+ * Reads a bounded object into memory for server-side signature inspection.
+ * Callers must supply a small upper bound; this prevents an untrusted upload
+ * from turning confirmation into an unbounded memory allocation.
+ */
+export const r2GetObjectBytes = async (
+  key: string,
+  maxBytes: number,
+  bucket: string = env.R2_BUCKET_NAME,
+): Promise<Uint8Array> => {
+  const client = getR2Client();
+  const response = await client.send(new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Range: `bytes=0-${maxBytes}`,
+  }));
+
+  if (!response.Body) {
+    throw new AppError('UPLOAD_EMPTY', 422, 'The uploaded file is empty.');
+  }
+
+  const bytes = await response.Body.transformToByteArray();
+  if (bytes.byteLength > maxBytes) {
+    throw new AppError('UPLOAD_TOO_LARGE', 413, 'The uploaded file exceeds the allowed size.');
+  }
+  return bytes;
+};
+
+/**
+ * Resolves the public display-asset bucket + its public base URL. These files are
+ * served separately from the private NIC/exam-PDF bucket, so
  * this throws 503 until both env vars are set (and the bucket is made public in the
  * Cloudflare dashboard — the app's S3 key cannot enable public access itself).
  */
-export const getPublicAvatarConfig = (): { bucket: string; publicBaseUrl: string } => {
+export const getPublicAssetConfig = (): { bucket: string; publicBaseUrl: string } => {
   ensureR2Configured();
   if (!env.R2_PUBLIC_BUCKET_NAME || !env.R2_PUBLIC_URL) {
     throw new AppError(
       'R2_NOT_CONFIGURED',
       503,
-      'Public avatar storage is not configured (R2_PUBLIC_BUCKET_NAME / R2_PUBLIC_URL).',
+      'Public asset storage is not configured (R2_PUBLIC_BUCKET_NAME / R2_PUBLIC_URL).',
     );
   }
   return {
@@ -134,6 +194,9 @@ export const getPublicAvatarConfig = (): { bucket: string; publicBaseUrl: string
     publicBaseUrl: env.R2_PUBLIC_URL.replace(/\/+$/, ''),
   };
 };
+
+/** Backward-compatible profile-service name. */
+export const getPublicAvatarConfig = getPublicAssetConfig;
 
 /** Best-effort object delete (used when replacing/removing an avatar). */
 export const deleteR2Object = async (

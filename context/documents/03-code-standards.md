@@ -216,6 +216,7 @@ router.post(
 
 - All env vars are validated at startup via a Zod schema in `src/config/env.ts`.
 - App crashes immediately on boot if any required variable is missing — fail fast.
+- **Platform vs. provider settings (planned, [14](./14-multi-tenancy-readiness.md) §4):** `env.ts` keeps validating platform-level settings (database, Redis, JWT, encryption key). Provider credentials (Bunny, PayHere, Zoom, SMS, bank details) move to encrypted per-organization settings with an environment fallback for the default organization. Until then, read provider settings only through the existing utility modules (`utils/bunny.ts`, `utils/zoom.ts`, `utils/r2.ts`) so the refactor touches few files.
 
 ### 6.2 Logging
 
@@ -226,7 +227,16 @@ logger.info({ userId, action: 'PAYMENT_CREATED' }, 'Student payment processed');
 logger.error({ err, userId }, 'Payment processing failed');
 ```
 
-- Use **Pino** structured JSON logger — never `console.log` in production code.
+- Use **Pino** structured JSON logger — never `console.log` in production code. Request logging must
+  redact authorization, request cookies, and response `Set-Cookie` headers; never log tokens,
+  presigned credentials, passwords, or full identity documents.
+
+- Direct-to-storage public display uploads must use a server-issued resource-bound key, then a
+  separate confirmation request. Confirmation must reauthorize ownership, bound the fetched bytes,
+  compare stored MIME to decoded content, enforce a pixel limit and full decode, check the product's
+  exact dimensions, and only then build the public URL. Never accept an arbitrary client URL for a
+  managed asset. Delete invalid, replaced, and removed tracked objects best-effort and audit the
+  privileged lifecycle actions.
 - Always include context object as first argument.
 
 ### 6.3 Date Handling

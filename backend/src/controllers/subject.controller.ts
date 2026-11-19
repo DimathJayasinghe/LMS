@@ -7,6 +7,7 @@ import { AUDIT_ACTION } from '@/utils/constants';
 import {
   createSubjectSchema,
   listSubjectsQuerySchema,
+  replaceSubjectTeachersSchema,
   subjectIdParamSchema,
   updateSubjectSchema,
 } from '@/schemas/subject.schema';
@@ -69,3 +70,42 @@ export const updateSubject = asyncHandler(async (req: Request, res: Response): P
     message: 'Subject updated successfully.',
   });
 });
+
+export const listMyAssignedSubjects = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const subjects = await SubjectService.listMyAssignedSubjects(req.user!.userId);
+    res.status(200).json({ status: 'success', data: subjects, count: subjects.length });
+  },
+);
+
+export const listSubjectTeachers = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { id } = subjectIdParamSchema.parse(req.params);
+    const assignments = await SubjectService.listSubjectTeachers(id);
+    res.status(200).json({ status: 'success', data: assignments, count: assignments.length });
+  },
+);
+
+export const replaceSubjectTeachers = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { id } = subjectIdParamSchema.parse(req.params);
+    const input = replaceSubjectTeachersSchema.parse(req.body);
+    const assignments = await SubjectService.replaceSubjectTeachers(id, input);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.SUBJECT_TEACHERS_ASSIGNED,
+      description: `${assignments.length} teacher(s) assigned to subject`,
+      targetType: 'Subject',
+      targetId: id,
+      metadata: { teacherIds: assignments.map((assignment) => assignment.teacherId) },
+      context: extractAuditContext(req),
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: assignments,
+      count: assignments.length,
+      message: 'Subject teachers updated.',
+    });
+  },
+);

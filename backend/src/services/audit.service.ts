@@ -104,5 +104,5 @@ export const log = (input: AuditLogInput): void => {
 				{ err, action, actorId: context.actorId, targetType, targetId },
 				'Failed to persist audit log — non-blocking',
 			);
-		});
+	});
 };

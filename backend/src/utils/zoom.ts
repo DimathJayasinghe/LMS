@@ -50,7 +50,7 @@ const ZOOM_ACCESS_TOKEN_CACHE_KEY = 'zoom:s2s-access-token';
  * Redis so we don't mint a new one on every REST call — Zoom's tokens live
  * ~1h; we cache for a bit under that.
  */
-const getZoomAccessToken = async (): Promise<string> => {
+export const getZoomAccessToken = async (): Promise<string> => {
   assertZoomConfigured();
 
   const cached = await redis.get(ZOOM_ACCESS_TOKEN_CACHE_KEY).catch(() => null);

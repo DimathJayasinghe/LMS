@@ -21,6 +21,7 @@ All endpoints require the `access_token` cookie.
 - **Create** (`POST /`) — `STUDENT` (self-enroll), or `ADMIN`/`SUPER_ADMIN`
   (front-desk enrolling a specific student via `userId`).
 - **My enrollments** (`GET /my`) — `STUDENT`.
+- **Learning summary/seen marker** (`GET /learning`, `POST /learning/:courseId/seen`) — `STUDENT`.
 - **List all** (`GET /`) — `SUPER_ADMIN`, `ADMIN` (oversight; paginated).
 - **Get one** (`GET /:id`) — the owning `STUDENT`, or `ADMIN`/`SUPER_ADMIN`.
 - **Cancel** (`DELETE /:id`) — the owning `STUDENT`, or `ADMIN`/`SUPER_ADMIN`.
@@ -51,9 +52,13 @@ All endpoints require the `access_token` cookie.
 }
 ```
 
-- `classType` — `ONLINE` | `PHYSICAL`. A student may hold **one enrollment per
+- `classType` — `ONLINE` | `PHYSICAL` today. A student may hold **one enrollment per
   `(course, classType)`** (unique on `userId + courseId + classType`), so the same
-  course can be taken both online and physically as two enrollments.
+  course can be taken both online and physically as two enrollments, **each billed separately**.
+  *Planned (2026-11-19, not implemented):* a `HYBRID` value meaning one enrollment, one fee, both
+  modes, and one **active** enrollment per `(user, course)`; see the
+  [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §4.
+  The content gate (`assertStudentContentAccess`) currently checks enrollment and payment only, not `classType`.
 - `isActive` — `false` means cancelled/dropped; history (payments) is retained.
 - The admin list (`GET /`) additionally embeds a `user` summary
   (`{ id, name, indexNumber, email }`).
@@ -64,11 +69,20 @@ All endpoints require the `access_token` cookie.
 | --- | --- | --- | --- |
 | POST | `/` | STUDENT, ADMIN, SUPER_ADMIN | Create (or reactivate) an enrollment. |
 | GET | `/my` | STUDENT | List the caller's own enrollments. |
+| GET | `/learning` | STUDENT | Current active enrollments with new lessons/upcoming sessions. |
+| POST | `/learning/:courseId/seen` | STUDENT | Advance the caller's course-content seen marker. |
 | GET | `/` | ADMIN, SUPER_ADMIN | List all enrollments (paginated). |
 | GET | `/:id` | Owner, ADMIN, SUPER_ADMIN | Get one enrollment. |
 | DELETE | `/:id` | Owner, ADMIN, SUPER_ADMIN | Soft-cancel (set `isActive: false`). |
 
 ## Endpoint Details
+
+### GET `/learning` and POST `/learning/:courseId/seen`
+
+The learning list is bounded to 50 active enrollments. Each enrollment includes `learning` with
+`newLessonCount` (READY recordings created after `lastSeenAt`), `latestLessonAt`,
+`upcomingSessionCount`, `nextSessionAt`, and `lastSeenAt`. The seen endpoint requires an active
+enrollment and upserts a private `(userId, courseId)` marker; it never accepts another user's ID.
 
 ### POST `/`
 

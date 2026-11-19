@@ -1,62 +1,98 @@
 # 11 — Git Workflow & Naming Conventions
 
-> How we branch, commit, review, and name things. Consistency here keeps a multi-contributor repo (backend + frontend) from drifting. This formalizes the flow already visible in the repo's history.
+> How we branch, commit, review, release, and clean up. Consistency here keeps a multi-contributor repo (backend + frontend) from drifting. Revised 2026-11-19: branch deletion after merge is now the rule (§1.4), stacked branches and worktrees are covered (§1.5, §1.6), and a cleanup runbook was added (§7).
 
 ---
 
 ## 1. Branching Model
 
-A lightweight **trunk-with-integration** flow. Three kinds of branch:
+A lightweight **trunk-with-integration** flow. Two long-lived branches, everything else short-lived:
 
 ```
-main            ← production. Protected. Only updated via PR. Always deployable.
-  └── dev       ← integration / staging. Features land here first.
-        └── <work branches>   ← short-lived; one task each
+main            ← production. Protected. Always deployable. Tagged releases.
+  └── dev       ← integration. Protected. Every feature lands here first.
+        └── <work branches>   ← short-lived; one task each; deleted after merge
 ```
 
 | Branch | Role | Rules |
 |--------|------|-------|
-| `main` | Production truth | Protected; **no direct pushes**; PR + green CI + review to merge; deploys from here |
-| `dev` | Integration/staging | Features merge here first and are tested together before a release PR to `main` |
-| Work branches | One task | Branch off `dev`; short-lived; delete after merge |
+| `main` | Production truth | Protected; **no direct pushes**; updated only by a release PR from `dev`; deploys from here |
+| `dev` | Integration/staging | Protected; **no direct pushes**; features squash-merge here and are tested together before a release |
+| Work branches | One task | Branch off fresh `origin/dev`; short-lived; **deleted after merge** |
 
-> The repo also has `dev-backend` as a backend-only integration lane feeding `dev`/`main`. Keep such long-lived lanes to a minimum — prefer one `dev`. Retire experiments (old `feature/*`, contributor scratch branches) once merged.
+There are no other long-lived lanes. A backend-only or frontend-only integration branch (the old `dev-backend`) is not allowed: it forks history and strands fixes (a CORS fix once lived only there). If a task is too big for one PR, use stacked branches (§1.5), not a lane.
 
 ### 1.1 Work-branch naming
 
-`<type>/<short-scope>` — or, when it helps in a shared repo, prefix with the contributor: `<name>/<type>/<scope>`.
+`<type>/<kebab-scope>`. **No personal prefixes** (`chathura/dev/...`). The PR author already identifies the owner, and per-person namespaces left a pile of abandoned, unmerged `chathura/dev/*` branches.
 
 | Type | Use for | Example |
 |------|---------|---------|
-| `feature/` | New capability | `feature/subject-crud` |
+| `feature/` | New capability | `feature/payment-slips` |
 | `fix/` | Bug fix | `fix/exam-timer-off-by-one` |
+| `hotfix/` | Urgent production fix, branched from `main` (§5.2) | `hotfix/payhere-webhook-signature` |
 | `chore/` | Tooling, deps, config | `chore/bump-prisma-7` |
 | `docs/` | Docs only | `docs/cost-and-hosting` |
 | `refactor/` | No behaviour change | `refactor/extract-course-access` |
+| `test/` | Tests only | `test/attendance-concurrency` |
 
-- Lowercase, `kebab-case` scope, no spaces. Keep it short and specific: `feature/pay-at-entrance`, not `feature/payments`.
-- One task per branch. If the scope is growing past ~5 files or two domains, split it (see 04-ai-workflow-rules).
+- Lowercase, `kebab-case`, no spaces, no dates, no ticket numbers alone. Short and specific: `feature/pay-at-entrance`, not `feature/payments`.
+- One task per branch. If the scope grows past ~5 files or two domains, pause and split it or confirm the scope (see [04-ai-workflow-rules.md](./04-ai-workflow-rules.md)).
+- Reserved names: `main`, `dev`, `release/*` (not currently used). `hotfix/*` branches come from `main`, not `dev` (§5.2); every other rule in this section applies to them.
 
 ### 1.2 Lifecycle
 
-```
-git switch dev && git pull
-git switch -c feature/pay-at-entrance
+```bash
+git fetch origin
+git switch --no-track -c feature/pay-at-entrance origin/dev   # always from fresh origin/dev
 # ...commit small, logical steps...
 git push -u origin feature/pay-at-entrance
-# open PR → dev ; tests green + review ; merge
+gh pr create --base dev
+# CI green + review → squash-merge → branch is auto-deleted on GitHub
+git switch dev && git pull --ff-only
+gh pr view feature/pay-at-entrance --json state -q .state    # must print MERGED
+git branch -D feature/pay-at-entrance                # squash merges need -D, see §1.4
 ```
-Release: PR `dev → main` when a batch is tested. Tag `main` for notable releases (`v1.0.0`).
 
-> **For AI-agent sessions (2026-07-10, restated explicitly after a stretch of direct-to-`dev`
-> commits that shouldn't have happened): never commit straight to `dev`, even for a small fix.**
-> Always: branch → do the work → run the test suite (`cd backend && npm run test` + `npx tsc
-> --noEmit` in both `backend/` and `frontend/`) → push the branch → open a PR (`gh pr create`) →
-> merge only once everything is green. There is no GitHub Actions CI configured yet (see Phase 10
-> in `06-progress-tracker.md`), so "tests green" means the agent ran them locally and confirmed
-> before merging — it is standing in for CI, not skipping the gate. **Never delete a branch after
-> merging** — this repo's owner continues work on branches post-merge, which overrides the
-> "delete branch" line in §5 below.
+Never commit straight to `dev` or `main`, even for a one-line fix (restated 2026-07-10 after a stretch of direct-to-`dev` commits). Run the checks locally first (`cd backend && npm run test`; `npx tsc --noEmit` in `backend/` and `frontend/`) so CI confirms rather than discovers.
+
+### 1.3 Keeping a branch current
+
+Rebase onto `origin/dev` while the branch is private and unreviewed; once others have commented, merge `origin/dev` in instead of rewriting reviewed history. After a rebase push with `git push --force-with-lease` — **only on your own work branch**, never `dev`/`main`, never plain `--force`.
+
+Prisma migrations are the usual conflict. Never hand-merge two migration folders: rebase, delete your new migration, regenerate it (`prisma migrate dev --name ...`) on top of the latest schema, and re-run the drift gate.
+
+### 1.4 Deleting branches after merge
+
+**Delete the work branch as soon as its PR is merged.** This reverses the 2026-07-10 rule ("never delete a branch after merging"). Reasons for the change:
+
+- Squash-merge creates a new commit on `dev`; the original branch tip is never an ancestor of `dev`, so merged branches look "unmerged" forever. By 2026-11-19 there were 52 merged-but-present remote branches mixed with 15 truly abandoned ones, and nobody could tell them apart.
+- GitHub keeps the PR, its commits and a "Restore branch" button after deletion, so no work is lost.
+- Continuing work after a merge is still allowed: create a new branch from fresh `origin/dev` (`feature/payment-slips-followup`). Do not re-use the merged branch name.
+
+Mechanics:
+
+- GitHub setting **Automatically delete head branches** is ON, so remote branches disappear on merge.
+- Locally: `git fetch --prune`, then delete with `git branch -D <name>` for squash-merged branches (`-d` refuses because the tip is not an ancestor). Only after confirming the PR shows *Merged* (`gh pr view <name> --json state`).
+- Never delete a branch with an open PR, or one whose last commit is not in a merged PR (it may be someone's unpushed-elsewhere work). Ask first.
+
+### 1.5 Stacked branches
+
+When PR B depends on unmerged PR A, base B on A's branch (`gh pr create --base feature/a`). When A squash-merges and its branch is auto-deleted, GitHub retargets B to `dev` automatically only if the base branch was deleted *by the merge*; otherwise retarget manually (`gh pr edit <B> --base dev`). Then rebase B onto `origin/dev`, dropping A's now-squashed commits (`git rebase --onto origin/dev feature/a feature/b`). Do this **before** deleting local `feature/a` (or record A's old tip SHA and use it in place of `feature/a`), then push B with `--force-with-lease`. Do not stack more than two deep.
+
+### 1.6 Worktrees
+
+- Default: work in the **main checkout**. Do not leave work only in a worktree: a worktree is a second working copy, not a backup, and removing one with `--force` discards anything uncommitted.
+- Agents and most work stay in the main checkout (§8) unless the owner says otherwise. A worktree is fine for parallel, long-running branches or reviewing a PR while keeping your tree dirty. Put them in `.worktrees/<branch-name>` (gitignored) and nowhere else in the repo.
+- Every worktree needs its own `npm ci` in `backend/` and `frontend/`; that `node_modules` is untracked and expendable.
+- After the branch merges: `git worktree remove .worktrees/<name>` then delete the branch (§1.4). Run `git worktree prune` during cleanups.
+- A branch can be checked out in only one worktree. If `git switch` says "already used by worktree", go to that worktree or remove it; do not force.
+
+### 1.7 Stale and abandoned branches
+
+- A work branch with no commits for **30 days** and no open PR is stale. Anyone may ask the owner; after 14 days without reply it is deleted.
+- If the work might matter, archive it instead of keeping the branch: `git tag archive/<branch-name> <sha> && git push origin archive/<branch-name>`, then delete the branch. Archive tags are the only tag namespace besides `vX.Y.Z`.
+- Unmerged work is never "left in case". Either open a draft PR (visible, reviewed, closeable) or archive it.
 
 ---
 
@@ -70,6 +106,7 @@ fix(exams): reject submission when server time > endTime
 refactor(class): extract assertCourseAccess ownership gate
 chore(docker): add redis AOF persistence + healthchecks
 docs(architecture): switch topology to single-VPS Compose
+feat(payments)!: require slip approval before marking SUCCESS
 ```
 
 | Type | When |
@@ -81,22 +118,42 @@ docs(architecture): switch topology to single-VPS Compose
 | `docs` | Documentation only |
 | `test` | Tests only |
 | `perf` | Performance |
+| `ci` | GitHub Actions / pipeline only |
+| `revert` | Reverting an earlier commit (`revert: feat(x): ...`, body names the SHA) |
 
-- **Scope** = the domain: `auth`, `users`, `subjects`, `class`, `exams`, `submissions`, `payments`, `attendance`, `video`, `stream`, `docker`, `infra`.
-- One logical change per commit. Body (optional) explains **why**, not what. Reference issues: `Refs #42`.
+- **Scope** = the domain: `auth`, `users`, `organizations`, `subjects`, `class`, `exams`, `submissions`, `payments`, `attendance`, `video`, `stream`, `markers`, `docker`, `infra`, `requirements`, `delivery`.
+- One logical change per commit. Body (optional) explains **why**, not what. Reference issues: `Refs #42`, `Closes #42`.
+- **Breaking change**: `!` after the scope and/or a `BREAKING CHANGE:` footer. Required for API contract changes, env var renames, and destructive migrations.
 - A schema change and its code go in the **same** commit/PR so the tree is never half-migrated.
+- Never commit secrets, `.env`, tokens, or customer data. If one slips in, rotate it first; history rewriting is secondary.
+- Never `--no-verify` to skip hooks, and never `git commit --amend` a commit that is already pushed and reviewed.
+- Because PRs are squash-merged, the **PR title** becomes the commit on `dev`: it must itself be a valid Conventional Commit.
+- AI-assisted commits keep the trailer the tooling adds (`Co-Authored-By: ...`); do not strip it.
 
 ---
 
 ## 3. Pull Requests
 
 - **One feature per PR.** Small PRs review faster and revert cleanly.
-- **Squash-merge** into `dev`/`main` so history stays one-commit-per-feature.
-- Merge requires: **tests green** (`npm run build` + lint + `npm run test`; run locally by the
-  agent/contributor until GitHub Actions CI is wired up — see Phase 10) and **one review** where a
-  human reviewer is available.
+- Base is `dev`. The only PRs into `main` are releases (§5.1) and hotfixes (§5.2).
+- **Squash-merge** into `dev` so history stays one-commit-per-feature. Release PRs are the exception (§5.1).
+- Merge requires: **CI green** (`Quality Gate`, which needs Backend and Frontend jobs) and **one review** where a human reviewer is available. Solo/agent-authored PRs get an independent review pass (a second reviewer or an automated review) before merge. "One review" is policy: GitHub does not enforce it while required approvals is 0 (§6).
+- Backend and frontend lint are required CI checks. The backend baseline covers application code and unit tests; legacy live-stack diagnostic scripts excluded from `tsconfig.json` remain a documented follow-up rather than being silently treated as lint-clean.
 - PR description states: what changed, why, how tested, and any migration/ops step (e.g. "run `prisma migrate deploy`").
+- Docs-only PRs still go through CI and review. Docs that contradict code are bugs; verify facts against source.
 - Never merge red CI or a partial migration. If blocked, keep the PR in draft.
+
+PR checklist (paste into the description):
+
+```markdown
+- [ ] Branch is from current `origin/dev`; one task only
+- [ ] PR title is a Conventional Commit
+- [ ] Tests added/updated; `npm run test`, `tsc --noEmit` (backend + frontend) pass locally
+- [ ] Schema change + migration in this PR; `prisma migrate diff` shows zero drift
+- [ ] Docs updated where behaviour/contract changed (`context/documents/`)
+- [ ] No secrets, no `.env`, no unrelated files
+- [ ] Breaking change flagged with `!` / `BREAKING CHANGE:`
+```
 
 ---
 
@@ -143,13 +200,100 @@ The authoritative style lives in [03-code-standards.md](./03-code-standards.md);
 
 ---
 
-## 5. Quick Do / Don't
+## 5. Releases and Hotfixes
+
+### 5.1 Release (`dev` → `main`)
+
+1. Confirm `dev` CI is green and the batch has been exercised on staging.
+2. Open a PR `dev → main` titled `chore(release): vX.Y.Z`. List the included PRs in the body (`gh pr list --state merged --base dev --search "merged:>=<last-release-date>"`), plus migration/ops steps.
+3. Merge with a **merge commit** (not squash, not rebase). Squashing would make `main` diverge from `dev` and every later release PR would re-show already-shipped commits.
+4. Tag the merge commit on `main` with an annotated tag (tag `origin/main` explicitly so a stale local HEAD is never tagged): `git fetch origin && git tag -a vX.Y.Z -m "..." origin/main && git push origin vX.Y.Z`. Current baseline: `v0.1.0` (a lightweight tag).
+5. Versioning: SemVer. `0.x` while pre-launch; any breaking API/env/migration change bumps the minor (major after 1.0).
+
+### 5.2 Hotfix
+
+1. `git switch -c hotfix/<scope> origin/main`; fix; PR into `main`; CI green; merge commit; tag a patch release.
+2. **Back-merge immediately**: open a PR `main → dev` (merge commit) so `dev` contains the fix. Open the back-merge from a fresh branch (`chore/backmerge-vX.Y.Z` from `origin/dev`, merge `origin/main` into it, resolve conflicts there) because protected `main` cannot be edited to resolve them. A hotfix that exists only on `main` is the same failure as the stranded `dev-backend` CORS fix.
+3. If the same change also exists on `dev`, resolve in the back-merge, not by force-pushing.
+
+---
+
+## 6. Protected Branch Settings (GitHub)
+
+Applied to both `dev` and `main` (2026-11-19). Apply protection **before** enabling auto-delete: release PRs have head `dev` and back-merge PRs have head `main`, and "Allow deletions: off" is what stops auto-delete from removing them.
+
+| Setting | Value |
+|---------|-------|
+| Require a pull request before merging | on, 0 required approvals while the team is solo/agent-heavy; raise to 1 once a second maintainer reviews regularly |
+| Require status checks | `Quality Gate` (aggregates Backend + Frontend) |
+| Require branches to be up to date | off (avoids serial re-runs; rebase when the PR touches migrations) |
+| Allow force pushes | off |
+| Allow deletions | off |
+| Enforce for administrators | off (owner can break glass; do not use it for routine merges) |
+| Automatically delete head branches | on (repo setting) |
+| Allowed merge methods | squash and merge commit; rebase merging disabled. Using a merge commit only for release, hotfix and back-merge PRs is a convention (repo-wide merge methods cannot enforce it) |
+
+Repository: `DimathJayasinghe/LMS`. Changing these settings needs the repo owner; record any change in [06-progress-tracker.md](./06-progress-tracker.md).
+
+---
+
+## 7. Cleanup Runbook
+
+Run monthly, or whenever `git branch -a | wc -l` passes ~15.
+
+```bash
+git fetch --prune origin
+# remote branches whose tip is already in dev
+git branch -r --merged origin/dev | grep -v -E 'origin/(dev|main)( |$)|origin/HEAD'
+# squash-merged branches are NOT listed above; check by PR instead
+gh pr list --state merged --base dev  --json headRefName,headRefOid --limit 1000
+gh pr list --state merged --base main --json headRefName,headRefOid --limit 1000
+gh pr list --state open --json headRefName
+```
+
+A branch is **safe to delete** when either (a) its tip is an ancestor of `origin/dev`, or (b) its tip SHA equals the head SHA of a PR merged into `dev`/`main`. Anything else is **unmerged**: list it, ask the owner, then archive (§1.7) or delete.
+
+Order of operations:
+
+1. List candidates and show them to the owner. Do not delete from an unconfirmed list. For unmerged work that must survive, make the archive tag (§1.7) or a bundle first (`git bundle create <dir>/backup-<name-with-slashes-replaced>.bundle <name>`).
+2. Remove worktrees for those branches (`git worktree remove`, `git worktree prune`).
+3. Delete remote: `git push origin --delete <name> [<name> ...]`.
+4. Delete local: `git branch -D <name>`; `git fetch --prune`.
+5. Note the cleanup (date, counts) in the tracker.
+
+---
+
+## 8. AI-Agent Session Rules
+
+Agents (Claude Code and similar) follow everything above plus:
+
+- Work in the **main checkout**, not a worktree, unless the owner says otherwise. Check `git branch --show-current` and `git status` before any write.
+- Branch from fresh `origin/dev`. Never commit to `dev`/`main`.
+- Do not chain destructive steps after a command that can fail (`git switch ... && cp ...`). Verify the branch first, then write.
+- Never run bare `git stash` / `git stash pop`. To park someone's uncommitted work: `git stash push -u -m "<tag>"`, note its SHA with `git rev-parse stash@{0}`, restore with `git stash apply <sha>`, and drop only after verifying.
+- Stage explicit paths, never `git add -A`/`.` in a checkout that may hold other people's changes.
+- Ask before deleting branches, force-pushing, or changing GitHub settings, unless the owner already instructed that exact action in the session.
+- After opening a PR: wait for CI, run an independent review, fix findings, then merge only if the owner authorized merging.
+
+---
+
+## 9. Quick Do / Don't
 
 | ✅ Do | ❌ Don't |
 |------|---------|
-| Branch off `dev`, one task, short-lived | Commit straight to `dev` or `main` |
-| `feat(exams): ...` conventional commits | `update stuff`, `wip`, `fix2` |
-| Squash-merge via PR once tests are green | Merge red/untested code or a partial migration |
+| Branch off fresh `origin/dev`, one task, short-lived | Commit straight to `dev` or `main` |
+| `feat(exams): ...` conventional commits, PR title too | `update stuff`, `wip`, `fix2` |
+| Squash-merge via PR once CI is green | Merge red/untested code or a partial migration |
 | Ship schema + code together | Split a migration across PRs |
-| **Keep merged branches** (2026-07-10, overrides the old advice below) | Delete a branch after merging — the owner keeps working on them |
+| Delete the branch after merge; start a new branch for follow-ups | Keep merged branches or reuse their names |
+| Merge-commit releases, tag `vX.Y.Z`, back-merge hotfixes | Squash a release PR; leave a fix only on `main` |
+| `--force-with-lease` on your own branch | `--force`, or force-push `dev`/`main` |
+| `type/kebab-scope` | `yourname/dev/thing`, long-lived lanes |
 | `domain.layer.ts` + `camelCase` fields | Mixed casing, `snake_case` in TS |
+
+---
+
+## 10. Decision History
+
+- **2026-07-10** — "Never commit straight to dev" restated for agent sessions. "Never delete a branch after merging" added because the owner kept working on merged branches.
+- **2026-11-19** — Rule reversed. Audit found 52 merged-but-undeleted remote branches (39 local), 15 abandoned unmerged branch names (remote and local copies counted once), and 2 stale worktrees of merged branches. Squash-merge makes "merged" undetectable by `git branch --merged`, which made the pile unauditable. Decisions: delete after merge; auto-delete on GitHub; protect `dev` and `main`; no personal branch prefixes; no long-lived lanes; `hotfix/` and release flow defined; cleanup runbook added. The 15 unmerged branches were deleted at the owner's request.

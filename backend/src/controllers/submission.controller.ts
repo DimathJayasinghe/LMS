@@ -11,6 +11,7 @@ import {
   startSubmissionSchema,
   completeSubmissionSchema,
   completeSubmissionBodySchema,
+  correctPublishedResultSchema,
   listSubmissionsParamsSchema,
   listSubmissionsQuerySchema,
   listMySubmissionsQuerySchema,
@@ -83,6 +84,12 @@ export const listSubmissions = asyncHandler(
 
 // ─── Submit Marks ──────────────────────────────────────────
 
+export const authorizeMarks = asyncHandler(async (req, _res, next) => {
+  const { id } = submissionIdParamSchema.parse(req.params);
+  await SubmissionService.assertMarkerMayGradeSubmission(id, req.user!.userId);
+  next();
+});
+
 export const submitMarks = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = submissionIdParamSchema.parse(req.params);
@@ -111,7 +118,7 @@ export const submitMarks = asyncHandler(
 export const publishResults = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { examId } = publishResultsParamsSchema.parse(req.params);
-    const result = await SubmissionService.publishResults(examId);
+    const result = await SubmissionService.publishResults(examId, req.user!);
 
     void AuditService.log({
       action: AUDIT_ACTION.RESULTS_PUBLISHED,
@@ -132,6 +139,33 @@ export const publishResults = asyncHandler(
       status: 'success',
       data: result,
       message: 'Results published successfully.',
+    });
+  },
+);
+
+export const correctPublishedResult = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { id } = submissionIdParamSchema.parse(req.params);
+    const input = correctPublishedResultSchema.parse(req.body);
+    const result = await SubmissionService.correctPublishedResult(id, input, req.user!);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.RESULT_CORRECTED,
+      description: `Published result corrected: ${input.reason}`,
+      targetType: 'Submission',
+      targetId: id,
+      metadata: {
+        before: result.before,
+        after: { marks: result.submission.marks, feedback: result.submission.feedback },
+        reason: input.reason,
+      },
+      context: extractAuditContext(req),
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: result.submission,
+      message: 'Published result corrected and recorded in the audit log.',
     });
   },
 );
@@ -168,4 +202,3 @@ const sendResultsSms = async (examId: string, examTitle: string): Promise<void> 
     logger.error({ err, examId }, 'Failed to enqueue results SMS — non-blocking');
   }
 };
-

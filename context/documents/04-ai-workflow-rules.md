@@ -74,7 +74,13 @@ service function, or bugfix with behavioral change):
    `prisma` export rather than hitting a real DB for pure service-logic tests. Colocate as
    `<file>.test.ts` next to the source file. See `backend/src/services/user.service.test.ts` for
    the reference pattern (mocked prisma, actor×target matrix, ordering-of-checks cases).
-3. This is in addition to, not instead of, the session's standing practice of testing against the
+3. **Organization dimension (from the multi-tenancy foundation, [14](./14-multi-tenancy-readiness.md) §6).**
+   Once the `Organization` table and scoped Prisma client exist, the actor×target matrix gains a third
+   axis: an actor from organization A must not read, list, update, delete or count organization B's
+   rows, including via guessed IDs. Add that case to the table-driven isolation tests for every new
+   route. Until the foundation lands, do not add new global uniques on user-visible values or
+   hand-built storage/cache keys.
+4. This is in addition to, not instead of, the session's standing practice of testing against the
    live Docker Compose stack for end-to-end verification — unit tests cover the logic branches
    fast and in CI; the live-stack pass confirms wiring end-to-end.
 

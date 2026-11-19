@@ -6,6 +6,7 @@ import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	listUsersQuerySchema,
+	academicStaffQuerySchema,
 	userIdParamSchema,
 	nicUploadUrlSchema,
 	nicConfirmSchema,
@@ -26,6 +27,13 @@ export const listUsers = asyncHandler(async (req: Request, res: Response): Promi
 		data,
 		count,
 	});
+});
+
+export const listAcademicStaff = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const query = academicStaffQuerySchema.parse(req.query);
+	const staff = await UserService.listAcademicStaff(query, req.user!.role);
+
+	res.status(200).json({ status: 'success', data: staff, count: staff.length });
 });
 
 export const getUserById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -200,4 +208,3 @@ export const resolveBarcode = asyncHandler(async (req: Request, res: Response): 
 		data,
 	});
 });
-
