@@ -216,6 +216,7 @@ router.post(
 
 - All env vars are validated at startup via a Zod schema in `src/config/env.ts`.
 - App crashes immediately on boot if any required variable is missing — fail fast.
+- **Platform vs. provider settings (planned, [14](./14-multi-tenancy-readiness.md) §4):** `env.ts` keeps validating platform-level settings (database, Redis, JWT, encryption key). Provider credentials (Bunny, PayHere, Zoom, SMS, bank details) move to encrypted per-organization settings with an environment fallback for the default organization. Until then, read provider settings only through the existing utility modules (`utils/bunny.ts`, `utils/zoom.ts`, `utils/r2.ts`) so the refactor touches few files.
 
 ### 6.2 Logging
 

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/DimathJayasinghe/LMS/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/DimathJayasinghe/LMS/actions/workflows/ci.yml)
 
-Learning Management System for a **single tuition institution** (~1,200 students) with several teachers across multiple subjects. Built to run **cheaply on one small VPS** — no Kubernetes, no auto-scaling.
+Learning Management System for Sri Lankan tuition institutes (A/L and similar classes). Deployed for **one organization first** (~1,200 students, several teachers across multiple subjects) and being made **multi-tenant ready** so more institutes can be onboarded later. Built to run **cheaply on one small VPS** — no Kubernetes, no auto-scaling.
 
 ## Features
 
@@ -13,11 +13,11 @@ Learning Management System for a **single tuition institution** (~1,200 students
 
 - **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — with optional per-user permission overrides
 - **Academic model** — Subject → Course (one teacher) → Class Sessions & Exams; students enrol + pay per course
-- **Classes** — delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes
+- **Classes** — physical, online, or both. Delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes. A `HYBRID` enrollment type (one fee, both modes) is designed but not built
 - **Content protection** — enrolled + paid gating; recorded video via Bunny's **token-authenticated embed player** (MediaCage DRM) + a per-student watermark overlay; server-signed Zoom live join
 - **Exams** — one mixed paper (MCQ + structured + essay) for both online and physical students; submit via MCQ, typed answers, or scanned PDF upload; server-authoritative timers
 - **Marking & Results** — marker assignment, grading, batch result publishing via SSE
-- **Payments** — PayHere **onsite checkout** (in-app modal, no redirect), bulk Excel import, and an admin records/summary dashboard; idempotency keys
+- **Payments** — PayHere **onsite checkout** (in-app modal, no redirect), front-desk/branch cash collection with receipts, bulk Excel import, and an admin records/summary dashboard; idempotency keys. A staff-approved **bank-transfer slip** channel is designed but not built
 - **Notifications** — SMS (Notify.lk), real-time SSE push, BullMQ background jobs
 
 ## Tech Stack
@@ -89,7 +89,7 @@ Full runbook and monthly cost breakdown: [`context/documents/09-cost-and-hosting
 
 ## Docs
 
-Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`.
+Full system design and conventions live in [`context/documents/`](./context/documents/). Start with `01-project-overview.md`. For where the product stands against the full requirement list see [`15-requirements-traceability.md`](./context/documents/15-requirements-traceability.md); the multi-tenancy plan is [`14-multi-tenancy-readiness.md`](./context/documents/14-multi-tenancy-readiness.md); the payment-channel and `HYBRID` design is in [`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`](./docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
 
 ## License
 

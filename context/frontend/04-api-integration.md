@@ -206,7 +206,7 @@ Wire each screen to its documented endpoints. Full details (bodies, query params
 | Submissions / marking | `submissions.endpoints.md` | `POST /submissions`, `PATCH /:id/{complete,marks}`, `POST /exam/:id/publish` |
 | Payments | `payments.endpoints.md` | `POST /payments` (`method`, `collectedById`), listing |
 | Attendance | `attendance.endpoints.md` | QR/barcode scan, listings (`source: QR`) |
-| Video (recorded) | `video.endpoints.md` | `GET /videos/:id/stream` (IP-bound token; enrolled + paid gate) |
+| Video (recorded) | `video.endpoints.md` | `GET /videos/:id/stream` (signed Bunny embed URL + watermark identity; enrolled + paid gate) |
 | Live stream | `stream.endpoints.md` | live join details |
 
 ---

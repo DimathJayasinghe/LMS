@@ -2,6 +2,8 @@
 
 This document describes the currently available authentication endpoints in the backend.
 
+> **Planned change (not implemented, 2026-11-19):** once organizations exist, `email` is unique per organization, so login and registration resolve the organization from the request host first (falling back to the default organization), and the access token carries `orgId`. See `documents/14-multi-tenancy-readiness.md` §5. Today `email` is globally unique.
+
 ## Base URL
 
 ```

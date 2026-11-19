@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Learning Management System for a single tuition institute (~1,200 students). Two independent apps —
+A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19, **not yet implemented** — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
 `frontend/` (Next.js) and `backend/` (Express) — no npm workspace, no root `package.json`; `cd` into
 each separately. Designed to run on **one small VPS** via Docker Compose: no Kubernetes, no
 auto-scaling, no multi-instance anything. The backend API is deliberately kept **stateless** anyway
@@ -121,9 +121,24 @@ collected; don't rely on prior Zoom SDK knowledge here.
 
 Recorded video and live-class access both require: authenticated, an active `Enrollment`, and the
 current month's `Payment.status = SUCCESS` — checked in the service layer before any token/signature
-is issued. VOD playback uses short-lived IP-bound Bunny tokens + a per-student watermark; live
+is issued. VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
 classes get the same watermark treatment but the Web Meeting SDK has no OS-level capture-blocking
 (that's a documented, accepted limitation, not a bug to fix).
+
+### Terminology and tenancy (decided 2026-11-19)
+
+- **Organization** is the tenant (a tuition institute as a customer). **Institute** means a *physical
+  branch* inside an organization and is not a tenant. `SUPER_ADMIN` owns one organization; the name
+  `PLATFORM_ADMIN` is reserved for a future SaaS operator and is not in the `Role` enum.
+- There is no `Organization` table yet. Until the foundation steps in `14-multi-tenancy-readiness.md §11`
+  land, do not add new global uniques on user-visible values, hand-built R2/Redis keys, or new
+  provider-credential reads from `env`; after they land, every tenant-owned table needs
+  `organizationId` and the scoped Prisma client.
+- **Stack decision:** stay on Express + Next.js. A NestJS rewrite was considered and rejected.
+- **Planned, not built:** `HYBRID` enrollment and a bank-slip payment channel
+  (`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`). Today the
+  content gate ignores `Enrollment.classType`.
+- Requirement-by-requirement status lives in `context/documents/15-requirements-traceability.md`.
 
 ### Invariants (see `context/documents/02-architecture.md §5` for the full list)
 
@@ -139,7 +154,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 
 ## Working with `context/`
 
-`context/documents/` (numbered `01`-`13`) is the source of truth for architecture, code standards,
+`context/documents/` (numbered `01`-`15`) is the source of truth for architecture, code standards,
 DB design, and AI workflow rules — read the relevant one before a non-trivial change.
 `context/api_endpoints/*.md` documents the actual current API surface per domain.
 `context/plan/` is historical brainstorming only; where it conflicts with `documents/`, `documents/`

@@ -8,6 +8,8 @@
 > amount; `refundedAmount` is the sum of completed refunds. Financial totals report the net retained
 > amount. A fully refunded row is terminal and cannot be reused by PayHere, entrance, bulk, or override flows.
 
+> **Channels.** Implemented: `ONLINE` (PayHere, endpoints 1–2), `ENTRANCE` (front desk or branch, endpoint 8), `BULK` (endpoint 7), `MANUAL` (override, endpoint 6). **Planned, not implemented (2026-11-19):** `BANK_TRANSFER` — a student uploads a bank-transfer slip, `ADMIN`/`SUPER_ADMIN` approve or reject it, and approval settles the month. The routes (`/api/payments/slips…`), states and edge cases are specified in [`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §3. Do not call them yet.
+
 ### 1. Initiate Payment (PayHere Checkout)
 Generates the payload required to redirect a student to PayHere checkout.
 
