@@ -2,6 +2,8 @@
 
 > Step-by-step build order, dependency graph, and objectives for the backend.
 > Each step produces a **testable, working increment** — nothing is left half-built.
+>
+> **Status note (2026-11-19):** this is the **original backend build order**; its steps are essentially complete and its checkboxes were not maintained. Forward-looking work is tracked in [13-product-roadmap.md](./13-product-roadmap.md), the multi-tenancy steps in [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md) §11, requirement status in [15-requirements-traceability.md](./15-requirements-traceability.md), and delivery slices in `docs/plans/`. Do not use this file to decide what to build next.
 
 > **⚠️ 2026-07-09 — Schema realignment lands first.** The revised institution model (see [08-database-design.md §12](./08-database-design.md#12-code-drift--required-migrations) and the Progress Tracker's *Phase S*) adds: the `TEACHER` role (`Role` becomes `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`), a top-level **`Subject`** model, **`Course.teacherId`** ownership, **`QR`** attendance, a **`PaymentMethod`** enum + pay-at-entrance, **`Submission.writtenAnswers`**, and exam **channel flags**. Do Phase S before resuming feature work, and thread teacher-ownership scoping (`course.teacherId === user.id`) into the Class/Exam services. New endpoints needed: `Subject` CRUD (Super Admin) and Teacher-scoped Course management.
 
@@ -307,7 +309,7 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 **Branch:** `feature/video-recordings`
 **Depends on:** Step 5
 **Can run parallel with:** Step 6
-**Objective:** Link Bunny.net videos to class sessions, generate IP-bound streaming tokens.
+**Objective:** Link Bunny.net videos to class sessions and issue signed, expiring playback URLs. *(Originally specified as IP-bound HLS tokens; replaced in July 2026 by Bunny's token-authenticated embed — see 02 §7.1.)*
 
 ### Tasks
 
@@ -321,11 +323,11 @@ Lane D can start after Step 4 but S12/S13 tie into other lanes at the end.
 | ------ | ------------------------------ | ----------------- | ------------------------------ |
 | POST   | `/api/videos`                | SUPER_ADMIN       | Attach video to class session  |
 | GET    | `/api/videos/class/:classId` | Any authenticated | List videos for a class        |
-| GET    | `/api/videos/:id/stream`     | STUDENT           | Get IP-bound signed stream URL |
+| GET    | `/api/videos/:id/stream`     | STUDENT           | Get signed embed URL + watermark |
 
 ### Acceptance Criteria
 
-- Stream URL is bound to student's IP (`req.ip`)
+- Embed URL is signed with the library token key and is only issued after the enrolled + paid gate
 - Token expires after a reasonable duration
 
 ---

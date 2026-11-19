@@ -4,9 +4,35 @@
 
 **Source baseline:** `dev` / `8fcd98880db4c76aac4c90b875fb06c07e033227`
 
-**Status:** discovery checkpoint; release scope and marker-group policy await owner answers
+**Status:** owner capacity/physical-marking clarification recorded; submission integrity verified; release gates remain open
 
 **Delivery issue:** [#77](https://github.com/DimathJayasinghe/LMS/issues/77)
+
+## Owner clarification and execution update
+
+The owner subsequently confirmed **1,200 students** as the target and authorized reasonable design
+adjustments. Physical-center paper marking must be supported with marks visible in the student's
+online academic record. A marker may work across multiple subjects/courses; membership must not be
+restricted to one subject. The owner requested system activity/error logs and a review of logical
+privileges, edge cases, and frontend/backend usability.
+
+Use exact exam assignments for access. Teachers manage owned-course groups; shared subject/center
+group configuration remains super-admin-managed to avoid one teacher changing another's allocations.
+Physical paper result entry must record the real staff actor and use the same publication/privacy
+rules as online results. Add that missing path to Phase E before declaring physical marking complete.
+No Zoom deferral was reconfirmed; retain the live-class implementation and verify its provider setup
+before claiming it ready. Audit coverage/durability and safe operational logs are required; this
+clarification does not establish a legal retention period or authorize destructive log cleanup.
+
+PR #78 passed CI and independent review and was squash-merged into `dev` (`69656fa`); its branch was
+retained. Docker Desktop has since been started and both production builder images compile. The
+earlier local-host Turbopack restriction persists, so compiled verification uses isolated Docker.
+Submission integrity bugs found while reviewing the physical-paper path take priority before E1.
+The focused patch passed independent review, 295 backend tests, 105 frontend tests, both production
+builder images, and 21 compiled HTTP/database/SSR assertions with disposable PostgreSQL/Redis.
+All six migrations apply to the isolated database. No live provider calls or production deployment
+were exercised; production readiness still requires the release gates below.
+The sections below preserve the original discovery checkpoint and its then-unanswered questions.
 
 ## Product and architecture
 
@@ -126,7 +152,10 @@ Its E5 instruction to push `dev` is superseded by the standing branch/PR workflo
 After the owner sets the release boundary, split accepted items into vertical slices: standalone
 assignments; moderation/result history/appeals; gradebook/rubrics/question bank; fair-access payment
 exceptions; calendar/communication; guardian access; analytics. Preserve documented deferrals for
-native apps, multi-tenancy, and optional AI unless the owner explicitly changes them.
+native apps and optional AI unless the owner explicitly changes them. **Multi-tenancy is no longer a
+deferral:** on 2026-11-19 the owner decided to build the codebase tenant-ready (deployed for one
+organization first); see [14-multi-tenancy-readiness.md](../../context/documents/14-multi-tenancy-readiness.md)
+and [15-requirements-traceability.md](../../context/documents/15-requirements-traceability.md).
 See [product roadmap](../../context/documents/13-product-roadmap.md) and
 [phases F–I](../reports/2026-08-20-full-system-gap-analysis.md) for the existing inventory.
 

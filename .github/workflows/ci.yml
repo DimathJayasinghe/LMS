@@ -69,6 +69,15 @@ jobs:
       - name: Require zero migration drift
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
+      - name: Verify immutable marker-group membership events
+        run: npx prisma db execute --file prisma/verify-marker-group-membership-event-immutability.sql
+
+      - name: Verify immutable exam paper revisions
+        run: npx prisma db execute --file prisma/verify-exam-paper-revision-immutability.sql
+
+      - name: Verify immutable scoped marker-allocation revisions
+        run: npx prisma db execute --file prisma/verify-marker-allocation-revision-immutability.sql
+
       - name: Create isolated legacy-adoption database
         env:
           DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/postgres?schema=public
@@ -82,8 +91,10 @@ jobs:
           npx prisma db execute --file prisma/migrations/20260819150000_reconcile_schema_baseline/migration.sql
           npx prisma migrate resolve --applied 20260510075330_init
           npx prisma migrate resolve --applied 20260819150000_reconcile_schema_baseline
+          npx prisma db execute --file prisma/seed-legacy-exam-fixture.sql
           npx prisma migrate deploy
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+          npx prisma db execute --file prisma/verify-legacy-exam-fixture.sql
 
       - name: Lint
         run: npm run lint

@@ -10,6 +10,7 @@ import { env } from '@/config/env';
 import { AppError } from '@/utils/app-error';
 
 let r2Client: S3Client | null = null;
+let r2PresignClient: S3Client | null = null;
 
 const ensureR2Configured = (): void => {
   const hasCredentials = Boolean(env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY);
@@ -39,23 +40,50 @@ const ensureR2Configured = (): void => {
   }
 };
 
+const buildClient = (endpoint: string): S3Client =>
+  new S3Client({
+    // The local S3 server (STORAGE_DRIVER=local) is addressed path-style on a plain host name;
+    // R2 uses virtual-host style and the "auto" region.
+    region: env.STORAGE_DRIVER === 'local' ? 'us-east-1' : 'auto',
+    endpoint,
+    forcePathStyle: env.STORAGE_DRIVER === 'local',
+    credentials: {
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+
+const resolveEndpoint = (): string =>
+  env.R2_ENDPOINT || `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+
+/** Client for server-side reads/writes (HEAD, GET, DELETE) — uses the in-network endpoint. */
 const getR2Client = (): S3Client => {
   ensureR2Configured();
 
   if (!r2Client) {
-    const endpoint = env.R2_ENDPOINT || `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-
-    r2Client = new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: {
-        accessKeyId: env.R2_ACCESS_KEY_ID,
-        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-      },
-    });
+    r2Client = buildClient(resolveEndpoint());
   }
 
   return r2Client;
+};
+
+/**
+ * Client used only to sign URLs handed to the browser. A signature covers the host, so a
+ * presigned URL must be signed for the host the browser will call. With the local driver that
+ * differs from the in-network endpoint; on R2 both are the same.
+ */
+const getR2PresignClient = (): S3Client => {
+  ensureR2Configured();
+
+  if (!env.R2_PRESIGN_ENDPOINT) {
+    return getR2Client();
+  }
+
+  if (!r2PresignClient) {
+    r2PresignClient = buildClient(env.R2_PRESIGN_ENDPOINT);
+  }
+
+  return r2PresignClient;
 };
 
 export const createR2PresignedPutUrl = async (
@@ -64,7 +92,7 @@ export const createR2PresignedPutUrl = async (
   expiresInSeconds: number,
   bucket: string = env.R2_BUCKET_NAME,
 ): Promise<string> => {
-  const client = getR2Client();
+  const client = getR2PresignClient();
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: key,
@@ -79,7 +107,7 @@ export const createR2PresignedGetUrl = async (
   expiresInSeconds: number,
   downloadName?: string,
 ): Promise<string> => {
-  const client = getR2Client();
+  const client = getR2PresignClient();
   const command = new GetObjectCommand({
     Bucket: env.R2_BUCKET_NAME,
     Key: key,

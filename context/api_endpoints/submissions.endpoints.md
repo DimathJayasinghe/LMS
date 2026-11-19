@@ -1,5 +1,26 @@
 # Submissions + Marking API Endpoints
 
+## Scoped marker access (2026-09-07)
+
+For exams with non-null `paperRevisionId`, every answer-bearing marker operation requires a confirmed
+grant for the student's frozen participant audience. Membership in a marker group alone grants no
+access. Legacy null-paper-revision exams retain their whole-exam assignment behavior.
+
+- `GET /api/submissions/exam/:examId` filters rows in the database through participant audience grants.
+  Its `count` is the length of that filtered result, and signed answer-PDF URLs are issued only for
+  those rows. This API has no separate marker submission-detail or answer-download endpoint; the list
+  contains answers and signed download links.
+- `PATCH /api/submissions/:id/marks` resolves the submission's participant in the same exam and checks
+  its exact audience. Missing participant/audience returns `403 EXAM_PARTICIPANT_NOT_FOUND`; another
+  audience or revoked assignment returns `403 MARKER_NOT_ASSIGNED`.
+- Grading requires a UUID `Idempotency-Key`. Fresh audience authorization runs before cached replay;
+  response keys are bound to actor, method and request URL, so a key cannot retrieve another
+  submission's answers. Removing a grant blocks fresh lists, new download URLs and grade retries.
+
+Previously issued signed URLs remain usable until their existing short expiry. Marker exam detail
+still strips MCQ answer keys, and student `/mine` responses still hide marks, feedback and graded time
+until results are published. No marker physical-entry roster endpoint exists in this slice.
+
 > Step 9 — Students submit answers, markers grade, admin publishes results.
 
 ---
@@ -39,6 +60,12 @@
 - Requires: `access_token` cookie
 - Role: `STUDENT`
 
+**Integrity checks (2026-09-06):** an active enrollment in the exam's course is required,
+for both physical and online students. This adds no monthly-payment gate. `INCLASS` papers
+cannot be self-submitted through this endpoint, and published exams are closed to new attempts.
+Automatically calculated MCQ marks are saved server-side but `marks`, `feedback`, and `gradedAt`
+remain null in the student response until results are published.
+
 ### Request Body
 
 ```json
@@ -60,6 +87,11 @@
 **Written channel (WRITTEN / HYBRID):** the written portion must arrive via **exactly one** channel — either typed `writtenAnswers` (when `allowTypedAnswers`) **or** a PDF upload via `fileName`/`contentType`/`fileSizeBytes` (when `allowPdfUpload`). Typed-only submissions return no `uploadUrl` and are `COMPLETED` immediately; PDF submissions return an upload URL and stay `UPLOADING` until `PATCH /:id/complete`.
 
 **Additional error codes:** `TYPED_NOT_ALLOWED` (400), `PDF_NOT_ALLOWED` (400), `WRITTEN_ANSWER_REQUIRED` (400 — neither channel supplied for a WRITTEN/HYBRID exam).
+
+`NOT_ENROLLED` (403) rejects absent/inactive enrollment; `INCLASS_SUBMISSION_NOT_ALLOWED` (400)
+rejects student-created physical-paper records; `RESULTS_ALREADY_PUBLISHED` (409) closes published
+exams. `MULTIPLE_WRITTEN_CHANNELS` (400) rejects typed answers together with a PDF. All three PDF
+metadata fields are required together (`FILE_METADATA_REQUIRED`, 400), before a submission is created.
 
 ### Success Response (201)
 
@@ -123,7 +155,12 @@
 > and only then persists `answerPdfUrl` before flipping `status = COMPLETED` — so a blocked/failed
 > PUT can't leave a "submitted" answer that isn't stored. The key must match
 > `answers/<examId>/<callerId>/` (→ `403 FORBIDDEN_KEY`); a missing object → `409 UPLOAD_NOT_FOUND`.
-> Typed-only/MCQ completions send no `key` and skip the R2 check.
+> Typed-only/MCQ attempts are already completed when created; replaying their completion needs no key
+> and performs no write. An `UPLOADING` attempt requires a key (`400 UPLOAD_KEY_REQUIRED`), continued
+> active enrollment, and an exam that has not been deleted or published. Publication closes upload
+> completion even within the existing one-minute grace period. Completion responses never reveal
+> unpublished marks, feedback, or grading time; already-completed historical results remain readable
+> by their owner after publication, independently of current enrollment.
 
 ### Success Response (200)
 

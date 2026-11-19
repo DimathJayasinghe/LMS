@@ -6,7 +6,7 @@ import { ANSWER_PDF_KEY_PREFIX, ANSWER_PDF_URL_TTL_SECONDS } from '@/utils/const
 import { createR2PresignedGetUrl, createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { mcqPayloadSchema } from '@/schemas/exam.schema';
 import { assertCourseAccess } from '@/services/class.service';
-import { assertMarkerAssignedToExam } from '@/services/access.service';
+import { assertMarkerAssignedToExam, assertMarkerAssignedToExamAudience, assertStudentContentAccess, assertStudentExamStartAccess } from '@/services/access.service';
 import type {
   StartSubmissionInput,
   SubmitMarksInput,
@@ -156,7 +156,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
   select: {
     id: true; title: true; type: true; startTime: true; endTime: true;
     totalMarks: true; isPublished: true; deletedAt: true; mcqPayload: true;
-    allowTypedAnswers: true; allowPdfUpload: true; courseId: true;
+    allowTypedAnswers: true; allowPdfUpload: true; courseId: true; paperRevisionId: true;
   };
 }>> => {
   const exam = await prisma.exam.findUnique({
@@ -164,7 +164,7 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
     select: {
       id: true, title: true, type: true, startTime: true, endTime: true,
       totalMarks: true, isPublished: true, deletedAt: true, mcqPayload: true,
-      allowTypedAnswers: true, allowPdfUpload: true, courseId: true,
+      allowTypedAnswers: true, allowPdfUpload: true, courseId: true, paperRevisionId: true,
     },
   });
 
@@ -186,6 +186,14 @@ export const startSubmission = async (
   input: StartSubmissionInput,
 ): Promise<StartSubmissionResult> => {
   const exam = await ensureExamActive(input.examId);
+  await assertStudentExamStartAccess({ userId, role: Role.STUDENT }, input.examId, input.audienceId);
+
+  if (exam.type === ExamType.INCLASS) {
+    throw new AppError('INCLASS_SUBMISSION_NOT_ALLOWED', 400, 'This paper is submitted in class. Staff record its result.');
+  }
+  if (exam.isPublished) {
+    throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
+  }
 
   // Server-authoritative time — never trust the client's clock
   const now = new Date();
@@ -215,6 +223,14 @@ export const startSubmission = async (
   const hasTyped =
     input.writtenAnswers !== undefined && Object.keys(input.writtenAnswers).length > 0;
   const usingPdf = requiresWritten && !!input.fileName;
+
+  const hasFileMetadata = input.fileName !== undefined || input.contentType !== undefined || input.fileSizeBytes !== undefined;
+  if (hasFileMetadata && (!input.fileName || !input.contentType || !input.fileSizeBytes)) {
+    throw new AppError('FILE_METADATA_REQUIRED', 400, 'Choose a PDF with its file name, type, and size before submitting.');
+  }
+  if (hasTyped && usingPdf) {
+    throw new AppError('MULTIPLE_WRITTEN_CHANNELS', 400, 'Submit typed answers or an answer PDF, not both.');
+  }
 
   if (requiresMcq && !input.answers) {
     throw new AppError('MCQ_ANSWERS_REQUIRED', 400, 'MCQ answers are required for this exam type.');
@@ -268,23 +284,30 @@ export const startSubmission = async (
   const isMcqOnly = exam.type === ExamType.MCQ;
   const status = usingPdf ? SubmissionStatus.UPLOADING : SubmissionStatus.COMPLETED;
 
-  const submission = await prisma.submission.create({
-    data: {
-      userId,
-      examId: input.examId,
-      status,
-      answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull,
-      writtenAnswers: hasTyped
-        ? (input.writtenAnswers as unknown as Prisma.InputJsonObject)
-        : Prisma.JsonNull,
-      // Only MCQ-only exams auto-grade; written work waits for a marker.
-      marks: isMcqOnly ? mcqMarks : null,
-      gradedAt: isMcqOnly ? new Date() : null,
-    },
-    select: submissionDetailSelect,
-  });
+  const submission = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.examId}, 0))`);
+    const locked = await tx.exam.findUnique({ where: { id: input.examId }, select: { id: true, courseId: true, paperRevisionId: true, startTime: true, endTime: true, isPublished: true, deletedAt: true } });
+    if (!locked || locked.deletedAt) throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+    if (locked.isPublished) throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
+    const lockedNow = new Date();
+    if (lockedNow < locked.startTime) throw new AppError('EXAM_NOT_STARTED', 400, 'This exam has not started yet.');
+    if (lockedNow > locked.endTime) throw new AppError('EXAM_ENDED', 400, 'This exam has ended. Submissions are no longer accepted.');
+    const enrolled = await tx.enrollment.findFirst({ where: { userId, courseId: locked.courseId, isActive: true }, select: { id: true } });
+    if (!enrolled) throw new AppError('NOT_ENROLLED', 403, 'You are not enrolled in this course.');
+    if (locked.paperRevisionId) {
+      if (!input.audienceId) throw new AppError('EXAM_AUDIENCE_REQUIRED', 400, 'Choose your assigned online audience.');
+      const participant = await tx.examParticipant.findFirst({ where: { examId: input.examId, userId, audienceId: input.audienceId, audience: { deliveryMode: 'ONLINE' } }, select: { id: true } });
+      if (!participant) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'You are not eligible to start this exam audience.');
+    }
+    const duplicate = await tx.submission.findUnique({ where: { userId_examId: { userId, examId: input.examId } }, select: { id: true } });
+    if (duplicate) throw new AppError('ALREADY_SUBMITTED', 409, 'You have already submitted for this exam.');
+    return tx.submission.create({ data: { userId, examId: input.examId, status, answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, writtenAnswers: hasTyped ? (input.writtenAnswers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, marks: isMcqOnly ? mcqMarks : null, gradedAt: isMcqOnly ? new Date() : null }, select: submissionDetailSelect });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-  const result: StartSubmissionResult = { submission };
+  // Automatic grading is stored immediately but released only by the teacher.
+  const result: StartSubmissionResult = {
+    submission: { ...submission, marks: null, feedback: null, gradedAt: null },
+  };
 
   // Generate presigned upload URL for the answer PDF (PDF channel only).
   if (usingPdf && input.fileName && input.contentType) {
@@ -321,7 +344,7 @@ export const completeSubmission = async (
     select: {
       ...submissionDetailSelect,
       examId: true,
-      exam: { select: { endTime: true } },
+      exam: { select: { endTime: true, isPublished: true, courseId: true, deletedAt: true } },
     },
   });
 
@@ -334,8 +357,19 @@ export const completeSubmission = async (
   }
 
   if (submission.status === SubmissionStatus.COMPLETED) {
-    // Idempotent — already completed, just return it
-    return submission;
+    // A replay must enforce the same publication gate as GET /mine.
+    const { exam, ...ownSubmission } = submission;
+    return exam.isPublished
+      ? ownSubmission
+      : { ...ownSubmission, marks: null, feedback: null, gradedAt: null };
+  }
+
+  if (submission.exam.deletedAt) {
+    throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+  }
+  await assertStudentContentAccess({ userId, role: Role.STUDENT }, submission.exam.courseId);
+  if (submission.exam.isPublished) {
+    throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
   }
 
   // Verify server time hasn't passed exam end + grace period
@@ -352,6 +386,9 @@ export const completeSubmission = async (
   // For the PDF answer channel, verify the file actually reached R2 (HeadObject)
   // before persisting `answerPdfUrl` — the presign no longer eagerly writes it, so
   // a failed/blocked browser PUT never leaves a "submitted" answer that isn't there.
+  if (!input.key) {
+    throw new AppError('UPLOAD_KEY_REQUIRED', 400, 'Upload your answer PDF and provide its upload key before completing.');
+  }
   let answerPdfUrl: string | undefined;
   if (input.key) {
     const expectedPrefix = `${ANSWER_PDF_KEY_PREFIX}/${submission.examId}/${userId}/`;
@@ -378,7 +415,7 @@ export const completeSubmission = async (
     select: submissionDetailSelect,
   });
 
-  return updated;
+  return { ...updated, marks: null, feedback: null, gradedAt: null };
 };
 
 // ─── List Submissions ─────────────────────────────────────
@@ -415,11 +452,33 @@ export const listSubmissions = async (
         ? { marks: null }
         : {};
 
+  // A scoped marker list is never merely exam-scoped: bind every returned
+  // student to an audience grant resolved at confirmation. Legacy exams retain
+  // their old explicit whole-exam MarkerAssignment semantics.
+  const markerAudienceFilter: Prisma.SubmissionWhereInput =
+    actor.role === Role.MARKER && exam.paperRevisionId
+      ? {
+          user: {
+            examParticipants: {
+              some: {
+                examId,
+                audience: {
+                  markerAssignmentAudiences: {
+                    some: { examId, assignment: { markerId: actor.userId } },
+                  },
+                },
+              },
+            },
+          },
+        }
+      : {};
+
   const submissions = await prisma.submission.findMany({
     where: {
       examId,
       ...statusFilter,
       ...gradedFilter,
+      ...markerAudienceFilter,
     },
     select: submissionListSelect,
     orderBy: { submittedAt: 'asc' },
@@ -493,16 +552,16 @@ export const listMySubmissions = async (
 // ─── Submit Marks ──────────────────────────────────────────
 // Markers grade a specific submission. Idempotency is handled at the route level.
 
-export const submitMarks = async (
+export const assertMarkerMayGradeSubmission = async (
   submissionId: string,
-  input: SubmitMarksInput,
   markerId: string,
-): Promise<SubmissionResult> => {
+) => {
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
     select: {
       ...submissionDetailSelect,
-      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true } },
+      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true, paperRevisionId: true } },
+      user: { select: { examParticipants: { select: { examId: true, audienceId: true } } } },
     },
   });
 
@@ -510,8 +569,22 @@ export const submitMarks = async (
     throw new AppError('SUBMISSION_NOT_FOUND', 404, 'Submission not found.');
   }
 
-  // Verify the marker is assigned to this exam
-  await assertMarkerAssignedToExam(markerId, submission.exam.id);
+  if (submission.exam.paperRevisionId) {
+    const audienceId = submission.user.examParticipants.find((participant) => participant.examId === submission.exam.id)?.audienceId;
+    if (!audienceId) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'This scoped submission has no eligible exam audience.');
+    await assertMarkerAssignedToExamAudience(markerId, submission.exam.id, audienceId);
+  } else {
+    await assertMarkerAssignedToExam(markerId, submission.exam.id);
+  }
+  return submission;
+};
+
+export const submitMarks = async (
+  submissionId: string,
+  input: SubmitMarksInput,
+  markerId: string,
+): Promise<SubmissionResult> => {
+  const submission = await assertMarkerMayGradeSubmission(submissionId, markerId);
 
   if (submission.exam.isPublished) {
     throw new AppError(

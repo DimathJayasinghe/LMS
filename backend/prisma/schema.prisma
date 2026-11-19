@@ -85,6 +85,22 @@ enum ExamType {
   INCLASS
 }
 
+enum ExamAudienceDeliveryMode {
+  ONLINE
+  PHYSICAL
+}
+
+enum MarkerGroupScope {
+  COURSE
+  SUBJECT
+  INSTITUTE
+}
+
+enum MarkerGroupMembershipAction {
+  ADDED
+  REMOVED
+}
+
 // Scenarios that can fire a notification. Add new values here as new triggers
 // ship — NotificationSettingService seeds a row per (type, channel) on demand.
 enum NotificationType {
@@ -126,21 +142,30 @@ model User {
   emailChangedAt    DateTime? // cooldown anchor — self email changes
   passwordChangedAt DateTime? // cooldown anchor — self password changes
 
-  permission         Permission?         @relation("UserPermission")
-  enrollments        Enrollment[]
-  taughtCourses      Course[]            @relation("CourseTeacher") // courses this TEACHER teaches
-  subjectAssignments SubjectTeacher[]    @relation("SubjectTeacher")
-  courseProgress     CourseContentProgress[]
-  studentBarcodes    StudentBarcode[] // per-institute barcodes
-  attendance         Attendance[]
-  submissions        Submission[]
-  actorAuditLogs     AuditLog[]          @relation("AuditActor")
-  markerAssignments  MarkerAssignment[]  @relation("AssignedMarker")
-  collectedPayments  Payment[]           @relation("PaymentCollector") // ENTRANCE/MANUAL payments taken
-  paymentAdjustments PaymentAdjustment[] @relation("PaymentAdjustmentActor")
-  smsLogs            SmsLog[]
-  notifications      Notification[]
-  refreshTokens      RefreshToken[]
+  permission                        Permission?                  @relation("UserPermission")
+  enrollments                       Enrollment[]
+  taughtCourses                     Course[]                     @relation("CourseTeacher") // courses this TEACHER teaches
+  subjectAssignments                SubjectTeacher[]             @relation("SubjectTeacher")
+  courseProgress                    CourseContentProgress[]
+  studentBarcodes                   StudentBarcode[] // per-institute barcodes
+  attendance                        Attendance[]
+  submissions                       Submission[]
+  actorAuditLogs                    AuditLog[]                   @relation("AuditActor")
+  markerAssignments                 MarkerAssignment[]           @relation("AssignedMarker")
+  markerAllocationRevisions         MarkerAllocationRevision[]   @relation("MarkerAllocationActor")
+  markerGroupsCreated               MarkerGroup[]                @relation("MarkerGroupCreator")
+  markerGroupMembershipsAdded       MarkerGroupMember[]          @relation("MarkerGroupMemberAddedBy")
+  markerGroupMembershipsRemoved     MarkerGroupMember[]          @relation("MarkerGroupMemberRemovedBy")
+  markerGroupMembershipEvents       MarkerGroupMembershipEvent[] @relation("MarkerGroupMembershipEventActor")
+  markerGroupMembers                MarkerGroupMember[]
+  markerGroupMembershipEventMarkers MarkerGroupMembershipEvent[]
+  examPapersCreated                 ExamPaper[]                  @relation("ExamPaperCreator")
+  examParticipants                  ExamParticipant[]
+  collectedPayments                 Payment[]                    @relation("PaymentCollector") // ENTRANCE/MANUAL payments taken
+  paymentAdjustments                PaymentAdjustment[]          @relation("PaymentAdjustmentActor")
+  smsLogs                           SmsLog[]
+  notifications                     Notification[]
+  refreshTokens                     RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -198,6 +223,7 @@ model Subject {
 
   courses            Course[]
   teacherAssignments SubjectTeacher[]
+  markerGroups       MarkerGroup[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -214,12 +240,12 @@ model Course {
   isActive    Boolean @default(true)
 
   // Display assets shown on the course page / dashboard
-  bannerUrl     String? // server-controlled public URL
-  bannerKey     String? // public R2 object key for lifecycle management
-  bannerAlt     String? // accessible description
-  backdropUrl   String? // server-controlled public URL
-  backdropKey   String? // public R2 object key for lifecycle management
-  backdropAlt   String? // accessible description
+  bannerUrl   String? // server-controlled public URL
+  bannerKey   String? // public R2 object key for lifecycle management
+  bannerAlt   String? // accessible description
+  backdropUrl String? // server-controlled public URL
+  backdropKey String? // public R2 object key for lifecycle management
+  backdropAlt String? // accessible description
 
   subjectId String
   subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
@@ -227,12 +253,14 @@ model Course {
   teacherId String
   teacher   User   @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
 
-  enrollments    Enrollment[]
-  classSessions  ClassSession[]
-  exams          Exam[]
-  timetableSlots TimetableSlot[]
+  enrollments     Enrollment[]
+  classSessions   ClassSession[]
+  exams           Exam[]
+  examPapers      ExamPaper[]
+  timetableSlots  TimetableSlot[]
   contentProgress CourseContentProgress[]
   modules         CourseModule[]
+  markerGroups    MarkerGroup[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -503,6 +531,13 @@ model Exam {
   totalMarks  Int      @default(100)
   isPublished Boolean  @default(false)
 
+  // Null keeps the complete legacy whole-course exam contract. A non-null
+  // revision turns this into a scoped instance with explicit audiences/roster.
+  paperRevisionId  String?
+  paperRevision    ExamPaperRevision? @relation(fields: [paperRevisionId], references: [id], onDelete: Restrict)
+  audienceRevision Int                @default(0)
+  rosterRevision   Int                @default(0)
+
   courseId String
   course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
 
@@ -510,6 +545,10 @@ model Exam {
 
   submissions       Submission[]
   markerAssignments MarkerAssignment[]
+  markerAssignmentAudiences MarkerAssignmentAudience[]
+  markerAllocationRevisions MarkerAllocationRevision[]
+  audiences         ExamAudience[]
+  participants      ExamParticipant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -519,6 +558,73 @@ model Exam {
   @@index([endTime])
   @@index([deletedAt])
   @@index([type])
+  @@index([paperRevisionId])
+}
+
+model ExamPaper {
+  id          String              @id @default(uuid())
+  title       String
+  courseId    String
+  course      Course              @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy   User                @relation("ExamPaperCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  revisions   ExamPaperRevision[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([courseId])
+  @@index([createdById])
+}
+
+model ExamPaperRevision {
+  id                String    @id @default(uuid())
+  paperId           String
+  paper             ExamPaper @relation(fields: [paperId], references: [id], onDelete: Restrict)
+  version           Int
+  type              ExamType
+  totalMarks        Int
+  paperPdfUrl       String?
+  mcqPayload        Json?
+  allowTypedAnswers Boolean   @default(true)
+  allowPdfUpload    Boolean   @default(true)
+  instances         Exam[]
+  createdAt         DateTime  @default(now())
+
+  @@unique([paperId, version])
+  @@index([paperId])
+}
+
+model ExamAudience {
+  id           String                   @id @default(uuid())
+  examId       String
+  exam         Exam                     @relation(fields: [examId], references: [id], onDelete: Restrict)
+  label        String
+  deliveryMode ExamAudienceDeliveryMode
+  instituteId  String?
+  institute    Institute?               @relation(fields: [instituteId], references: [id], onDelete: Restrict)
+  participants ExamParticipant[]
+  markerAssignmentAudiences MarkerAssignmentAudience[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@unique([id, examId])
+  @@index([examId])
+  @@index([instituteId])
+}
+
+model ExamParticipant {
+  id         String       @id @default(uuid())
+  examId     String
+  audienceId String
+  userId     String
+  exam       Exam         @relation(fields: [examId], references: [id], onDelete: Restrict)
+  audience   ExamAudience @relation(fields: [audienceId, examId], references: [id, examId], onDelete: Restrict)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt  DateTime     @default(now())
+
+  @@unique([examId, userId])
+  @@index([audienceId, examId])
+  @@index([userId])
 }
 
 model Submission {
@@ -556,10 +662,145 @@ model MarkerAssignment {
   exam   Exam   @relation(fields: [examId], references: [id], onDelete: Restrict)
 
   assignedAt DateTime @default(now())
+  allAudiences Boolean @default(false)
+
+  // Scoped instances resolve every confirmed allocation to these exact,
+  // audience-bound grants. Legacy instances intentionally retain their
+  // whole-exam assignment without grant rows.
+  audienceGrants MarkerAssignmentAudience[]
 
   @@unique([markerId, examId])
+  @@unique([id, examId])
   @@index([markerId])
   @@index([examId])
+}
+
+model MarkerAssignmentAudience {
+  id String @id @default(uuid())
+
+  assignmentId String
+  assignment MarkerAssignment @relation(fields: [assignmentId, examId], references: [id, examId], onDelete: Restrict)
+
+  // `examId` is duplicated so PostgreSQL can bind the grant to an audience of
+  // the same instance through the composite audience foreign key.
+  examId String
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  audienceId String
+  audience ExamAudience @relation(fields: [audienceId, examId], references: [id, examId], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  source Json @default("[]")
+
+  @@unique([assignmentId, audienceId])
+  @@index([examId, audienceId])
+}
+
+// Immutable academic evidence for each confirmed scoped allocation. The JSON
+// snapshots make revocation auditable without allowing historical group edits
+// to alter confirmed marker/audience grants.
+model MarkerAllocationRevision {
+  id String @id @default(uuid())
+  examId String
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  revision Int
+  reason String
+  digest String
+  beforeState Json
+  afterState Json
+  sourceState Json @default("[]")
+  evidenceState Json @default("{}")
+  requestState Json @default("{}")
+  idempotencyKey String?
+  actorId String
+  actor User @relation("MarkerAllocationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([examId, revision])
+  @@unique([examId, actorId, idempotencyKey])
+  @@index([examId, createdAt])
+  @@index([actorId])
+}
+
+// The migration enforces that every scope selects exactly one target relation.
+model MarkerGroup {
+  id          String           @id @default(uuid())
+  name        String
+  description String?
+  scope       MarkerGroupScope
+  isActive    Boolean          @default(true)
+  deletedAt   DateTime?
+  revision    Int              @default(0)
+
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  instituteId String?
+  institute   Institute? @relation(fields: [instituteId], references: [id], onDelete: Restrict)
+
+  createdById String
+  createdBy   User   @relation("MarkerGroupCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  members          MarkerGroupMember[]
+  membershipEvents MarkerGroupMembershipEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([subjectId])
+  @@index([instituteId])
+  @@index([createdById])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+// Removed membership rows remain available for reactivation; append-only events
+// provide the historical record consumed by staff audit views.
+model MarkerGroupMember {
+  id String @id @default(uuid())
+
+  groupId String
+  group   MarkerGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  markerId String
+  marker   User   @relation(fields: [markerId], references: [id], onDelete: Restrict)
+
+  addedById String
+  addedBy   User     @relation("MarkerGroupMemberAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  addedAt   DateTime @default(now())
+
+  removedById String?
+  removedBy   User?     @relation("MarkerGroupMemberRemovedBy", fields: [removedById], references: [id], onDelete: Restrict)
+  removedAt   DateTime?
+
+  @@unique([groupId, markerId])
+  @@index([groupId])
+  @@index([markerId])
+  @@index([removedAt])
+}
+
+model MarkerGroupMembershipEvent {
+  id     String                      @id @default(uuid())
+  action MarkerGroupMembershipAction
+  reason String
+
+  groupId String
+  group   MarkerGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  markerId String
+  marker   User   @relation(fields: [markerId], references: [id], onDelete: Restrict)
+
+  actorId String
+  actor   User   @relation("MarkerGroupMembershipEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([groupId, createdAt])
+  @@index([markerId])
+  @@index([actorId])
 }
 
 model AuditLog {
@@ -651,6 +892,8 @@ model Institute {
   studentBarcodes StudentBarcode[]
   timetableSlots  TimetableSlot[]
   payments        Payment[]
+  markerGroups    MarkerGroup[]
+  examAudiences   ExamAudience[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

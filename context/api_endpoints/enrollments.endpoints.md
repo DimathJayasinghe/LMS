@@ -52,9 +52,13 @@ All endpoints require the `access_token` cookie.
 }
 ```
 
-- `classType` — `ONLINE` | `PHYSICAL`. A student may hold **one enrollment per
+- `classType` — `ONLINE` | `PHYSICAL` today. A student may hold **one enrollment per
   `(course, classType)`** (unique on `userId + courseId + classType`), so the same
-  course can be taken both online and physically as two enrollments.
+  course can be taken both online and physically as two enrollments, **each billed separately**.
+  *Planned (2026-11-19, not implemented):* a `HYBRID` value meaning one enrollment, one fee, both
+  modes, and one **active** enrollment per `(user, course)`; see the
+  [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §4.
+  The content gate (`assertStudentContentAccess`) currently checks enrollment and payment only, not `classType`.
 - `isActive` — `false` means cancelled/dropped; history (payments) is retained.
 - The admin list (`GET /`) additionally embeds a `user` summary
   (`{ id, name, indexNumber, email }`).

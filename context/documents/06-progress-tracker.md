@@ -8,20 +8,63 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Shared/separate exam and customizable marking design; Phase E implementation pending |
-| **Last Updated** | 2026-09-06 |
-| **Last Completed Task** | Owner approved the shared/separate exam and customizable marker-access design. |
-| **Next Task** | Write the phased implementation plan, then deliver small tested slices; role-dashboard integration audit follows exam/marking work. |
-| **Blockers** | No design blocker; provider/deployment/recovery and retention requirements remain release gates. |
+| **Current Phase** | Requirements and docs alignment (multi-tenancy, payment channels, HYBRID enrollment), then code alignment; Phase E marker groups and exam papers/audiences are merged |
+| **Last Updated** | 2026-11-19 |
+| **Last Completed Task** | Owner decisions of 2026-11-19 recorded in docs: [14 multi-tenancy ADR](./14-multi-tenancy-readiness.md), [15 requirements traceability](./15-requirements-traceability.md), and the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md). No code changed. |
+| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → Phase E allocation preview/snapshot slice and accountable physical-paper result entry → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
+| **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
+
+### 2026-11-19 — Local offline development with provider drivers
+
+- [x] Owner request: until hosted, run everything locally in Docker through adapters configured by environment. Design in [16-local-development.md](./16-local-development.md): drivers default to the real providers, are implemented inside the existing utilities, and are refused when `NODE_ENV=production`.
+- [x] **Storage** (`STORAGE_DRIVER=local`): RustFS S3-compatible container, path-style addressing, separate browser-facing presign endpoint (`R2_PRESIGN_ENDPOINT`), bucket bootstrap with CORS and a public-read bucket via `docker-compose.local.yml` and `docker/local/storage-init.sh`. Verified manually on 2026-11-19 against the real backend image in Docker (presign, browser PUT from the host, backend HEAD confirm, public read); unit tests cover URL shape and driver selection only. The MinIO Docker Hub image no longer exists, hence RustFS.
+- [x] **SMS** (`SMS_DRIVER=log`): the worker logs the message and marks `SmsLog` `SENT`.
+- [ ] **Video** (`VIDEO_DRIVER=local`): contract emulation with no DRM; TUS upload, signed webhook to the existing route, minimal player page. The nginx `X-Frame-Options DENY` header must not block the local player.
+- [ ] **PayHere** local mock checkout that reuses `utils/payhere.ts` signing; **Zoom** mock meeting creation (joining needs real Zoom).
+- [ ] Known gap: `next/image` has no `images.remotePatterns`, so remote banner URLs are blocked by Next regardless of driver.
+
+### 2026-11-19 — Git workflow rules and branch cleanup
+
+- [x] Rewrote [11-git-and-naming.md](./11-git-and-naming.md): protected `dev`/`main`, no long-lived lanes, `type/kebab-scope` names without personal prefixes, **delete branches after merge** (reverses the 2026-07-10 rule), stacked branches, worktree policy, stale-branch policy, release and hotfix flow, PR checklist, cleanup runbook, AI-agent session rules. `.worktrees/` is now gitignored.
+- [x] Owner-approved cleanup: merged branches (squash-merge makes them look unmerged to `git branch --merged`) and the abandoned unmerged `chathura/dev/*`, `feature/hardening`, `dev-backend` and `fix/remove-misplaced-route` branches deleted; open-PR branches kept. GitHub: auto-delete head branches on merge, `dev` and `main` protected (PR required, `Quality Gate` required, no force-push, no deletion).
+- [ ] Known loss: the CORS/env-pickup fix in `9c86b11` (was on `feature/hardening` and `dev-backend`) is not in `dev`; re-apply if still needed.
+
+### 2026-11-19 — Requirements alignment: multi-tenancy, payment channels, class types
+
+- [x] **Owner decisions recorded** (rationale in the Decisions Log): deploy for one organization but build tenant-ready; tenant is `Organization`, `SUPER_ADMIN` owns one organization, `PLATFORM_ADMIN` name reserved; three class types via a planned `HYBRID` enrollment; three payment channels including a planned staff-approved bank-slip channel; stay on Express + Next.js (no NestJS rewrite); Bunny Stream remains the video provider.
+- [x] Added [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md): data-model changes, per-organization uniques, provider configuration, webhook resolution, isolation strategy, key spaces, and the M1–M8 migration plan.
+- [x] Added [15-requirements-traceability.md](./15-requirements-traceability.md): every requirement from the review mapped to Done / Partial / Planned / Gap / Deferred / Decide, including where the generic list conflicts with earlier decisions.
+- [x] Added the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
+- [x] Corrected doc drift found while checking source: playback is a **token-authenticated embed with a 4-hour, non-IP-bound token** (docs, `CLAUDE.md` and the hosting doc said IP-bound HLS); the described player "black-screen detection" does not exist; `generateBunnyStreamUrl` is dead code; `07-implementation-plan.md` is the original build order, not a current plan.
+- [x] **Decided later the same day:** a `PHYSICAL`-only enrollment loses live/recording access unless the student is `HYBRID` or the session opts in via a new `ClassSession.onlineForPhysical` flag (behaviour change; needs a rollout report); the first organization migration uses placeholder slug `default` / code `DEF`, renamed before launch.
+- [ ] **Still open:** (1) one fee for all modes or per-mode fees; (2) keep existing `LMS-<index>` QR values when the organization prefix is introduced; (3) is a tenant export/restore tool required before a second customer; (4) Sinhala/Tamil UI at launch or after; (5) are one-way WhatsApp notifications acceptable.
+- [ ] Code alignment has not started. Cleanups already identified: delete `generateBunnyStreamUrl`; remove the `hls.js` frontend dependency, which nothing imports any more (the `resend` dependency noted in the 2026-07-09 decision is already gone).
 
 ### 2026-09-06 — Configurable exam scope and dashboard follow-up
 
 - [x] Owner confirmed shared AND separate exam instances, teacher-selected centers/grouped centers/online students, and optional teacher-configured marker restrictions inside shared instances.
 - [x] Owner approved the [customizable exam-marking design](../../docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md), separating paper reuse, exam audiences, student roster and effective marker access. No new behavior/schema is implemented in this design checkpoint.
-- [x] PR #79 remains open, independently reviewed and green in GitHub CI. Its 295-backend/105-frontend tests and 21 compiled-stack assertions are evidence for that patch, not for this planned feature or current `dev`. Its Docker verification supersedes the earlier unavailable-daemon checkpoint.
-- [ ] Land PR #79 and deliver the approved feature as small tested migration/API/UI slices. Preserve both branches and reconcile tracker updates when integrating.
+- [x] PR #79 was open at the time of this entry (independently reviewed, green in GitHub CI); it has since merged into `dev` (2026-11). Its 295-backend/105-frontend tests and 21 compiled-stack assertions are evidence for that patch, not for this planned feature or current `dev`. Its Docker verification supersedes the earlier unavailable-daemon checkpoint.
+- [ ] ~~Land PR #79~~ (merged) and deliver the approved feature as small tested migration/API/UI slices; Phase E slices E1 and the allocation scoping are on `dev`, allocation preview/snapshot and physical-result entry remain. Preserve both branches and reconcile tracker updates when integrating.
 - [ ] After the current exam/marking work, [issue #81](https://github.com/DimathJayasinghe/LMS/issues/81) covers all five role dashboards: real backend wiring, correct privileges, navigation, loading/error/empty states and end-to-end outcomes. Sparse dashboards do not justify copying another role's privileges.
 - [ ] Separate results-SMS duplication/settings bypass is tracked in [issue #80](https://github.com/DimathJayasinghe/LMS/issues/80).
+### 2026-09-06 — Owner decisions and submission integrity hardening
+
+- [x] Owner confirmed 1,200 students, physical-center paper groups/results in online academic records, markers working across subjects/courses, and activity/error logging. Proceed with privilege and usability review.
+- [x] PR #78 passed CI and independent review, then squash-merged into `dev`; branch preserved. Docker Desktop is now available and both production builder images compile.
+- [x] Fix verified submission defects: missing enrollment check, fabricated student INCLASS submissions, ambiguous/incomplete upload channels, missing-key completion, unpublished-grade response leaks, and completion after publication/deletion/enrollment revocation.
+- [x] Independent review found publication-grace and revoked-enrollment completion gaps; both now have failing-first regression coverage and fixes. Follow-up review found no blocking issues.
+- [x] Verification: backend 295 tests (37 files), frontend 105 tests (27 files), both production builder images, and 21 compiled HTTP/database/SSR assertions on isolated PostgreSQL/Redis with all six migrations. No provider credentials, real users, or existing application database were used. Backend runtime used test configuration; frontend ran its production server. This is not a production-deployment or external-provider certificate.
+- [ ] Finish submission-integrity CI and merge its reviewed PR.
+- [ ] Phase E must add staff physical-paper result entry; the existing student-facing promise has no corresponding staff API yet. Keep exact exam assignment as the marker access source and preserve publication privacy.
+
+### 2026-09-06 — Phase E1 marker-group backend foundation
+
+- [x] Added reusable `COURSE`, `SUBJECT`, and `INSTITUTE` marker groups without changing exact exam authorization; `MarkerAssignment` remains the sole exam-access source.
+- [x] Added transactionally replaced active membership, immutable add/remove events, active-marker validation, required reasons, and a revision increment on every membership change.
+- [x] Scoped group configuration/history to SUPER_ADMIN globally and owning TEACHER course groups only; ADMIN, MARKER, and STUDENT are denied.
+- [x] Added authenticated, idempotent mutation endpoints at `/api/marker-groups`, durable audit records, an additive migration with scope and event-immutability constraints, and focused actor×target Vitest coverage.
+- [ ] Phase E2 must provide read-only allocation preview and atomic exam-specific assignment snapshots; group membership must continue never to alter existing exam access.
 
 ### 2026-09-06 — Production delivery baseline
 
@@ -305,7 +348,7 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 - [x] Implement barcode scanning attendance endpoint
 - [x] Implement Zoom webhook handler (upsert attendance)
 - [x] Create `video.routes.ts`, `video.controller.ts`, `video.service.ts`
-- [x] Implement Bunny.net video token generation (IP-bound)
+- [x] Implement Bunny.net video token generation (IP-bound) *(superseded 2026-07-11: signed embed token, not IP-bound; see 02 §7.1)*
 - [x] Build class schedule page (student view) — `(app)/timetable/page.tsx`
 - [x] Build attendance scanner/report page — `(app)/attendance/page.tsx` keeps the working SUPER_ADMIN/ADMIN entrance scanner (institute→class→session, wedge/camera QR, live roster, manual fallback) and now gives SUPER_ADMIN/TEACHER an ownership-scoped session roster + Zoom reconciliation preview/apply view (2026-08-17). MARKER remains intentionally unsupported.
 - [ ] Build video player component with DRM black-screen detection — `components/features/VideoPlayer.tsx` (187 lines) plays video but has **no watermark overlay and no black-screen detection**; `02-architecture.md §7.1` describes these as if built for VOD — that description is aspirational/stale for the watermark specifically, don't trust it without checking the component
@@ -473,6 +516,14 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | 2026-07-10 | **Notification bell: full persisted inbox, not an ephemeral toast** | User explicitly chose the bigger option over the lighter SSE-only recommendation — wanted unread counts, mark-as-read, and history, not just live pop-ups |
 | 2026-07-10 | **Notification channels: IN_APP + SMS only, no EMAIL toggle** | Matches the existing "email out of scope for v1" decision — a toggle with no sender behind it would be a dead control. `NotificationChannel` enum is structured to extend cleanly when email infra exists |
 | 2026-07-10 | **Notification settings are SUPER_ADMIN-only, not ADMIN** | Consistent with the audit-log-access decision the same session — front-desk doesn't get to decide whether students get contacted, only the owner does |
+| 2026-11-19 | **Stay on Express + Next.js; no NestJS migration** | The backend already has strict route/controller/service layering, a separate BullMQ worker, idempotent signed webhooks, and 27 service modules, most with colocated Vitest suites. A framework rewrite would add cost without adding capability. |
+| 2026-11-19 | **Multi-tenant ready, single-tenant deployed**; tenant = `Organization`; shared schema with `organizationId` | Reverses the "multi-tenancy out of scope" row in 01 §6. Pre-launch is the cheapest time to add tenancy; database-per-tenant stays as an escape hatch. See [14](./14-multi-tenancy-readiness.md). |
+| 2026-11-19 | **`SUPER_ADMIN` = owner of one organization; `PLATFORM_ADMIN` name reserved, not implemented** | Avoids a second role remap later (the ADMIN/STAFF rename was painful) without building a platform console now. |
+| 2026-11-19 | **`Institute` keeps meaning "physical branch"** | Not renamed; the tenant term is `Organization`. |
+| 2026-11-19 | **Three payment channels into one ledger**: platform (PayHere), front desk/branch (`ENTRANCE`), bank transfer + staff-approved slip (`BANK_TRANSFER`, planned) | Keeps `@@unique([enrollmentId, paymentMonth])`; slips live in a separate append-only `PaymentSlip` table. See the payment design §3. |
+| 2026-11-19 | **Physical-only students do not get live/recorded access** unless `HYBRID` or the session sets `onlineForPhysical` | Today's gate ignores `classType`; the owner chose to tie online access to the enrollment type. Behaviour change for existing students, so enforcement needs a prior usage report and announcement. |
+| 2026-11-19 | **Add `HYBRID` enrollment (planned)**; one active enrollment per student per course | One fee, both modes; stops double billing from holding `ONLINE` and `PHYSICAL` enrollments. See the payment design §4. |
+| 2026-11-19 | **Bunny Stream stays the video provider** | Token-authenticated embed is built; MediaCage DRM is enabled per library and must be verified. Wrapped behind a provider interface during ADR 14 M4. |
 | 2026-07-10 | **Consolidated payment SMS into NotificationService.dispatch(), removed the old per-controller helpers** | `payment.controller.ts` already had `sendPaymentConfirmationSms`/`sendPaymentOverrideSms` calling `SmsNotificationService.sendSms` directly, with no settings gate and at risk of double-sending once the new dispatch-based calls were added in the service layer. Removed the controller-level versions; `NotificationService.dispatch` is now the only path, and it respects the super-admin toggle. `sendBulkPaymentSms` (bulk upload) was left as the pre-existing no-op — it never sent anything before this change either, wiring it up needs `bulkUploadPayments` to expose per-row recipients first |
 
 ---
@@ -485,7 +536,9 @@ The `backend/prisma/schema.prisma` was migrated to match [08-database-design.md 
 | Zoom webhook missed during server restart | Ownership-scoped preview/apply reconciliation plus SUPER_ADMIN/TEACHER "Sync" UI; provider retry monitoring still remains | 🟡 Reconciliation done 2026-08-17; staging provider proof and retry alerting remain |
 | JWT expiry during long exam | Silent refresh token rotation | 🟡 Partial — reactive refresh-on-401 exists (`frontend/lib/api.ts`, single retry); no proactive/background rotation ahead of the 15-min expiry |
 | R2 presigned URL expiry during slow upload | Multipart upload with token refresh | ⬜ To implement (confirmed absent 2026-07-15 — NIC/exam-paper/answer-PDF uploaders are single presign→PUT→confirm, no resume path) |
-| Video piracy (leaked stream link) | Bunny token-authenticated embed + MediaCage DRM, enrolled/paid gating, per-student watermark overlay | ✅ Done (2026-07-11, PR #56 — see `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`) |
+| Video piracy (leaked stream link) | Bunny token-authenticated embed (4-hour, not IP-bound), enrolled/paid gating, per-student watermark overlay; MediaCage DRM is a Bunny library setting | 🟡 Code done (2026-07-11, PR #56 — see `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`). Library DRM setting and a valid Bunny key are **unverified** (roadmap P0 records a malformed key). Consider a shorter TTL and referrer restrictions (09 §2) |
+| **New 2026-11-19:** A missing tenant filter leaks one organization's data to another once more than one organization exists | Scoped Prisma client, registry test, isolation test suite, raw-SQL ban, integrity check (ADR 14 §6) | ⬜ Planned; not applicable while there is one organization |
+| **New 2026-11-19:** Bank-slip fraud (reused or forged slips, one transfer credited twice) | Staff approval, unique approved reference per organization, audited file access, no auto-unlock from a pending slip (payment design §3.3) | ⬜ Planned |
 | Live-class link sharing | Per-session Zoom SDK signature bound to authenticated enrolled+paid student | ✅ Done |
 | DRM black screen on external monitors | Frontend detection overlay with user guidance | ⬜ Not planned — Web Meeting SDK has no OS-level capture-blocking; CLAUDE.md documents this as an **accepted limitation**, not a bug to fix |
 | Single VPS is a single point of failure | Self-hosted Postgres on a persistent volume + the `backup` service (verified, encrypted, **off-site** dumps) + nightly Redis snapshot; scripted rebuild + restore runbook ([12](./12-data-backup-and-recovery.md)) | 🟡 Backup engine built & validated; configure off-site + drill before cutover |

@@ -46,7 +46,7 @@ vi.mock('@/utils/r2', () => ({
 	r2HeadObject: vi.fn(),
 }));
 
-import { getExamById, listExams, replaceExamMarkers } from './exam.service';
+import { getExamById, listExams, replaceExamMarkers, updateExam } from './exam.service';
 
 const teacher = { userId: 'teacher-1', role: Role.TEACHER } as const;
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER } as const;
@@ -85,6 +85,13 @@ beforeEach(() => {
 	}));
 });
 
+describe('updateExam — pinned paper revisions', () => {
+	it('rejects changing copied assessment content on a scoped instance', async () => {
+		examFindUnique.mockResolvedValueOnce({ ...examRow, paperRevisionId: 'revision-1' });
+		await expect(updateExam('exam-1', { totalMarks: 50 }, teacher)).rejects.toMatchObject({ code: 'PINNED_PAPER_REVISION', statusCode: 409 });
+	});
+});
+
 describe('replaceExamMarkers — ownership and exact-set assignment', () => {
 	it('rejects a non-owning teacher before looking up marker accounts', async () => {
 		examFindUnique.mockResolvedValueOnce(examRow);
@@ -121,8 +128,8 @@ describe('replaceExamMarkers — ownership and exact-set assignment', () => {
 		});
 		expect(markerAssignmentCreateMany).toHaveBeenCalledWith({
 			data: [
-				{ markerId: 'marker-1', examId: 'exam-1' },
-				{ markerId: 'marker-2', examId: 'exam-1' },
+				{ markerId: 'marker-1', examId: 'exam-1', allAudiences: true },
+				{ markerId: 'marker-2', examId: 'exam-1', allAudiences: true },
 			],
 			skipDuplicates: true,
 		});
@@ -195,7 +202,10 @@ describe('listExams — MARKER + ADMIN authorization', () => {
 		await listExams({ status: 'all' }, { userId: 'm1', role: Role.MARKER });
 
 		const call = examFindMany.mock.calls[0]![0];
-		expect(call.where.markerAssignments).toEqual({ some: { markerId: 'm1' } });
+		// Scoped exams only list for a marker who holds at least one audience grant (legacy exams: any assignment).
+		expect(call.where.markerAssignments).toEqual({
+			some: { markerId: 'm1', OR: [{ exam: { paperRevisionId: null } }, { audienceGrants: { some: {} } }] },
+		});
 	});
 
 	it('denies front-desk ADMIN with 403 FORBIDDEN, never querying', async () => {

@@ -111,5 +111,5 @@ For any data-driven view, implement all four — not just the happy path:
 - Never render tokens/secrets; session is cookie-based (Doc 04). Don't log PII (NIC, phone) to the console.
 - Video/exam content is access-gated server-side; the UI should **guide** (enroll/pay prompts) rather than expose
   content optimistically before the gate passes.
-- Respect the content-protection intent: don't add "download" affordances to protected streams; the stream token
-  is IP-bound and short-lived by design.
+- Respect the content-protection intent: don't add "download" affordances to protected streams; the signed
+  embed URL expires (4 hours) and is not IP-bound; the watermark identity is part of the response.

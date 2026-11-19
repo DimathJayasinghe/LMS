@@ -41,6 +41,7 @@ const examBaseSchema = z.object({
 	// Answer channels students may use (default true in DB if omitted)
 	allowTypedAnswers: z.boolean().optional(),
 	allowPdfUpload: z.boolean().optional(),
+	paperRevisionId: z.string().uuid().optional(),
 });
 
 export const createExamSchema = examBaseSchema;
@@ -104,3 +105,30 @@ export const replaceMarkersSchema = z.object({
 });
 
 export type ReplaceMarkersInput = z.infer<typeof replaceMarkersSchema>;
+
+// Scoped instances must state their intended audience set explicitly. `allAudiences`
+// is expanded to the current audience IDs during preview/confirmation; no empty
+// scope is interpreted as a whole-exam grant.
+const markerAllocationSchema = z.object({
+	markerIds: z.array(z.string().uuid()).max(50).default([]),
+	groupIds: z.array(z.string().uuid()).max(50).default([]),
+	audienceIds: z.array(z.string().uuid()).max(100).default([]),
+	allAudiences: z.boolean().default(false),
+}).superRefine((value, ctx) => {
+	if (value.markerIds.length + value.groupIds.length === 0) ctx.addIssue({ code: 'custom', message: 'Select a marker or marker group.' });
+	if (value.allAudiences && value.audienceIds.length) ctx.addIssue({ code: 'custom', message: 'Choose all audiences or selected audiences, not both.' });
+	if (!value.allAudiences && value.audienceIds.length === 0) ctx.addIssue({ code: 'custom', message: 'A restricted marker allocation needs at least one audience.' });
+});
+
+export const previewMarkerAllocationsSchema = z.object({
+	allocations: z.array(markerAllocationSchema).max(100),
+});
+export const confirmMarkerAllocationsSchema = previewMarkerAllocationsSchema.extend({
+	reason: z.string().trim().min(3).max(500),
+	expectedAudienceRevision: z.coerce.number().int().nonnegative(),
+	expectedRosterRevision: z.coerce.number().int().nonnegative(),
+	expectedAllocationRevision: z.coerce.number().int().nonnegative(),
+	digest: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type PreviewMarkerAllocationsInput = z.infer<typeof previewMarkerAllocationsSchema>;
+export type ConfirmMarkerAllocationsInput = z.infer<typeof confirmMarkerAllocationsSchema>;

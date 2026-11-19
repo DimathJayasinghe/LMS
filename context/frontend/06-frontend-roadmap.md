@@ -122,7 +122,7 @@ it was first found; none have drifted in either direction):_
 - ✅ Browse subjects/courses → course detail → **enroll** → **pay** — `/classes`, `/classes/[classId]`,
   `EnrollPanel` (self-enroll + PayHere initiate). Added the backend enrollment endpoints to unblock it.
 - ✅ Timetable view (weekly) — `/timetable`. Class sessions list on the detail page (enrolled-gated).
-- ✅ Recorded **video player** (IP-bound stream token, enrolled+paid gate) — Recordings list on class
+- ✅ Recorded **video player** (signed Bunny embed URL, enrolled+paid gate) — Recordings list on class
   detail + `/classes/[classId]/videos/[videoId]` (`hls.js`, browser-side token fetch).
 - ✅ **Live classes** (Zoom Meeting SDK, embedded in-site) — schedule/start/join CTA on the class detail
   page, `/classes/[classId]/live/[sessionId]` room with watermark + basic UI hardening. Blocked on real
@@ -297,6 +297,10 @@ _(Move completed items here with date + PR.)_
   `402`/`403` gate cards, retry, token-expiry handling, and the HDCP black-screen tip. Added `hls.js` dep,
   `VideoRecording`/`StreamData` types, `lib/video.ts` (`formatDuration`), route `loading.tsx`. Frontend-only
   (no backend change — video endpoints already existed). `lint` + `next build` green (18 routes).
+  *Superseded 2026-07-11:* the player now renders Bunny's token-authenticated iframe embed with a
+  repositioning watermark and no longer uses `hls.js`; the stream is not IP-bound. See
+  `docs/superpowers/specs/2026-07-11-bunny-video-drm-design.md`. The "HDCP black-screen tip" described
+  above does not exist in the current player.
 - 2026-07-10 — Phase 3 (part 2): **Exams**. `/exams` list (status filter, type/status badges, submission
   hints) + `/exams/[examId]` sit flow (MCQ checkboxes, visual countdown from server `endTime`, localStorage
   autosave + `BroadcastChannel` cross-tab sync, typed **or** PDF-upload written channel, one-shot submit) and a

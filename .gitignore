@@ -38,10 +38,11 @@ prisma/migrations/**/migration_lock.toml
 backups/
 
 # misc
+.superpowers/
 *.tsbuildinfo
 next-env.d.ts
 coverage/
 .vercel
 
-# isolated agent worktrees
+# local git worktrees (see context/documents/11-git-and-naming.md §1.6)
 .worktrees/
