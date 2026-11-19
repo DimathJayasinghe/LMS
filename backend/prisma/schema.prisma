@@ -679,7 +679,7 @@ model MarkerAssignmentAudience {
   id String @id @default(uuid())
 
   assignmentId String
-  assignment MarkerAssignment @relation(fields: [assignmentId, examId], references: [id, examId], onDelete: Cascade)
+  assignment MarkerAssignment @relation(fields: [assignmentId, examId], references: [id, examId], onDelete: Restrict)
 
   // `examId` is duplicated so PostgreSQL can bind the grant to an audience of
   // the same instance through the composite audience foreign key.

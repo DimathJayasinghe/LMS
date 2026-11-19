@@ -163,6 +163,8 @@ reject scoped configuration. Each participant must be an active student with
 an active enrollment in the exam course and may appear only once per instance.
 New scoped online starts provide an audience ID and require an ONLINE matching
 participant row; legacy starts retain course-enrollment behavior.
+Replacing audiences while any marker allocation grant references them returns
+`409 MARKER_ALLOCATIONS_EXIST`; clear the exam's allocations first (confirm an empty allocation set).
 
 ## Endpoint Details
 
@@ -408,14 +410,16 @@ A UUID `Idempotency-Key` header is required. The service rechecks ownership and 
 one serializable transaction; the digest binds pinned paper, audience/roster versions, group/member
 versions, marker account state, original selections, broad intent, and the explicit current diff.
 Changed evidence returns `409 MARKER_ALLOCATION_STALE`; unavailable sources/accounts also fail fresh
-validation. Preview counts are advisory and are not a grading lock.
+validation. Group members whose account is deleted or no longer a `MARKER` are skipped when a group is
+expanded; a directly listed marker that is ineligible still fails with `400 INVALID_MARKER_IDS`.
+Confirmation runs under a per-exam advisory lock (read committed), not a serializable snapshot. Preview counts are advisory and are not a grading lock.
 
 Confirmation atomically replaces grants and records immutable source selections, before/after diff,
 version evidence, reason, actor and revision. Explicit broad intent is stored independently of rows;
 it covers the audiences resolved at confirmation and does not silently grant a subsequently added
 audience. Response `data` contains `allocationRevision`, the consumed `digest`, and resolved `grants`.
 Retries with the same key, exam, actor and request return the recorded result without writing a second
-revision or restoring revoked grants. Reusing that key for different input returns 409. Ownership is
+revision or restoring revoked grants. Reusing that key for different input returns `409 IDEMPOTENCY_KEY_REUSED`. Ownership is
 checked again before every replay; scoped confirmation bypasses the generic response cache.
 
 `GET /:id/markers/history` returns newest-first immutable revisions with `id`, `revision`, `reason`,

@@ -274,7 +274,7 @@ export const listExams = async (
 		...(role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
 		// Markers only see exams they are assigned to.
 		...(role === Role.MARKER
-			? { markerAssignments: { some: { markerId: actor.userId } } }
+			? { markerAssignments: { some: { markerId: actor.userId, OR: [{ exam: { paperRevisionId: null } }, { audienceGrants: { some: {} } }] } } }
 			: {}),
 		...timeFilter,
 	};

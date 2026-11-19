@@ -56,7 +56,8 @@ const resolve = async (db: Db, exam: Awaited<ReturnType<typeof authorize>>, inpu
     }
     for (const id of allocation.markerIds) add(id, { type: 'DIRECT', id, allAudiences: allocation.allAudiences, audienceIds: [...allocation.audienceIds].sort() }, selected);
     for (const id of allocation.groupIds) {
-      for (const member of groups.find((group) => group.id === id)!.members) {
+      // Removed-role or soft-deleted members are skipped rather than failing the whole request.
+      for (const member of groups.find((group) => group.id === id)!.members.filter((m) => m.marker.role === Role.MARKER && !m.marker.deletedAt)) {
         add(member.markerId, { type: 'GROUP', id, allAudiences: allocation.allAudiences, audienceIds: [...allocation.audienceIds].sort() }, selected);
       }
     }
@@ -95,6 +96,8 @@ export const previewMarkerAllocations = async (examId: string, input: PreviewMar
   return { paperRevision: evidence.paperRevision, audienceRevision: evidence.audienceRevision, rosterRevision: evidence.rosterRevision, allocationRevision: evidence.allocationRevision, markers, diff: evidence.diff, digest: resolved.digest };
 }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
+// ReadCommitted on purpose: every exam-configuration writer takes the same per-exam advisory lock, and a
+// Serializable snapshot would be taken before a waiting caller acquires it (stale previous-revision read).
 export const confirmMarkerAllocations = async (examId: string, input: ConfirmMarkerAllocationsInput, actor: AuthenticatedUser, idempotencyKey?: string) => prisma.$transaction(async (tx) => {
   await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${examId}, 0))`);
   const exam = await authorize(tx, examId, actor);
@@ -102,7 +105,9 @@ export const confirmMarkerAllocations = async (examId: string, input: ConfirmMar
   // Replaying reports its original result without reapplying removed grants.
   const previous = await tx.markerAllocationRevision.findFirst({ where: { examId, actorId: actor.userId, ...(idempotencyKey ? { idempotencyKey } : { digest: input.digest }) } });
   if (previous) {
-    if (hash(previous.requestState) !== hash(json(input))) throw new AppError('MARKER_ALLOCATION_STALE', 409, 'This preview was confirmed with a different request.');
+    if (hash(previous.requestState) !== hash(json(input))) throw idempotencyKey
+      ? new AppError('IDEMPOTENCY_KEY_REUSED', 409, 'This idempotency key was already used with a different request.')
+      : new AppError('MARKER_ALLOCATION_STALE', 409, 'This preview was confirmed with a different request.');
     return { allocationRevision: previous.revision, digest: previous.digest, grants: previous.afterState };
   }
   const resolved = await resolve(tx, exam, input, actor);
@@ -124,7 +129,7 @@ export const confirmMarkerAllocations = async (examId: string, input: ConfirmMar
   await tx.markerAllocationRevision.create({ data: { examId, revision, reason: input.reason, digest: input.digest, idempotencyKey, beforeState: json(evidence.diff.current), afterState: json(evidence.diff.proposed), sourceState: json(input.allocations), evidenceState: json(evidence), requestState: json(input), actorId: actor.userId } });
   await tx.auditLog.create({ data: { action: 'MARKER_ALLOCATIONS_CONFIRMED', targetType: 'Exam', targetId: examId, metadata: json({ reason: input.reason, digest: input.digest, diff: evidence.diff }), ip: null, userAgent: null, actorId: actor.userId, actorRole: actor.role } });
   return { allocationRevision: revision, digest: input.digest, grants: json(evidence.diff.proposed) };
-}, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 
 export const listMarkerAllocationHistory = async (examId: string, actor: AuthenticatedUser) => {
   await authorize(prisma, examId, actor);
