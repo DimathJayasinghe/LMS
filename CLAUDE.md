@@ -172,8 +172,10 @@ target matrix, not-found cases, check-ordering when two validations could both f
 a Vitest unit test in addition to live-stack verification — this was added after the
 privileged-account incident above and is a standing requirement, not a suggestion.
 
-`context/documents/11-git-and-naming.md`: branch off `dev` as `type/kebab-scope`
-(`feature/`, `fix/`, `chore/`, `docs/`, `refactor/`); commits are Conventional Commits
-(`type(scope): summary`); squash-merge into `dev` with green CI + one review; **never delete a
-branch after merge** — this repo's owner continues work on branches post-merge, which overrides the
-doc's own "delete merged branches" line.
+`context/documents/11-git-and-naming.md` is the full git guide (rewritten 2026-11-19). Essentials: branch off
+fresh `origin/dev` as `type/kebab-scope` (`feature/`, `fix/`, `hotfix/`, `chore/`, `docs/`, `refactor/`, `test/`;
+no personal prefixes, no long-lived lanes); never commit straight to `dev` or `main`; Conventional Commits
+(`type(scope): summary`, PR title too); squash-merge into `dev` with green `Quality Gate` plus review;
+**delete the branch after merge** (this reverses the 2026-07-10 "never delete" rule; start a new branch for
+follow-up work); releases are merge-commit `dev` -> `main` PRs tagged `vX.Y.Z`, hotfixes are back-merged;
+work in the main checkout, not a worktree, and use tagged stashes only.

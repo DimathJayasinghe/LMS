@@ -14,6 +14,12 @@
 | **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → Phase E allocation preview/snapshot slice and accountable physical-paper result entry → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
 
+### 2026-11-19 — Git workflow rules and branch cleanup
+
+- [x] Rewrote [11-git-and-naming.md](./11-git-and-naming.md): protected `dev`/`main`, no long-lived lanes, `type/kebab-scope` names without personal prefixes, **delete branches after merge** (reverses the 2026-07-10 rule), stacked branches, worktree policy, stale-branch policy, release and hotfix flow, PR checklist, cleanup runbook, AI-agent session rules. `.worktrees/` is now gitignored.
+- [x] Owner-approved cleanup: merged branches (squash-merge makes them look unmerged to `git branch --merged`) and the abandoned unmerged `chathura/dev/*`, `feature/hardening`, `dev-backend` and `fix/remove-misplaced-route` branches deleted; open-PR branches kept. GitHub: auto-delete head branches on merge, `dev` and `main` protected (PR required, `Quality Gate` required, no force-push, no deletion).
+- [ ] Known loss: the CORS/env-pickup fix in `9c86b11` (was on `feature/hardening` and `dev-backend`) is not in `dev`; re-apply if still needed.
+
 ### 2026-11-19 — Requirements alignment: multi-tenancy, payment channels, class types
 
 - [x] **Owner decisions recorded** (rationale in the Decisions Log): deploy for one organization but build tenant-ready; tenant is `Organization`, `SUPER_ADMIN` owns one organization, `PLATFORM_ADMIN` name reserved; three class types via a planned `HYBRID` enrollment; three payment channels including a planned staff-approved bank-slip channel; stay on Express + Next.js (no NestJS rewrite); Bunny Stream remains the video provider.

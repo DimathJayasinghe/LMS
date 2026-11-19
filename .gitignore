@@ -43,3 +43,6 @@ backups/
 next-env.d.ts
 coverage/
 .vercel
+
+# local git worktrees (see context/documents/11-git-and-naming.md §1.6)
+.worktrees/
