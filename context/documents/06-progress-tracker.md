@@ -11,7 +11,7 @@
 | **Current Phase** | Requirements and docs alignment (multi-tenancy, payment channels, HYBRID enrollment), then code alignment; Phase E marker groups and exam papers/audiences are merged |
 | **Last Updated** | 2026-11-19 |
 | **Last Completed Task** | Owner decisions of 2026-11-19 recorded in docs: [14 multi-tenancy ADR](./14-multi-tenancy-readiness.md), [15 requirements traceability](./15-requirements-traceability.md), and the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md). No code changed. |
-| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → Phase E allocation preview/snapshot slice and accountable physical-paper result entry → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
+| **Next Task** | Owner answers the open decisions in the 2026-11-19 entry below; then code alignment in this order: tenant foundation (ADR 14 M1–M3) → accountable physical-paper result entry (Phase E Task 4; scoped allocations are merged in #85) → `HYBRID` enrollment → bank-slip channel → ADR 14 M4–M7. |
 | **Blockers** | No blocker to local implementation; external provider readiness and production recovery evidence still require verification. |
 
 ### 2026-11-19 — Local offline development with provider drivers
@@ -39,6 +39,15 @@
 - [x] **Decided later the same day:** a `PHYSICAL`-only enrollment loses live/recording access unless the student is `HYBRID` or the session opts in via a new `ClassSession.onlineForPhysical` flag (behaviour change; needs a rollout report); the first organization migration uses placeholder slug `default` / code `DEF`, renamed before launch.
 - [ ] **Still open:** (1) one fee for all modes or per-mode fees; (2) keep existing `LMS-<index>` QR values when the organization prefix is introduced; (3) is a tenant export/restore tool required before a second customer; (4) Sinhala/Tamil UI at launch or after; (5) are one-way WhatsApp notifications acceptable.
 - [ ] Code alignment has not started. Cleanups already identified: delete `generateBunnyStreamUrl`; remove the `hls.js` frontend dependency, which nothing imports any more (the `resend` dependency noted in the 2026-07-09 decision is already gone).
+
+### 2026-09-06 — Configurable exam scope and dashboard follow-up
+
+- [x] Owner confirmed shared AND separate exam instances, teacher-selected centers/grouped centers/online students, and optional teacher-configured marker restrictions inside shared instances.
+- [x] Owner approved the [customizable exam-marking design](../../docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md), separating paper reuse, exam audiences, student roster and effective marker access. No new behavior/schema was implemented in this design checkpoint; the slices listed below have since landed.
+- [x] PR #79 was open at the time of this entry (independently reviewed, green in GitHub CI); it has since merged into `dev` (2026-11). Its test counts and compiled-stack assertions are evidence for that patch only, not for later slices. Its Docker verification supersedes the earlier unavailable-daemon checkpoint.
+- [ ] ~~Land PR #79~~ (merged) and deliver the approved feature as small tested migration/API/UI slices; Phase E slices E1, paper/audience/roster and scoped allocations (preview, confirm, history; #85) are on `dev`; staff physical-result entry, the guided workflow and the dashboard audit remain.
+- [ ] After the current exam/marking work, [issue #81](https://github.com/DimathJayasinghe/LMS/issues/81) covers all five role dashboards: real backend wiring, correct privileges, navigation, loading/error/empty states and end-to-end outcomes. Sparse dashboards do not justify copying another role's privileges.
+- [ ] Separate results-SMS duplication/settings bypass is tracked in [issue #80](https://github.com/DimathJayasinghe/LMS/issues/80).
 
 ### 2026-09-06 — Owner decisions and submission integrity hardening
 
