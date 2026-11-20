@@ -33,7 +33,6 @@
 erDiagram
     %% ─── IDENTITY ───
     USER ||--o{ REFRESH_TOKEN : "owns"
-    USER ||--o| PERMISSION : "may have overrides"
     USER ||--o{ ENROLLMENT : "enrolls in"
     USER ||--o{ COURSE : "teaches (as TEACHER)"
     USER ||--o{ SUBJECT_TEACHER : "approved for subject"
@@ -76,11 +75,6 @@ erDiagram
         datetime deletedAt "nullable - soft delete"
     }
 
-    PERMISSION {
-        uuid id PK
-        uuid userId FK,UK "one row per user"
-        json permissions "fine-grained overrides on top of role"
-    }
 
     SUBJECT {
         uuid id PK
@@ -241,7 +235,7 @@ erDiagram
 
 ### Design notes on enums
 
-- **`Role`** — `SUPER_ADMIN` is the owner of one organization (exactly one per organization; today there is one organization). `PLATFORM_ADMIN` is a reserved name for the future SaaS operator and is **not** in the enum; `TEACHER` (many) teaches courses; `ADMIN` (many) is front-desk staff; `MARKER` grades assigned exams; `STUDENT`. This replaces the legacy `ADMIN/STAFF` mapping in the current code (§12).
+- **`Role`** — `SUPER_ADMIN` is the owner of one organization (one per organization by default, up to two with `identity.maxOwners`; today there is one organization). `PLATFORM_ADMIN` is a reserved name for the future SaaS operator and is **not** in the enum; `TEACHER` (many) teaches courses; `ADMIN` (many) is front-desk staff; `MARKER` grades assigned exams; `STUDENT`. This replaces the legacy `ADMIN/STAFF` mapping in the current code (§12).
 - **`ClassType`** — `ONLINE` vs `PHYSICAL` today; **`HYBRID` is planned for enrollments** and means one enrollment, one fee, physical attendance plus online access. On `ClassSession` and `TimetableSlot`, `classType` is **nullable**: `null` means the session is for all cohorts (e.g. a physical class that is also streamed to online students); a session is never itself `HYBRID`. Eligibility rules are in the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §4.3.
 - **`PaymentMethod`** — how a payment was collected: `ONLINE` (PayHere, on the platform), `ENTRANCE` (paid in person at the front desk or a branch), `BULK` (Excel import), `MANUAL` (admin/owner adjustment), and planned `BANK_TRANSFER` (student uploads a slip; staff approve). Enables channel-based reporting.
 - **`AttendanceSource`** — `QR` (student shows their QR at the entrance, staff scans) or `BARCODE` (physical barcode card) — both are entrance scans; `ZOOM_WEBHOOK` (live-streamed class join); `MANUAL` (admin entry). A record existing = present; no record = absent.
@@ -274,7 +268,6 @@ model User {
   nicBackUrl     String?                       // R2 key — NIC back photo (private)
 
   // Relations
-  permission        Permission?        @relation("UserPermission")
   enrollments       Enrollment[]
   taughtCourses     Course[]           @relation("CourseTeacher")   // courses this TEACHER teaches
   studentBarcodes   StudentBarcode[]                                // per-institute barcodes
@@ -300,23 +293,9 @@ model User {
 - **`taughtCourses`** — a TEACHER owns the courses they teach (`Course.teacherId`).
 - **`deletedAt`** is the universal "active" filter: `WHERE deletedAt IS NULL`.
 
-### 4.2 Permission (per-user overrides)
+### 4.2 Permission — removed (D-IDENTITY-4)
 
-```prisma
-model Permission {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation("UserPermission", fields: [userId], references: [id], onDelete: Restrict)
-  permissions Json                              // e.g. { "createExam": true, "manageUsers": false }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([userId])
-}
-```
-
-- **Role first, permissions second.** The `role` decides the default capability set; `Permission.permissions` is an **optional** JSON map that grants or revokes specific abilities for one user (e.g. a trusted teacher allowed to manage markers). Keep it small — most users have no `Permission` row at all.
-- Enforced in the service layer alongside the role check. Do **not** spread core access rules across many permission keys; use it only for genuine exceptions.
+Never read or written by code; the `Permission` model is dropped in Wave 1b Task 7 (the migration refuses to run if any row exists). Authorization is the role plus resource and target guards.
 
 ### 4.3 RefreshToken
 
@@ -903,7 +882,7 @@ model TimetableSlot {
 | User(Teacher) → Course | Restrict | Cannot delete a teacher who owns courses (reassign first) |
 | Course → Enrollment / ClassSession / Exam | Restrict | Cannot delete a course with academic records |
 | User(Student) → Enrollment / Attendance / Submission | Restrict | History must survive |
-| User → RefreshToken / MarkerAssignment / Permission | Restrict | Managed/assignment history |
+| User → RefreshToken / MarkerAssignment | Restrict | Managed/assignment history |
 | User → AuditLog (actor) | Restrict | Audit trail is sacrosanct |
 | User → SmsLog | SetNull | SMS history survives, FK nulled |
 | User → Payment (collectedBy) | SetNull | Payment record survives if staff removed |
@@ -976,14 +955,13 @@ model TimetableSlot {
 
 ## 10. Role-Based Access Control (service layer)
 
-Controllers never import Prisma. Services scope every query by the authenticated user's role, plus optional `Permission` overrides.
+Controllers never import Prisma. Services scope every query by the authenticated user's role and resource ownership.
 
 ### Access Matrix
 
 | Table | SUPER_ADMIN | TEACHER | ADMIN | MARKER | STUDENT |
 | --- | :--: | :--: | :--: | :--: | :--: |
 | **User** | CRUD + roles | Read (own students) | Read all, activate/deactivate | Read own | Read own |
-| **Permission** | CRUD | ❌ | ❌ | ❌ | ❌ |
 | **Subject** | CRUD | Read | Read | Read | Read active |
 | **Course** | CRUD | CRUD **own** | Read all | Read assigned | Read enrolled |
 | **Enrollment** | CRUD | Read (own courses) | Create + Read all | ❌ | Read own |
@@ -1003,7 +981,7 @@ Controllers never import Prisma. Services scope every query by the authenticated
 | **TimetableSlot** | CRUD | CRUD **own courses** | CRUD (scheduler) | Read | Read |
 | **ClassSession** (schedule) | CRUD | CRUD own | **CRUD (edit timetable)** | Read | Read enrolled |
 
-> "**own**" = scoped to courses where `Course.teacherId = user.id`. A Teacher cannot touch another teacher's courses unless granted via `Permission`.
+> "**own**" = scoped to courses where `Course.teacherId = user.id`. A Teacher cannot touch another teacher's courses.
 
 ### Key restrictions
 

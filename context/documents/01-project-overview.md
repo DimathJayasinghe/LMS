@@ -31,11 +31,11 @@ The system targets **~1,200 registered students**, with read-heavy spikes (up to
 
 ## 3. User Roles
 
-Each organization has one owner, many teachers, front-desk staff, markers, and students. A guardian role is planned (roadmap P1) and a platform-operator role (`PLATFORM_ADMIN`) is reserved for the future SaaS operator; neither exists in code yet. Roles are enforced by middleware; fine-grained exceptions use the optional per-user `Permission` overrides (see [08-database-design.md](./08-database-design.md)).
+Each organization has one owner, many teachers, front-desk staff, markers, and students. A guardian role is planned (roadmap P1) and a platform-operator role (`PLATFORM_ADMIN`) is reserved for the future SaaS operator; neither exists in code yet. Roles are enforced by middleware; exceptions are expressed as resource and target guards, not per-user overrides (the unused `Permission` model is removed, D-IDENTITY-4).
 
-### 3.1 Super Admin (owner) — exactly one per organization
+### 3.1 Super Admin (owner) — one per organization, up to two
 - The organization owner. **Global oversight and management within the organization**: manage all users and roles, all subjects/courses, all finances, and all academic data. This is oversight, not impersonation: persona actions such as sitting an exam or submitting marks as a marker stay restricted, and emergency overrides are explicit, reasoned and audited (see the [gap analysis](../../docs/reports/2026-08-20-full-system-gap-analysis.md) §2).
-- Only one Super Admin account exists per organization.
+- One owner per organization by default; a co-owner (`identity.maxOwners` = 2) is added only by an operator CLI (D-IDENTITY-5).
 
 ### 3.2 Teacher — many
 - A lecturer employed by the institution. Teaches one or more courses (each course belongs to a subject).
@@ -92,7 +92,7 @@ Subject  (e.g. Physics, Chemistry, Combined Maths)   ← top level
 Physical classes are held at **pre-configured physical centers ("institutes")** — e.g. a Nugegoda center and a Rathnapura center. An institute is a **branch inside one organization**, not a tenant: the tenant is the `Organization` ([14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md)). The Super Admin maintains the **allowlist** of supported institutes; a student can only attach barcodes for institutes on that list.
 
 **Two independent identifiers per student:**
-1. **LMS QR code** (`User.barcode`) — issued by the LMS, globally unique, shown in-app for LMS-native/online entrance attendance. **Auto-generated at registration** (decision 2026-07-10: `LMS-<indexNumber padded to 6 digits>`, derived from the already-unique `indexNumber` so it's collision-free with no retry loop) — every student gets one immediately, not only once an admin manually assigns it. An admin can still reassign it later (e.g. a lost card) via the pre-existing `PATCH /users/:id/barcode`.
+1. **LMS QR code** (`User.barcode`) — issued by the LMS, unique within the organization and across all scan-code kinds, shown in-app for LMS-native/online entrance attendance. **Auto-generated at registration** (originally derived from the student's index number; new and reissued codes are random and unguessable, D-ACCESS-4) — every student gets one immediately, not only once an admin manually assigns it. An admin can still reassign it later (e.g. a lost card) via the pre-existing `PATCH /users/:id/barcode`.
 2. **Institute barcodes** (`StudentBarcode`) — issued by each physical center's own card system, entered by the student during setup as a **plain text field** (never a scan/photo in our UI — the student is just typing in a code the institute already printed on a card). A student who attends physical classes at two centers has **two** institute barcodes (one per institute).
 
 > **Barcode uniqueness is per-institute, not global.** Two students at two different institutes may legitimately hold the *same* barcode value. Uniqueness is enforced as `@@unique([instituteId, barcode])`; the LMS QR (`User.barcode`) stays globally unique because the LMS issues it.
@@ -205,5 +205,5 @@ Physical classes are held at **pre-configured physical centers ("institutes")** 
 | **Bank slip** | Planned payment evidence: a student uploads a bank-transfer slip that `ADMIN`/`SUPER_ADMIN` approve or reject. |
 | **Institute Barcode** | An institute-issued scan code a student registers during setup; unique **per institute**, one per institute per student. Distinct from the LMS QR. |
 | **LMS QR** | The LMS-issued, globally-unique code (`User.barcode`) shown in-app for LMS-native entrance attendance. |
-| **NIC** | Sri Lankan National Identity Card; front + back photos uploaded during account setup and stored privately. There is no approval or verification step (§4.1), and staff currently cannot view them (audit F-30); whether minors should be asked for one is an open decision (F-19). |
-| **Permission** | Optional per-user JSON grant that fine-tunes what a specific user can do beyond their role. |
+| **NIC** | Sri Lankan National Identity Card; front + back photos uploaded during account setup and stored privately. There is no approval or verification step (§4.1), and staff currently cannot view them (audit F-30); photos are no longer collected (D-IDENTITY-1); the NIC number is optional and never requested from anyone under 18. |
+| **Permission** | Removed (D-IDENTITY-4): never enforced in code; authorization is role plus resource and target guards. The model is dropped in Wave 1b Task 7. |

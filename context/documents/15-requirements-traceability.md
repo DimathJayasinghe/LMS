@@ -3,7 +3,7 @@
 > Maps the general requirement list for a Sri Lankan A/L tuition LMS (agreed 2026-11-19) to what the
 > repository actually does. Each row has a stable ID so tickets, specs and PRs can cite it.
 >
-> **Status values were checked against source and docs on 2026-11-19.** Where a row says *not verified*,
+> **Status values were checked against source and docs on 2026-11-19; decisions of 2026-11-20 are applied only to rows that cite doc 19.** Where a row says *not verified*,
 > the behaviour could not be confirmed from code and must be checked before being relied on. Update this
 > file in the same PR as the feature, as the rule in `CLAUDE.md` requires for all `context/` docs.
 
@@ -38,7 +38,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-USR-05 | Front-desk staff | Done | `Role.ADMIN` |
 | R-USR-06 | Paper markers | Done | `Role.MARKER`, `MarkerAssignment`, marker groups (Phase E1) |
 | R-USR-07 | Platform operator for a future SaaS | Planned | ADR 14 §8–9; `PLATFORM_ADMIN` name reserved |
-| R-USR-08 | Fine-grained RBAC | Partial | Role + ownership checks exist; the optional `Permission` model is an undocumented bypass risk (gap analysis §2: remove or build a tested engine) |
+| R-USR-08 | Fine-grained RBAC | Partial | Role plus resource and target guards (`assertCourseAccess`, `assertCanManagePrivilegedTarget`); the unused `Permission` model is removed in Wave 1b Task 7 (D-IDENTITY-4); owner-set caps live in their own tables |
 | R-USR-09 | One teacher account working at several organizations | Deferred | ADR 14 §9: accounts are per organization. Teachers across several **branches** of one organization already work |
 
 ### 1.2 Students and classes
@@ -48,10 +48,10 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-STU-01 | Registration with school, A/L batch, stream, medium, trilingual name | Gap | `User` has name/NIC/phone/address/city only; no school, batch, stream or medium fields |
 | R-STU-02 | Unique student ID as QR/barcode, printable ID card | Partial | `User.barcode` auto-issued and shown as a QR in the app; no printable card layout |
 | R-STU-03 | Class setup: subject, teacher, fee, timetable, branch | Done | `Subject → Course`, `TimetableSlot`, `Institute` |
-| R-STU-04 | Class capacity and teaching medium | Gap | No `capacity` or `medium` on `Course`. Audit 2026-11-19: F-92. |
+| R-STU-04 | Class capacity and teaching medium | Planned | D-STRUCTURE-3, Wave 2c T11. Audit 2026-11-19: F-92. |
 | R-STU-05 | Enrol/unenrol; transfer between classes or branches | Partial | Enrol/cancel/reactivate exist; mode change is specified in the HYBRID design; no transfer workflow |
 | R-STU-06 | Physical, online and hybrid attendance of one student | Planned | Sessions support all three; **enrollment** gains `HYBRID` per the payment/enrollment spec §4 |
-| R-STU-07 | Free-card, half-fee, scholarship, sibling discounts | Planned | Roadmap P1 "Payments operations"; gap analysis Phase G |
+| R-STU-07 | Free-card, half-fee, scholarship, sibling discounts | Planned | D-MONEY-3 concessions, Wave 2b T10 |
 | R-STU-08 | Bulk student import from Excel/CSV | Gap | Bulk Excel upload exists for payments only; exam rosters are replaced through the exam-audience API, not imported |
 | R-STU-09 | Several children per guardian | Planned | With R-USR-02 |
 
@@ -78,12 +78,12 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-PAY-04 | **Bank transfer with slip upload and staff approval** | Planned | Payment channels spec §3 (`PaymentSlip`, `BANK_TRANSFER`) |
 | R-PAY-05 | Excel reconciliation | Done | `BULK` method |
 | R-PAY-06 | Other local wallets (LankaQR, FriMi, Genie) | Gap | Only via whatever PayHere exposes |
-| R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | Hard gate in `access.service.ts`; grace/waiver/dispute exceptions planned as `AccessException` (gap analysis Phase G, flagged P0 for fairness) |
+| R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | Hard gate in `access.service.ts`; simple grace (`fees.graceDays`=10, Colombo month) in Wave 1 Task 1; full coverage function and `AccessException` in Wave 2b T6 (D-MONEY-1) |
 | R-PAY-08 | Refunds and adjustments with an audit trail | Done | `PaymentAdjustment` immutable ledger; provider-executed refunds planned |
-| R-PAY-09 | Defaulter list and automatic reminders | Partial | Outstanding totals exist; no scheduled reminder job |
-| R-PAY-10 | Teacher/institute revenue share or commission | Gap | Teachers see own-class aggregates only; no payout/settlement model. Audit 2026-11-19: F-91. |
+| R-PAY-09 | Defaulter list and automatic reminders | Planned | D-OPS-1 who-owes and manual reminders, Wave 1 Task 5 |
+| R-PAY-10 | Teacher/institute revenue share or commission | Planned | D-MONEY-8, Wave 2f T31. Audit 2026-11-19: F-91. |
 | R-PAY-11 | Advance payment, multi-month, installments | Planned | Phase G; explicitly out of the slip spec |
-| R-PAY-12 | Per-mode fees (online / physical / hybrid) | Decide | Payment channels spec §4.4 |
+| R-PAY-12 | Per-mode fees (online / physical / hybrid) | Planned | Decided 2026-11-20 (D-MONEY-2): effective-dated `CourseFee`; `onlineFee` and `hybridFee` nullable and fall back to `monthlyFee`; Wave 2b T4 |
 
 ### 1.5 Online learning
 
@@ -135,7 +135,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-COM-02 | Message templates for absence, fee due, cancellations | Partial | Only three `NotificationType` values exist |
 | R-COM-03 | In-app real-time updates | Done | SSE |
 | R-COM-04 | Email | Deferred | Decision 2026-07-09; the `resend` dependency is already removed |
-| R-COM-05 | WhatsApp as a notification channel | Decide | Chat features are out of scope; one-way WhatsApp notifications are a separate question (§2) |
+| R-COM-05 | WhatsApp as a notification channel | Deferred | Decided 2026-11-20 (D-IDENTITY-3): SMS is the only outbound channel at launch; WhatsApp can be added later as a `NotificationChannel` value |
 | R-COM-06 | Push notifications | Planned | With the PWA (roadmap P2) |
 | R-COM-07 | Announcements per class/batch | Planned | Roadmap P1 "Communication" |
 | R-COM-08 | Timetable-change alerts | Partial | SSE event exists; no SMS template |
@@ -156,7 +156,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 |---|---|---|---|
 | R-RPT-01 | Financial reports, scoped by role | Done | Admin reports; teacher own-class aggregates |
 | R-RPT-02 | Per-student attendance, fees, marks trend | Partial | Pieces exist; no combined student profile |
-| R-RPT-03 | Daily collection report for the counter | Gap | Month summary exists; a per-day, per-collector view is not verified |
+| R-RPT-03 | Daily collection report for the counter | Planned | D-OPS-1 cash tally, Wave 1 Task 6 |
 | R-RPT-04 | Export to Excel/PDF | Planned | Phase G settlement/export |
 | R-RPT-05 | Owner dashboard on mobile | Partial | Responsive web; role dashboards tracked in issue #81 |
 
@@ -171,8 +171,8 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-NFR-05 | Backups and recovery | Partial | Scheduled verified dumps; encryption, off-site copy and restore drill outstanding (P0) |
 | R-NFR-06 | OTP/2FA login | Gap | Not built; propose roadmap P2 |
 | R-NFR-07 | Rate limiting, secure headers, audit logs | Done | Helmet, Redis rate limits, `AuditLog` |
-| R-NFR-08 | PDPA 2022 compliance, consent, retention, data export/delete | Gap | Gap analysis P0 "Privacy"; no policy pages, retention schedule or subject-access workflow. Audit 2026-11-19: F-99. |
-| R-NFR-09 | Minors' consent | Gap | Part of R-NFR-08 |
+| R-NFR-08 | PDPA 2022 compliance, consent, retention, data export/delete | Planned | D-IDENTITY-2, D-IDENTITY-9, Wave 2e. Audit 2026-11-19: F-99. |
+| R-NFR-09 | Minors' consent | Planned | D-IDENTITY-2, Wave 2e |
 | R-NFR-10 | Accessibility | Planned | WCAG 2.2 AA audit is P0 |
 
 ### 1.12 Administration and operations
@@ -196,7 +196,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-NTH-03 | Marketplace of teachers/classes | Deferred | Out of scope in 01 §6 |
 | R-NTH-04 | Certificates and achievement showcase | Planned | Roadmap P2 "Credentials" |
 | R-NTH-05 | Parent mobile app | Deferred | Parent web access first (R-USR-02) |
-| R-NTH-06 | Free trial classes, referrals | Gap | Not planned. Audit 2026-11-19: F-94. |
+| R-NTH-06 | Free trial classes, referrals | Planned | Trials, D-MONEY-7, Wave 2b T9; referrals rejected. Audit 2026-11-19: F-94. |
 
 ## 2. Where the generic list conflicts with earlier decisions
 
@@ -206,21 +206,21 @@ decision stands.
 | # | Generic requirement | Earlier decision | Recommendation |
 |---|---|---|---|
 | 1 | Multi-tenant SaaS, several institutes | 01 §6 listed multi-tenancy as out of scope | **Resolved 2026-11-19:** the codebase becomes tenant-ready, deployed for one organization first (ADR 14) |
-| 2 | Sinhala and Tamil UI | "English-only for v1" (01 §6); roadmap P2 already lists it | Decide whether launch needs it. Recommended: add the message-catalog scaffolding and a per-user `locale` now, because retrofitting strings across every screen later is far costlier, and translate screen by screen |
+| 2 | Sinhala and Tamil UI | "English-only for v1" (01 §6); roadmap P2 already lists it | Decide whether launch needs it. Recommended: add the message-catalog scaffolding and a per-user `locale` now, because retrofitting strings across every screen later is far costlier, and translate screen by screen. SMS templates in Sinhala and Tamil are decided (D-IDENTITY-3); UI language is still open |
 | 3 | 3,000+ students in one class | Target is ~1,200 students total on one VPS | Treat 1,200 as the supported scale until a load test proves more ([production delivery baseline](../../docs/plans/2026-09-06-production-delivery-baseline.md)) |
-| 4 | Email and WhatsApp channels | Email deferred; chat out of scope | Keep email deferred. Decide whether one-way WhatsApp notifications are acceptable (needs a Business API provider and cost) |
+| 4 | Email and WhatsApp channels | Email deferred; chat out of scope | Decided 2026-11-20 (D-IDENTITY-3): email deferred, WhatsApp deferred; SMS only at launch |
 | 5 | Native Android app | Native apps deferred; PWA planned | Keep web/PWA; revisit only for OS-level capture blocking |
 | 6 | Discussion forums and announcements | 01 §6 said forums are out of scope for v1, while roadmap P1 lists threaded discussions | Reconcile: announcements in P1, threaded discussions later. 01 now points at the roadmap |
 | 7 | Block screen recording | Documented as an accepted limitation of the Web SDK | Keep; rely on watermark, device limits and DRM where available |
-| 8 | NIC approval and verification | Decision 2026-07-10: no approval gate | Keep; revisit alongside PDPA work (R-NFR-08). The 2026-11-19 audit adds: the photos are write-only (no staff view or delete, F-30) and are demanded of minors who mostly have no NIC (F-19); decide whether NIC is mandatory for under-18s |
-| 9 | Hard payment lock | Gap analysis flags it as unfair without exceptions | Build `AccessException` (Phase G) before a public launch |
+| 8 | NIC approval and verification | Decision 2026-07-10: no approval gate | Decided 2026-11-20 (D-IDENTITY-1): NIC photos no longer collected; NIC number optional, never requested from under-18s |
+| 9 | Hard payment lock | Gap analysis flags it as unfair without exceptions | Decided 2026-11-20 (D-MONEY-1): grace in Wave 1; `AccessException` in Wave 2b T6 (default grace 10 days) |
 | 10 | "Super admin can do everything" | Global oversight, not impersonation (gap analysis §2) | Keep |
 | 11 | PHYSICAL-only students and online content | Today the gate ignores `classType` | **Resolved 2026-11-19:** physical-only students lose live/recording access unless `HYBRID` or the session opts in (`onlineForPhysical`); payment/enrollment spec §4.4 |
-| 12 | Which month's fee unlocks which content | Gate = current UTC month `SUCCESS` payment (access.service.ts); doc 02 silent on past months | Audit F-05, F-65, F-66: decide current-month-only versus "any recording while paid", a grace window, and per-enrollment versus per-course gating; resolve before HYBRID work touches the same gate |
-| 13 | Who may mark an exam | Markers mark; teachers only publish and correct | Audit F-67: allow the owning teacher to enter marks on their own exam, or document that every exam needs an assigned marker |
-| 14 | Branch dimension | Institute = branch (ADR 14), but `Course`, `Enrollment` and `ClassSession` carry no branch | Audit F-52, F-53, F-37: decide whether one course runs at several branches with separate rosters and fees before building the physical roster and scanner |
-| 15 | Exams and payment | Exams gated by enrollment only | Audit F-23: decide whether an unpaid student may sit the monthly test |
-| 16 | Teacher and owner authority | Money adjustments and refunds are owner-only; teachers publish and correct; the owner has no read-only console | Audit F-125, F-126, F-127: decide teacher concession and refund caps, late-work policy and the owner console (doc 17 section 12) |
+| 12 | Which month's fee unlocks which content | Gate = current UTC month `SUCCESS` payment (access.service.ts); doc 02 silent on past months | **Decided 2026-11-20 (D-MONEY-1, D-ACCESS-1, D-ACCESS-9):** one covered-student function, current billing month in Asia/Colombo plus a configurable grace for students who paid last month, per-course gate, one recording window rule. See [19](./19-owner-decisions-2026-11-20.md) |
+| 13 | Who may mark an exam | Markers mark; teachers only publish and correct | **Decided 2026-11-20 (D-EXAMS-1):** the owning teacher and the owner may enter marks on their own exams; markers keep their assigned scope |
+| 14 | Branch dimension | Institute = branch (ADR 14), but `Course`, `Enrollment` and `ClassSession` carry no branch | **Decided 2026-11-20 (D-STRUCTURE-1):** each branch runs its own course with its own roster and fee; branch recorded on sessions and scans |
+| 15 | Exams and payment | Exams gated by enrollment only | **Decided 2026-11-20 (D-ACCESS-2):** exam sitting follows the same coverage function, with a per-course owner toggle |
+| 16 | Teacher and owner authority | Money adjustments and refunds are owner-only; teachers publish and correct; the owner has no read-only console | **Decided 2026-11-20 (D-MONEY-9, D-EXAMS-5, D-OPS-1):** teacher money caps ship at zero (requests go to an owner queue), configurable per teacher; late-work policy as in D-EXAMS-5; owner console is read-only (F-127) |
 
 ## 3. Candidate roadmap additions
 

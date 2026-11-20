@@ -216,7 +216,7 @@ Once its foundation steps land, every review also checks:
 - Provider credentials, R2 keys, Redis keys, SSE channels and job payloads are organization-scoped; webhooks identify the organization before verifying signatures.
 - A table-driven tenant-isolation test covers every new route.
 
-M1 (2026-11-19) added the `Organization` table, the default row and a nullable `organizationId` on every model, with a registry test and a CI tenant integrity check. Until M2–M3 land the system has exactly one organization and no query filters by it, and new code should not add anything that would block these steps (for example new global uniques on user-visible values, or hand-built storage and cache keys).
+M1 (2026-11-19) added the `Organization` table, the default row and a nullable `organizationId` on every model, with a registry test and a CI tenant integrity check. Until M2–M3 land the system has exactly one organization and no query filters by it, and new code should not add anything that would block these steps (for example new global uniques on user-visible values until M3; until M5 hand-built storage and cache keys; until M4 new provider-credential reads from env; M4–M7 wait for a second organization).
 
 ---
 
@@ -224,12 +224,10 @@ M1 (2026-11-19) added the `Organization` table, the default row and a nullable `
 
 | Domain | Target | Host |
 |--------|--------|------|
-| `academylms.com` / `www.academylms.com` | Next.js frontend | Vercel |
-| `api.academylms.com` | nginx → Node.js backend | Single VPS |
+| `academylms.com` / `www.academylms.com` | Next.js frontend and `/api` | One host: nginx on the VPS (`/` to Next.js, `/api` to Express), or Vercel with `/api` rewritten to the VPS |
 
 - **DNS Provider**: Cloudflare (free).
-- **Frontend**: `CNAME` for `@` / `www` → Vercel.
-- **Backend**: `A` record for `api` → the VPS public IP. Proxy through Cloudflare (orange cloud) for a free CDN + DDoS shield if desired.
+- **Host**: `A` record for `@` / `www` → the VPS public IP (or a `CNAME` to Vercel when `/api` is rewritten to the VPS). Proxy through Cloudflare (orange cloud) for a free CDN + DDoS shield if desired.
 - **TLS**: nginx terminates TLS on the VPS using a free Let's Encrypt certificate (auto-renewed). Vercel handles frontend TLS automatically.
 - **Future tenants**: each organization is reached at `<slug>.<platform-domain>` (wildcard DNS and certificate). The current single-domain deployment keeps working because unmatched hosts resolve to the default organization ([14](./14-multi-tenancy-readiness.md) §5).
 
@@ -242,7 +240,7 @@ M1 (2026-11-19) added the `Organization` table, the default row and a nullable `
 | Transport | HTTPS everywhere (Vercel TLS + nginx/Let's Encrypt on the VPS) |
 | Authentication | JWT access token (15 min) + refresh token (7 days), both in HTTP-only cookies |
 | Refresh tokens | Hashed (SHA-256) before DB storage; rotated on use; reuse detection revokes the whole family |
-| Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`) gates by the **caller's** role only; course-scoped content (exams/videos/submissions/sessions) additionally requires `assertCourseAccess` in the service layer so a `TEACHER` is scoped to courses they actually teach — see CLAUDE.md's "Auth & authorization" section. Optional per-user `Permission` overrides also exist (see 08) |
+| Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`) gates by the **caller's** role only; course-scoped content (exams/videos/submissions/sessions) additionally requires `assertCourseAccess` in the service layer so a `TEACHER` is scoped to courses they actually teach — see CLAUDE.md's "Auth & authorization" section. The unused per-user `Permission` model is removed (D-IDENTITY-4) |
 | Input Validation | Zod schemas in middleware — reject before reaching the controller |
 | Rate Limiting | `express-rate-limit` with Redis store (auth routes tightened to 10/min/IP) |
 | HTTP Hardening | Helmet.js on all responses |

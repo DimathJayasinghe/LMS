@@ -2,6 +2,8 @@
 # 09 — Cost & Hosting
 
 > How this system stays **cheap, simple, and easy to host** while remaining secure and reliable. One small VPS runs the whole backend; everything else is a free tier or pay-per-use.
+>
+> **Topology note (decided 2026-11-20, [19](./19-owner-decisions-2026-11-20.md) §6).** The browser must reach the page and `/api` on **one host** (nginx routing both, or a Vercel rewrite of `/api` to the VPS with `NEXT_PUBLIC_API_URL=/api`), because the auth cookies are host-only and the server-rendered layout must read them. The split variant below (frontend at `<domain>`, API at `api.<domain>` with an absolute API URL) does not work with the server-side guard and is unsupported; the Wave 0 plan corrects this document and the nginx comment in its first PR.
 
 ---
 
@@ -143,7 +145,7 @@ See [02-architecture.md §7](./02-architecture.md#7-security-model) for the full
 
 > For a fully **offline** setup that needs no provider accounts (local S3-compatible storage, logged SMS) use the overlay described in [16-local-development.md](./16-local-development.md). The ngrok tunnel below is only needed when a real provider sandbox must call back into your machine (Bunny, Zoom or PayHere webhooks).
 
-Production keeps the **split**: frontend on Vercel, API/worker/db on the VPS (above). But for
+Production serves the page and `/api` from ONE host (nginx routing `/` and `/api`, or a Vercel rewrite of `/api` to the VPS with `NEXT_PUBLIC_API_URL=/api`); see the topology note at the top. For
 local development — especially exercising **external webhooks** (Bunny, Zoom, PayHere) that must
 reach `localhost` — it's convenient to run *everything* in Compose and expose it on a single public
 HTTPS URL. Two **dev-only** `docker-compose.yml` services do this:
@@ -175,8 +177,7 @@ Result — one domain serves everything:
 - ngrok's **free-tier browser interstitial** shows once per session on first page load — click
   "Visit Site"; a session cookie then suppresses it (API `fetch`es are unaffected after that).
 
-**Reverting for production (back to Vercel + VPS):**
-1. Delete the `frontend` and `ngrok` services from `docker-compose.yml`.
-2. In `nginx/nginx.conf`, remove the `frontend_upstream` block and restore
-   `location / { return 404; }`.
-3. Deploy the frontend to Vercel with `NEXT_PUBLIC_API_URL=https://api.<domain>/api`.
+**Production shapes (same-origin only):**
+1. Delete the `ngrok` service from `docker-compose.yml` (production has its own public entry point).
+2. Either keep the `frontend` service and the `frontend_upstream` block in `nginx/nginx.conf` so one host serves `/` (Next.js) and `/api` (Express), or remove them and restore `location / { return 404; }` when the frontend is deployed elsewhere.
+3. If the frontend is deployed to Vercel, add a rewrite of `/api/*` to the VPS and set `NEXT_PUBLIC_API_URL=/api`. A frontend at `<domain>` with an absolute API at `api.<domain>` is not supported (auth cookies are host-only and the server-rendered layout reads them).

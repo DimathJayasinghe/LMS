@@ -21,7 +21,7 @@ configuration and onboarding task rather than a rewrite.
 | Tenancy model | **Shared database, shared schema, `organizationId` on every tenant-owned table** |
 | Name of a tenant | **`Organization`** (a tuition institute as a customer of the platform) |
 | `Institute` | Keeps its current meaning: a **physical branch/center** inside one organization. It is not renamed and is not a tenant |
-| Tenant owner role | `SUPER_ADMIN` remains the owner of **one organization**. "Exactly one" becomes "exactly one per organization" |
+| Tenant owner role | `SUPER_ADMIN` remains the owner of **one organization**. "Exactly one" becomes "one per organization by default, up to two (`identity.maxOwners`, a co-owner added only by an operator CLI, D-IDENTITY-5)" |
 | Platform operator role | **`PLATFORM_ADMIN` is reserved** for the future SaaS operator. It is not added to the `Role` enum until a platform console is built (see §9) |
 | Isolation enforcement | Service-layer tenant scoping through a single Prisma client extension, plus tenant-isolation tests; Postgres row-level security is a later hardening step (§6) |
 | When | Pre-launch. There is no production data to migrate, which makes this the cheapest moment |
@@ -77,7 +77,7 @@ already does. This keeps the scoped client uniform (no join-dependent filtering)
 security be added later without schema change. Child tables copy the value from their parent at create
 time.
 
-All of these are tenant-owned: `User`, `Permission`, `RefreshToken`, `IdempotencyRecord`, `Subject`,
+All of these are tenant-owned: `User`, `Permission` (removed in Wave 1b Task 7), `RefreshToken`, `IdempotencyRecord`, `Subject`,
 `SubjectTeacher`, `Course`, `CourseContentProgress`, `CourseModule`, `CourseMaterial`, `Enrollment`,
 `Payment`, `PaymentAdjustment`, `PaymentSlip` (planned), `ClassSession`, `Attendance`,
 `VideoRecording`, `Exam`, `ExamPaper`, `ExamPaperRevision`, `ExamAudience`, `ExamParticipant`,
@@ -299,10 +299,18 @@ physical-result and academic-evidence slice) must be rebased after M1 so that it
 `organizationId` from day one. **After M1,
 no migration may add a tenant-owned table without `organizationId`**, and the registry test enforces it.
 
-Recommended ordering relative to feature work: land **M1–M3 before the next Phase E slice (physical-result entry and
-academic evidence, plan Task 4)**, then HYBRID enrollment and `PaymentSlip` (see the
-[payment and enrollment spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)),
-then M4–M7 in parallel with the rest of the roadmap.
+**Ordering (decided 2026-11-20, [19](./19-owner-decisions-2026-11-20.md) §4 and the master delivery order in
+`docs/superpowers/plans/2026-11-20-wave-2-access-coherence-and-delivery-order.md`).** The live institute comes first:
+audit Wave 0 (stop the bleeding) and Wave 1 (a working day per role) land on the single-tenant code, then **M2 and M3 as one
+focused stretch of one to two weeks in which only hotfixes merge** (Wave 2 adds nearly all new tables and uniques, so writing
+them once on the scoped client is cheaper than retrofitting; M1 already guarantees `organizationId` on every new table), then
+Wave 2 (2a one enrollment migration with HYBRID, 2b money core and the single content gate, 2c structure, 2d bank slip with `PaymentSlip`, 2e identity and communication, 2f teacher money authority; see the
+[payment and enrollment spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)).
+M4–M7 wait until a second organization is contracted and are gated by the tenant export and restore tool (D-IDENTITY-13) and a
+combined-capacity load test. The earlier idea of landing M1–M3 before the physical-result slice no longer applies: the physical
+hall-mark design (D-EXAMS-2) adds columns only and does not need M2.
+
+**Trigger.** M2–M3 start when Wave 1 completes (earliest acceptable cut-over: Wave 0 plus F-11, F-10, F-83 and F-67, or earlier if a second customer signs first); if the stretch would exceed two weeks, merge M2 per service group (D-STRUCTURE-10).
 
 ## 12. Risks
 
@@ -314,14 +322,15 @@ then M4–M7 in parallel with the rest of the roadmap.
 | Provider secret exposure | Encrypted at rest, redacted in logs, never returned by APIs, rotation procedure to be added to [10-maintenance-guide.md](./10-maintenance-guide.md) with M4 |
 | Per-tenant restore is hard in a shared schema | Document a tenant export/import tool as a pre-onboarding task; database-per-tenant is the fallback |
 | Noisy neighbour on one VPS | Per-organization rate limits (Redis key prefix); load-test combined capacity before onboarding (§10) |
-| Refactor churn slows features | Foundation first (M1–M3), then feature work proceeds on the scoped client; M4–M7 run alongside |
+| Refactor churn slows features | Wave 0 and Wave 1 land on the single-tenant code; M2 and M3 then run as one one-to-two-week stretch (only hotfixes merge) before Wave 2; M4–M7 wait for a second organization (§11) |
 
 ## 13. Open decisions for the owner
 
 1. ~~Organization code and slug~~ **Decided 2026-11-19: placeholder.** M1 creates the default
    organization with slug `default` and code `DEF`; both are renamed to the real values before launch
    (no issued student IDs carry the prefix yet, so this is a data update).
-2. **Should existing students' printed or issued LMS QR values change?** The barcode today is
-   `LMS-<index>`. Moving to `<ORG>-<index>` would invalidate printed cards. Recommended: keep existing
-   values as they are (they stay unique per organization) and use the prefix only for newly issued codes.
-3. **Is a tenant data export/restore tool required before the second customer?** Recommended: yes.
+2. ~~Should existing students' printed or issued LMS QR values change?~~ **Decided 2026-11-20 (D-ACCESS-4):** existing cards keep
+   working; new and reissued codes are random with no organization prefix, unique per organization, and a collision report runs
+   before the uniqueness rule is enforced.
+3. ~~Is a tenant data export/restore tool required before the second customer?~~ **Decided 2026-11-20 (D-IDENTITY-13): yes**, and
+   it gates M4–M7.

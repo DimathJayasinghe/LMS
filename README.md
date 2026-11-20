@@ -11,7 +11,7 @@ Learning Management System for Sri Lankan tuition institutes (A/L and similar cl
 - Student current-enrollment dashboard with new READY lessons, upcoming sessions, and seen state
 - Role/ownership gates, mutation audit trails, fail-fast migrations, and zero-advisory dependency baseline
 
-- **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — with optional per-user permission overrides
+- **Roles** — Super Admin (owner), Teacher (many), Admin (front-desk), Marker, Student — authorization is the role plus resource and target guards
 - **Academic model** — Subject → Course (one teacher) → Class Sessions & Exams; students enrol + pay per course
 - **Classes** — physical, online, or both. Delivered in-site: live via Zoom Web SDK, recorded via Bunny.net; QR/barcode attendance at the physical entrance; Zoom-webhook attendance for streamed classes. A `HYBRID` enrollment type (one fee, both modes) is designed but not built
 - **Content protection** — enrolled + paid gating; recorded video via Bunny's **token-authenticated embed player** (MediaCage DRM) + a per-student watermark overlay; server-signed Zoom live join

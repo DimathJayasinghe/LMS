@@ -2,6 +2,8 @@
 
 _Date: 2026-11-19 · Status: approved direction, not implemented · Branch: `docs/multi-tenant-requirements-alignment`_
 
+_Amended 2026-11-20 by [doc 19](../../../context/documents/19-owner-decisions-2026-11-20.md): D-MONEY-1, -2, -4, -5, -6 and -7 supersede the notes in §3.3, §4.2, §4.4 and §5 where they differ. A free trial has an explicit PHYSICAL or ONLINE mode, never HYBRID, and recordings are excluded (D-MONEY-7)._
+
 ## 1. Goal
 
 Two owner decisions of 2026-11-19 change the data model and need a written contract before any code:
@@ -40,7 +42,7 @@ owner. It does not change code.
 |---|---|---|---|---|
 | Platform (card/wallet via PayHere) | `ONLINE` | System, from the signed PayHere webhook | Automatic (signature check) | Built |
 | Front desk / physical institute cash | `ENTRANCE` | `ADMIN` or `SUPER_ADMIN` | The collector is the verifier; `collectedById` and `collectedAtInstituteId` are recorded | Built |
-| Bulk Excel reconciliation | `BULK` | `ADMIN` or `SUPER_ADMIN` | Staff-supplied | Built |
+| Bulk Excel reconciliation | `BULK` | `SUPER_ADMIN` (migration and recovery tool, D-OPS-1) | Staff-supplied | Built |
 | Owner adjustment | `MANUAL` | `SUPER_ADMIN` | Reason required; ledgered in `PaymentAdjustment` | Built |
 | **Bank transfer + slip** | **`BANK_TRANSFER`** | **Student submits; `ADMIN`/`SUPER_ADMIN` approve** | **Human review of the uploaded slip** | **New** |
 
@@ -80,8 +82,8 @@ model PaymentSlip {
   payment        Payment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
 
   claimedAmount  Decimal           @db.Decimal(10, 2)
-  referenceNo    String?                       // bank reference printed on the slip
-  transferDate   DateTime?
+  referenceNo    String                        // bank reference printed on the slip (required, slips.requireReference)
+  transferDate   DateTime
   bankName       String?
 
   objectKey      String                         // private R2 key, never exposed
@@ -110,8 +112,8 @@ Rules:
 - A slip is never edited after review; a re-upload is a new row.
 - `REJECTED` requires `rejectReason`; the student sees it and may submit a new slip.
 - Approval sets `Payment.status = SUCCESS`, `method = BANK_TRANSFER`, `collectedById = reviewer`, and
-  `amount` to the course fee. If `claimedAmount` differs from the fee the reviewer must reject with a
-  reason. **Partial payments, multi-month slips and installments are out of scope here** and belong to
+  `amount` to `computeMonthFee` for that enrollment and month (concession-aware, `listAmount` stored). If `claimedAmount` differs from it the reviewer must reject with a
+  reason; a slip pays exactly one billing month (current or, within `fees.advanceMonthsAllowed`, the next), is exactly one enrollment, and is bounded by `slips.maxTransferAgeDays` and `slips.maxRejectionsPerMonth` (D-MONEY-6). **Partial payments, multi-month slips and installments are out of scope here** and belong to
   roadmap Phase G.
 - The same `referenceNo` on two `APPROVED` slips **in one organization** is blocked by the
   `approvedReferenceKey` unique (see "Constraints" below) to stop one transfer being used for two
@@ -175,7 +177,7 @@ All mutations require `Idempotency-Key`. Base path `/api/payments/slips`.
 | `POST` | `/` | `STUDENT` | Create the slip row for an owned, active enrollment and month; returns a presigned PUT |
 | `POST` | `/:id/confirm` | `STUDENT` (owner) | Verify object exists, size and decoded type; move to `SUBMITTED` |
 | `GET` | `/` | `STUDENT` (own), `ADMIN`, `SUPER_ADMIN` | Paginated list, filter by status; staff default to `SUBMITTED` |
-| `GET` | `/:id/file` | owner `STUDENT`, `ADMIN`, `SUPER_ADMIN` | Short-lived presigned GET; audited because slips can contain bank details |
+| `GET` | `/:id/file` | `ADMIN`, `SUPER_ADMIN` | Short-lived presigned GET; audited because slips can contain bank details. Students see status and reject reason only (D-MONEY-6) |
 | `POST` | `/:id/approve` | `ADMIN`, `SUPER_ADMIN` | Approve and settle the payment |
 | `POST` | `/:id/reject` | `ADMIN`, `SUPER_ADMIN` | Reject with a required reason |
 
@@ -228,11 +230,11 @@ class and may also use the live stream and recordings.
 - Add `HYBRID` to `ClassType`.
 - Replace `@@unique([userId, courseId, classType])` with **one active enrollment per `(userId,
   courseId)`**, enforced by a nullable `Enrollment.activeKey String? @unique` that the service sets to
-  `${userId}:${courseId}` while `isActive = true` and clears to `NULL` when the enrollment is cancelled
+  `${organizationId}:${userId}:${courseId}` while `isActive = true` and clears to `NULL` when the enrollment is cancelled
   (see "Constraints Prisma cannot express" in §3.3 for why this is used instead of a partial unique
   index). Today's rule lets one student pay twice for the same course by holding both an `ONLINE` and a
   `PHYSICAL` enrollment; `HYBRID` is the correct way to express that need.
-- Changing mode is an **in-place update of `classType`** (audited), not cancel-and-re-enroll, so the
+- Changing mode is an **in-place update of `classType`** (audited, timing per D-MONEY-4: a change that adds online access takes effect on the 1st of next month by default (`nextClassType`, `fees.modeUpgradeEffective`); a change that removes online access is immediate; price follows the new mode from next month; until HYBRID ships, a second active enrollment of the same course in another mode is refused with `409 ALREADY_ENROLLED_OTHER_MODE`), not cancel-and-re-enroll, so the
   existing `Payment` rows (keyed by `enrollmentId`) stay valid across a mid-month change.
 - Migration is additive-first: add the enum value and the `activeKey` column, detect users holding two
   active enrollments in one course, convert them to a single `HYBRID` enrollment (re-pointing payment
@@ -280,9 +282,7 @@ These change behaviour for existing students, so they are not decided by this do
      joined live classes, and an owner-approved announcement before the check is enforced.
    - Tests: each mode × `onlineForPhysical` true/false × live and recording × paid/unpaid, plus the
      privileged-role bypass and a teacher toggling the flag on a course they do not own.
-2. **Is the fee the same for every mode?** Today there is one `Course.monthlyFee`. Per-mode fees
-   (`onlineFee`, `physicalFee`, `hybridFee`) are a small additive change but need pricing from the owner.
-   Default until decided: one fee for all modes.
+2. ~~Per-mode fees~~ **Decided 2026-11-20 (D-MONEY-2):** effective-dated `CourseFee` (`monthlyFee` is the PHYSICAL/base fee; `onlineFee` and `hybridFee` nullable and fall back to `monthlyFee`). Only `SUPER_ADMIN` writes it; a change applies from the first month starting at least `fees.changeNoticeDays` (14) after it is saved. Every channel computes the amount with `computeMonthFee`.
 
 ### 4.5 Where `classType` is consumed (code to revisit)
 
@@ -294,13 +294,11 @@ new value.
 
 ## 5. Delivery order
 
-1. Owner decides the per-mode fee question in §4.4 (the other §4.4 decision is settled).
+1. Decided (D-MONEY-2); the fee function is Wave 2b T4.
 2. `HYBRID` enum + merge migration + eligibility helper + tests (small, self-contained).
 3. `BANK_TRANSFER` enum value + `PaymentSlip` migration + service + routes + tests.
 4. Slip UI (student upload, staff queue), notification types, expiry job.
 5. Docs: update `payments.endpoints.md`, `enrollments.endpoints.md`, `08-database-design.md` from
    "planned" to "implemented" in the same PR as each step.
 
-Both changes should land **after** the organization foundation migration in
-[14-multi-tenancy-readiness.md](../../../context/documents/14-multi-tenancy-readiness.md) so that
-`PaymentSlip` is created with `organizationId` from its first migration.
+Both land in Wave 2, after M2–M3 ([14-multi-tenancy-readiness.md](../../../context/documents/14-multi-tenancy-readiness.md); `organizationId` `NOT NULL`, scoped client): HYBRID with the lifecycle columns as one migration (2a), then the money core (`computeMonthFee`, any-SUCCESS guard, coverage function, 2b), then `PaymentSlip` (2d) after 2b and the Wave 1 who-owes and cash-tally views. `PaymentSlip` is created with a required `organizationId`.
