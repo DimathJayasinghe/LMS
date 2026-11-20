@@ -220,6 +220,7 @@ decision stands.
 | 13 | Who may mark an exam | Markers mark; teachers only publish and correct | Audit F-67: allow the owning teacher to enter marks on their own exam, or document that every exam needs an assigned marker |
 | 14 | Branch dimension | Institute = branch (ADR 14), but `Course`, `Enrollment` and `ClassSession` carry no branch | Audit F-52, F-53, F-37: decide whether one course runs at several branches with separate rosters and fees before building the physical roster and scanner |
 | 15 | Exams and payment | Exams gated by enrollment only | Audit F-23: decide whether an unpaid student may sit the monthly test |
+| 16 | Teacher and owner authority | Money adjustments and refunds are owner-only; teachers publish and correct; the owner has no read-only console | Audit F-125, F-126, F-127: decide teacher concession and refund caps, late-work policy and the owner console (doc 17 section 12) |
 
 ## 3. Candidate roadmap additions
 

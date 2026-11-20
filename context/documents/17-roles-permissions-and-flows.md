@@ -8,7 +8,7 @@
 > disposable local stack, and rendered-page checks per role.
 >
 > **Scope of this change: documentation only.** No code was changed. Findings, fixes and a sequence are
-> recorded here and in [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) (124 findings: 1 critical, 18 high, 83 medium, 22 low, ids `F-nn`). The 2026-11-19 decisions are **cited, not reopened**: Express + Next, Organization =
+> recorded here and in [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) (127 findings: 1 critical, 18 high, 86 medium, 22 low, ids `F-nn`). The 2026-11-19 decisions are **cited, not reopened**: Express + Next, Organization =
 > tenant and Institute = branch ([14](./14-multi-tenancy-readiness.md)), HYBRID enrollment and three payment
 > channels (planned, [spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)),
 > and the PHYSICAL-only access rule (planned).
@@ -96,6 +96,8 @@ Enforcement has three layers, and the gaps are always between them:
 | Publish results, post-publish correction | ✔ | ✔ own | – | – | read own |
 | Roster of enrolled students | ✔ | **– (F-83)** | ✔ | – | – |
 | Create staff account | **no flow (F-21)** | – | – | – | – |
+
+This table is the current state. The proposed extra authority for the teacher and the owner is in §12.
 | Reset a password | **nobody (F-03)** | – | – | – | – |
 
 ## 4. Journeys: as designed against as built
@@ -192,10 +194,11 @@ letters are S (hours), M (days), L (a week or more).
 - **Wave 1 — give each role a working day:** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
   entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation; F-104 timetable-generated classes
-  that can go live (a live-checked S fix).
+  that can go live (a live-checked S fix); F-127 read-only owner console.
 - **Wave 2 — make access coherent (needs owner decisions, §9):** the single content gate with mode and
   payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105), money and enrollment lifecycle (F-58 to F-65, F-91, F-93, F-94),
-  guardian contact, minors and notification events (F-25, F-76, F-98).
+  guardian contact, minors and notification events (F-25, F-76, F-98); teacher authority over concessions, refunds and
+  late work (F-125, F-126).
 - **Wave 3 — hardening and polish:** the remaining mediums and lows in doc 18, with Vitest matrices for every
   new guard as `04-ai-workflow-rules.md` §3.4 requires.
 
@@ -247,6 +250,9 @@ These change what gets built and cannot be settled from code.
     teachers or assistants handle money, substitute and co-teacher rules, year rollover and how long past
     students keep recordings, data retention, teacher-exit terms, rank visibility for minors, who may change a
     class fee.
+14. **Authority of the teacher and the owner (F-125, F-126, F-127).** How much money authority a teacher gets
+    (concession and refund caps, what is automatic, who bears the cost), the default late-work and late-result
+    policy, and what the owner console must show. Defaults are proposed in §12.
 
 ## 10. UI evidence (rendered per role)
 
@@ -273,7 +279,7 @@ for the rest.
 
 The audit ran in two passes. The first pass covered accounts, delivery, exams, enrollment and payment and the
 student UI. The second pass completed catalog and timetable, attendance, oversight and the staff UIs (front desk,
-teacher, marker, owner) and, with a Sri Lankan domain review, produced F-91 to F-124.
+teacher, marker, owner) and, with a Sri Lankan domain review, produced F-91 to F-127.
 
 The per-domain audit output, the route matrix, the merge script that generated doc 18 and the hypothesis list were kept outside the repository (the repository holds only the conclusions in this file and doc 18, so line-level evidence has to be re-located from the endpoint or function named in each finding). Re-running a domain is cheap if the scenario list in §6 and
 the hypotheses H1 (setup enforced only in the browser), H2 (stateless access token), H3 (month boundary),
@@ -281,3 +287,38 @@ H4 (nav against backend), H6 (unguarded reads), H7 (front desk not branch-scoped
 reused. Verdicts on those: H1 confirmed (F-29), H2 confirmed (F-15), H3 confirmed with Asia/Colombo offset
 (F-05, F-18), H4 partly (F-04 family), H6 confirmed for videos and attendance (F-06, F-09), H7 confirmed
 (F-52, F-53), H8 confirmed (F-10, F-11, F-21, F-83).
+
+## 12. Proposed privileges for the higher roles
+
+In a Sri Lankan tuition institute the class teacher and the owner hold the real authority. The teacher runs the
+class, owns its income and decides concessions, late work and results; the owner answers for the whole institute;
+front desk only executes. Today the code gives the teacher their own content, scheduling, exam set-up, publishing
+and post-publish correction, keeps every money adjustment and every refund with the owner, and gives the owner
+write access everywhere but no single place to see the whole institute. That leaves the people who carry the
+responsibility with the least control over their own work and forces every small decision through the owner.
+
+**Principle.** Delegate authority to the person who is accountable, bounded by scope (own courses), amount
+(owner-set cap), reason and audit; the owner can see everything read-only and can revoke. This extends, and does
+not reopen, the 2026-11-19 decisions (HYBRID enrollment, three payment channels, PHYSICAL-only access).
+
+| Role | Capability | Today | Proposed | Finding |
+|---|---|---|---|---|
+| Teacher | Roster of own class with paid or unpaid and attendance | none | read, without phone, NIC or amounts | F-83 |
+| Teacher | Enter marks on own exam, hall (`INCLASS`) marks | marker only | owning teacher may enter and finalize | F-67, F-13 |
+| Teacher | Results: publish, correct after publish | publish once; correction needs a reason | add completeness check, unpublish and re-publish with a reason and a notification | F-71, F-126 |
+| Teacher | Late work: extension, late window, re-open | none | per-student extension and late flag on own exams, with a reason | F-126 |
+| Teacher | Concession (free or half card, waiver) on own course | owner override only | grant within an owner-set cap per month; above the cap it queues for the owner | F-125, F-63 |
+| Teacher | Refund or payment correction on own course | owner only | request; small amounts auto-approved within the cap, execution stays in the owner-only refund path, never above the paid amount | F-125 |
+| Teacher | Attendance and sessions of own course | read, reconciliation | mark and undo, cancel, name a substitute | F-35, F-96, F-123 |
+| Teacher | Income statement | gross only | per-student drill-down, share, CSV | F-91 |
+| Teacher | Delegate to an assistant | none | scoped to own classes, with a cash handover record | F-95 |
+| Owner | Organization-wide read-only console | scattered or missing | rosters, attendance, marking progress, who owes, cash by collector, SMS log, security audit, teacher statements | F-127, F-10, F-77, F-120, F-121 |
+| Owner | View as a teacher, front desk or student | none | audited and strictly read-only | F-127 |
+| Owner | Approve teacher requests | none | one approval queue with reason and amount | F-125 |
+| Owner | Audit export, break-glass writes | partial | CSV export; writes stay owner-only with a reason | F-127, F-31, F-81 |
+
+**Guardrails that do not change.** Front desk keeps no refund, override or role power. Markers see no money.
+A teacher never touches another teacher's course (`assertCourseAccess`) and never approves their own request
+above the cap. Every adjustment carries an `Idempotency-Key`, a reason and an audit row. The owner invariants in
+F-31 (last owner, self-demotion) still apply. Cap values are owner decisions (§9 item 14), so start with
+conservative defaults (caps of zero, meaning every request goes to the owner) and raise them per teacher.
