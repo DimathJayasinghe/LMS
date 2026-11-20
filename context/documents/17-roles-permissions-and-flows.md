@@ -8,7 +8,7 @@
 > disposable local stack, and rendered-page checks per role.
 >
 > **Scope of this change: documentation only.** No code was changed. Findings, fixes and a sequence are
-> recorded here and in [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) (90 findings: 1 critical, 17 high, 59 medium, 13 low, ids `F-nn`). The 2026-11-19 decisions are **cited, not reopened**: Express + Next, Organization =
+> recorded here and in [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) (124 findings: 1 critical, 18 high, 83 medium, 22 low, ids `F-nn`). The 2026-11-19 decisions are **cited, not reopened**: Express + Next, Organization =
 > tenant and Institute = branch ([14](./14-multi-tenancy-readiness.md)), HYBRID enrollment and three payment
 > channels (planned, [spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)),
 > and the PHYSICAL-only access rule (planned).
@@ -29,13 +29,15 @@ content is one coarse rule applied differently depending on the route.
 |---|---|---|
 | T1 Session and account lifecycle | Browser sessions die 15 minutes after login; no password recovery; deactivation lags; no staff creation | F-01, F-02, F-03, F-15, F-21, F-31, F-32 |
 | T2 Staff have no operating surface | Front desk cannot enroll a walk-in, see who owes, or tally cash; teacher has no roster; nobody can enter hall-paper marks | F-10, F-11, F-13, F-67, F-77, F-83 |
-| T3 One content gate, applied inconsistently | `MARKER` and `ADMIN` pass the recording gate; the gate looks only at the current month; exams are not gated; video metadata is readable without enrollment | F-04, F-05, F-06, F-23 |
+| T3 One content gate, applied inconsistently | recording access is not scoped uniformly across roles; the gate looks only at the current month; exams are not gated | F-04, F-05, F-06, F-23 |
 | T4 No branch dimension | A course, enrollment and session carry no branch; one class per branch at a time; scanner not branch-aware | F-52, F-53, F-37 |
 | T5 Identity and attendance integrity | Scan identity resolution, QR integrity, Zoom webhook hardening, SDK joins that very likely cannot match students, attendance reads that are not scoped | F-07, F-08, F-09, F-14, F-54 |
 | T6 Money edges | Bulk upload is an unaudited front-desk money edit; cash and PayHere can double-settle; chargebacks ignored; no free/half card or proration | F-58, F-61, F-63, F-64 |
 | T7 Exams cannot be run end to end | Teacher cannot mark; hall (`INCLASS`) marks have no entry path; scoped exams cannot be sat; non-MCQ work is not autosaved | F-13, F-17, F-22, F-67, F-86 |
 | T8 Communication | Three SMS events, all to the student's own phone; none for absence, fee due or timetable change | F-25, F-76, F-72 |
 | T9 Documentation drift | Doc 01 contradicts itself and the code; CLAUDE.md and doc 15 overstated the content gate and the attendance channels | F-14, F-26, F-34, F-66 |
+| T10 Commercial and lifecycle model | No teacher settlement, class medium or capacity, drop and transfer lifecycle, non-monthly products, assistant role, substitutes, year rollover, minors' consent and retention | F-91 to F-102 |
+| T11 Scheduling, offboarding and oversight hygiene | Timetable-generated classes cannot go live, front desk not tied to a branch, offboarding without hand-over, no SMS log, thin security audit | F-104, F-105, F-107, F-118, F-120, F-121 |
 
 **Most urgent single item:** F-01 (verified in code; the login response was observed live with
 `Max-Age=900` on the access cookie, but the 16-minute logout itself has not been replayed, so reproduce it before
@@ -66,10 +68,10 @@ Enforcement has three layers, and the gaps are always between them:
 | Role | Scope as implemented | Where it leaks or is thin |
 |---|---|---|
 | `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28) |
-| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | Reads any student's attendance across all courses (F-09). No roster of own students (F-83). Cannot mark own exam (F-67) |
-| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Passes the recording gate (F-04). Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
-| `MARKER` | Assigned exams or audiences only for list, get and grade | Passes the recording gate (F-04). Reads any student's attendance (F-09). Sees full student identity on every script (F-74) |
-| `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); metadata readable without enrollment (F-06); not applied to exams (F-23) |
+| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | Attendance read scoping gap (F-09). No roster of own students (F-83). Cannot mark own exam (F-67) |
+| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Recording access scoping gap (F-04). Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
+| `MARKER` | Assigned exams or audiences only for list, get and grade | Recording and attendance read scoping gaps (F-04, F-09). Sees full student identity on every script (F-74) |
+| `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); recording read scoping (F-06); not applied to exams (F-23) |
 
 ## 3. Capability matrix (today, from the route matrix)
 
@@ -82,7 +84,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Timetable slots, generate sessions | ✔ | ✔ own course | ✔ | – | read |
 | Schedule Zoom, host live class | ✔ | ✔ own | – | – | join (paid) |
 | Upload recording, materials | ✔ | ✔ own | – | – | – |
-| Play recording | ✔ | ✔ own | **✔ any course (F-04)** | **✔ any course (F-04)** | ✔ if enrolled + current month paid |
+| Play recording | ✔ | ✔ own | scope gap (F-04) | scope gap (F-04) | ✔ if enrolled + current month paid |
 | Enroll a student | ✔ | – | ✔ API, **no UI (F-11)** | – | self |
 | Collect fee at entrance, bulk upload | ✔ | – | ✔ | – | – |
 | Override or refund a payment | ✔ | – | – | – | – |
@@ -117,8 +119,7 @@ Submit button disables at 0:00 (F-86); a failed PDF upload leaves a dead submiss
 **Front desk: the day at the counter.** Register or find a walk-in → enroll → take cash → scan in → chase
 unpaid → end-of-day tally. *Breaks:* no enroll UI (F-11; UI only, the API allows it and the student can self-enroll on a phone meanwhile), no bulk "who owes" list (F-10; one student's outstanding months can be checked at a time), scanner marks any active
 student present and shows nothing about enrollment, payment or mode (F-12), the scanner and cash desk resolve
-the same card with different rules (F-39), scan identity between the two code kinds can resolve to the wrong
-student (F-07), the bulk Excel upload can set any month `SUCCESS` without a per-row trail (F-58),
+the same card with different rules (F-39), scan identity resolution needs hardening (F-07), the bulk Excel upload can set any month `SUCCESS` without a per-row trail (F-58),
 cash collection can silently overwrite an existing `SUCCESS` row (F-59), and there is no end-of-day cash tally
 (F-77).
 
@@ -138,8 +139,8 @@ Today, per route:
 | Route family | Student rule | Staff rule |
 |---|---|---|
 | Live token | active enrollment **and** current-UTC-month `SUCCESS` payment on any enrollment of the course | host/owner path via `assertCourseAccess`; host credentials come from the shared owner Zoom account (F-56) |
-| Recording stream | same as live | not scoped by course for non-student roles; the gate function short-circuits for them (F-04, `live`; detail kept in the private audit notes) |
-| Recording list/get | enrollment check on the list only; the single-recording metadata read is not scoped (F-06, `live`) | – |
+| Recording stream | same as live | not uniformly scoped across roles (F-04, `live`; detail kept in the private audit notes) |
+| Recording list/get | enrollment check on the list only; metadata reads need tightening (F-06, `live`) | – |
 | Modules and materials | enrollment, payment for downloads | owner/teacher scope |
 | Exams | enrollment only (no payment) (F-23) | marker assigned only |
 | Attendance scan | none: enrollment, mode and payment are not checked (F-12) | – |
@@ -174,24 +175,27 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S9 | Parent SMS | Gap | No guardian contact; three events, all to the student (F-25, F-76) |
 | S10 | Low-end phone, bank slip | Planned | Bank slip is in the spec; no upload retry for exam PDFs, shared rate limiter (F-22, F-02) |
 | S11 | Staff turnover and deactivation | Partial | Refresh blocked at once, access token lives up to 15 minutes; no handover check (F-15, F-32, F-82) |
-| S12 | Minors' data privacy | Gap | NIC photos mandatory, write-only, no retention policy; account enumeration on register (F-19, F-30, F-33) |
+| S12 | Minors' data privacy | Gap | NIC photos mandatory, write-only, no retention policy; registration hardening (F-19, F-30, F-33) |
+| S13 | Teacher settlement, commission and concessions | Gap | No revenue share, statement or concession attribution; teacher income view is gross-only (F-91, F-79) |
+| S14 | Year-end rollover, repeaters and teacher substitution | Gap | No clone-to-new-year, batch end, substitute or make-up session (F-97, F-93, F-96) |
 
 ## 7. Recommended fix sequence
 
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; F-04 and F-07 need a quick owner confirmation, §9.12):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; F-04 and F-07 need a quick owner confirmation, §9 item 12):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually
   used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution.
 - **Wave 1 — give each role a working day:** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
-  entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation.
+  entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation; F-104 timetable-generated classes
+  that can go live (a live-checked S fix).
 - **Wave 2 — make access coherent (needs owner decisions, §9):** the single content gate with mode and
-  payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37), money edges (F-58 to F-65),
-  guardian contact and notification events (F-25, F-76).
+  payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105), money and enrollment lifecycle (F-58 to F-65, F-91, F-93, F-94),
+  guardian contact, minors and notification events (F-25, F-76, F-98).
 - **Wave 3 — hardening and polish:** the remaining mediums and lows in doc 18, with Vitest matrices for every
   new guard as `04-ai-workflow-rules.md` §3.4 requires.
 
@@ -238,13 +242,18 @@ These change what gets built and cannot be settled from code.
 12. **Wave 0 confirmations (F-04, F-07).** May front-desk or marker accounts ever open recordings (for support or
     marking)? The proposed default is no. And is scan identity required to be unique across both code kinds?
     The proposed default is yes.
+13. **Commercial model (F-91, F-92, F-94, F-95, F-96, F-97, F-99, F-101, F-102, F-110).** Teacher revenue share and
+    who bears concessions, class medium and capacity, which fee products exist beyond the monthly fee, whether
+    teachers or assistants handle money, substitute and co-teacher rules, year rollover and how long past
+    students keep recordings, data retention, teacher-exit terms, rank visibility for minors, who may change a
+    class fee.
 
 ## 10. UI evidence (rendered per role)
 
 Checked in a browser against the local stack, one login per role:
 
 - **New student** — every route redirects to `/auth/account-setup`: "Required. Upload both sides of your
-  National Identity Card." The gate is a frontend redirect only (F-29, `live`: the API serves the same account).
+  National Identity Card." Setup enforcement needs a server-side counterpart (F-29, `live`).
 - **Student with five paid enrollments** — the dashboard is a link grid with staff-written copy: Classes
   "Browse and manage classes", Payments "Records and entrance collection" (F-20). The classes list shows
   "Enrolled" and the next session but no branch, no mode and no paid state. A class detail page lists its
@@ -261,6 +270,10 @@ Not covered: mobile widths and screenshots of every screen; the staff and studen
 for the rest.
 
 ## 11. How this audit was produced and how to resume
+
+The audit ran in two passes. The first pass covered accounts, delivery, exams, enrollment and payment and the
+student UI. The second pass completed catalog and timetable, attendance, oversight and the staff UIs (front desk,
+teacher, marker, owner) and, with a Sri Lankan domain review, produced F-91 to F-124.
 
 The per-domain audit output, the route matrix, the merge script that generated doc 18 and the hypothesis list were kept outside the repository (the repository holds only the conclusions in this file and doc 18, so line-level evidence has to be re-located from the endpoint or function named in each finding). Re-running a domain is cheap if the scenario list in §6 and
 the hypotheses H1 (setup enforced only in the browser), H2 (stateless access token), H3 (month boundary),
