@@ -60,9 +60,9 @@ Found by the roles, scope and flow audit ([17](./17-roles-permissions-and-flows.
 
 | Wave | Deliverable | Findings |
 |---|---|---|
-| 0 | Session lifetime fix; recording gate excludes `MARKER`/`ADMIN`; enrollment check on video metadata; attendance reads scoped; Zoom validation branch; production boot check for Bunny keys; SSR traffic out of the per-IP limiter; unambiguous scan resolution | F-01, F-04, F-06, F-09, F-54, F-55, F-02, F-07 |
+| 0 | Session lifetime fix; recording read scoping; enrollment check on recording metadata; attendance read scoping; Zoom webhook hardening; production boot check for Bunny keys; SSR traffic out of the per-IP limiter; scan identity resolution | F-01, F-04, F-06, F-09, F-54, F-55, F-02, F-07 |
 | 1 | Front desk: enroll UI, who-owes, end-of-day cash tally, scanner context. Teacher: roster, marking, hall-mark entry. Students: scoped-exam sitting, exam resilience. Accounts: password reset, staff creation | F-11, F-10, F-77, F-12, F-83, F-67, F-13, F-17, F-22, F-86, F-03, F-21 |
-| 2 | One content gate with mode and payment rules; branch dimension; money edges; guardian contact and SMS events (needs owner decisions) | F-05, F-23, F-65, F-52, F-53, F-58 to F-64, F-25, F-76 |
+| 2 | One content gate with mode and payment rules; branch dimension; money edges; guardian contact and SMS events (needs owner decisions) | F-05, F-23, F-52, F-53, F-37, F-58 to F-65, F-25, F-76 |
 | 3 | Remaining medium and low findings with a Vitest matrix per guard | doc 18 |
 
 ## P1 - Complete the Core Teaching Product

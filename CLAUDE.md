@@ -121,10 +121,7 @@ collected; don't rely on prior Zoom SDK knowledge here.
 
 For a `STUDENT`, recorded video and live-class access both require: authenticated, an active `Enrollment`,
 and the current month's `Payment.status = SUCCESS` — checked in the service layer before any
-token/signature is issued. **Known gap (audit 2026-11-19, `context/documents/18-flow-audit-findings-register.md`
-F-04):** `assertStudentContentAccess` returns immediately for any non-student role, so `MARKER` and `ADMIN`
-currently pass the recording stream gate for every course; the gate also looks only at the current month
-(F-05), ignores `classType` (planned fix) and is not applied to exams (F-23). VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
+token/signature is issued. **Known gaps (audit 2026-11-19, `context/documents/18-flow-audit-findings-register.md` F-04, F-05, F-23):** the gate is not yet applied uniformly across roles and content types, it looks only at the current month, and it ignores `classType` (planned fix). VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
 classes get the same watermark treatment but the Web Meeting SDK has no OS-level capture-blocking
 (that's a documented, accepted limitation, not a bug to fix).
 

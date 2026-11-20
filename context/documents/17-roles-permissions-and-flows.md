@@ -3,7 +3,7 @@
 > **Audit of 2026-11-19.** Checks whether the role model, the permission and scope rules and the end-to-end
 > user journeys add up to workflows a Sri Lankan tuition institute can actually run, or only to a set of
 > features with inconsistent access. Method: a mechanical route matrix of all 145 endpoints, service-guard and
-> frontend-gate extraction, nine tracer audits (accounts, catalog/timetable, attendance, delivery,
+> frontend-gate extraction, nine per-domain audits (accounts, catalog/timetable, attendance, delivery,
 > enrollment and payment, exams, oversight, staff UX, student UX), live probes with one login per role on a
 > disposable local stack, and rendered-page checks per role.
 >
@@ -31,17 +31,22 @@ content is one coarse rule applied differently depending on the route.
 | T2 Staff have no operating surface | Front desk cannot enroll a walk-in, see who owes, or tally cash; teacher has no roster; nobody can enter hall-paper marks | F-10, F-11, F-13, F-67, F-77, F-83 |
 | T3 One content gate, applied inconsistently | `MARKER` and `ADMIN` pass the recording gate; the gate looks only at the current month; exams are not gated; video metadata is readable without enrollment | F-04, F-05, F-06, F-23 |
 | T4 No branch dimension | A course, enrollment and session carry no branch; one class per branch at a time; scanner not branch-aware | F-52, F-53, F-37 |
-| T5 Identity and attendance integrity | Ambiguous scan resolution, static QR, Zoom webhook hardening, SDK joins that very likely cannot match students, teacher reads any student's attendance | F-07, F-08, F-09, F-14, F-54 |
+| T5 Identity and attendance integrity | Scan identity resolution, QR integrity, Zoom webhook hardening, SDK joins that very likely cannot match students, attendance reads that are not scoped | F-07, F-08, F-09, F-14, F-54 |
 | T6 Money edges | Bulk upload is an unaudited front-desk money edit; cash and PayHere can double-settle; chargebacks ignored; no free/half card or proration | F-58, F-61, F-63, F-64 |
 | T7 Exams cannot be run end to end | Teacher cannot mark; hall (`INCLASS`) marks have no entry path; scoped exams cannot be sat; non-MCQ work is not autosaved | F-13, F-17, F-22, F-67, F-86 |
 | T8 Communication | Three SMS events, all to the student's own phone; none for absence, fee due or timetable change | F-25, F-76, F-72 |
 | T9 Documentation drift | Doc 01 contradicts itself and the code; CLAUDE.md and doc 15 overstated the content gate and the attendance channels | F-14, F-26, F-34, F-66 |
 
-**Most urgent single item:** F-01. The access cookie is set with the same lifetime as the access JWT
+**Most urgent single item:** F-01 (verified in code; the login response was observed live with
+`Max-Age=900` on the access cookie, but the 16-minute logout itself has not been replayed, so reproduce it before
+fixing). The access cookie is set with the same lifetime as the access JWT
 (`backend/src/utils/auth-cookies.ts:8`, `auth.service.ts:308-311`), so after 15 minutes the browser discards it,
 the API answers 401 *without* the `expired` flag, and the frontend's silent refresh
-(`frontend/lib/api.ts:92-98`) never fires. Everyone is logged out every 15 minutes, which stops a student
-mid-exam and a front-desk operator mid-queue. Refresh-token rotation is unaffected, so the fix is small.
+(`frontend/lib/api.ts:92-98`) never fires. Separately, the app layout resolves the session server-side and by
+design does not refresh (`frontend/app/(app)/layout.tsx`), so even a longer cookie would not keep a server-rendered
+navigation alive. Expect users to be sent to login about every 15 minutes, which stops a student mid-exam and a
+front-desk operator mid-queue. Refresh-token rotation is unaffected, but the fix needs a server-side refresh path
+(effort M), not only a cookie change.
 
 ## 2. Roles and how scope is actually enforced
 
@@ -132,9 +137,9 @@ Today, per route:
 
 | Route family | Student rule | Staff rule |
 |---|---|---|
-| Live token | active enrollment **and** current-UTC-month `SUCCESS` payment on any enrollment of the course | host/owner path via `assertCourseAccess`; shared owner Zoom ZAK is handed out (F-56) |
-| Recording stream | same as live | `assertStudentContentAccess` returns immediately for any non-student role, so **MARKER and ADMIN pass for every course** (F-04, `live`) |
-| Recording list/get | enrollment only on the list; **none** on `GET /videos/:id` (F-06, `live`) | – |
+| Live token | active enrollment **and** current-UTC-month `SUCCESS` payment on any enrollment of the course | host/owner path via `assertCourseAccess`; host credentials come from the shared owner Zoom account (F-56) |
+| Recording stream | same as live | not scoped by course for non-student roles; the gate function short-circuits for them (F-04, `live`; detail kept in the private audit notes) |
+| Recording list/get | enrollment check on the list only; the single-recording metadata read is not scoped (F-06, `live`) | – |
 | Modules and materials | enrollment, payment for downloads | owner/teacher scope |
 | Exams | enrollment only (no payment) (F-23) | marker assigned only |
 | Attendance scan | none: enrollment, mode and payment are not checked (F-12) | – |
@@ -142,8 +147,7 @@ Today, per route:
 **Target (as decided 2026-11-19, planned).** Access is the conjunction of: active enrollment; the delivery
 mode of that enrollment (`PHYSICAL`-only students get no live or recording unless `HYBRID` or
 `onlineForPhysical`); and a payment gate. Rework in one function, `assertStudentContentAccess`, called by every
-route family above; the exact lines to change for the mode rule are in the tracer output (finding DEL-12) and
-in the spec. Behaviour change on release: PHYSICAL-only students who today can watch recordings lose that
+route family above; the mode rule itself is specified in the HYBRID spec linked above. Behaviour change on release: PHYSICAL-only students who today can watch recordings lose that
 access. Two things the spec does not yet say and the audit needs decided (F-05, F-66): **which month's fee
 unlocks which content** (the audit recommends *any* recording of a course while the student is currently
 paid, plus a short grace window, rather than the current-month-only cliff), and **whether the gate is
@@ -165,7 +169,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S4 | Teacher sees own roster and own income only | Partial | Income scoped to self (good, but history rewrites, F-79); roster missing (F-83) |
 | S5 | Front-desk walk-in: register, enroll, cash, card, scan, chase unpaid | Partial | Cash and scan work; no enroll UI, no unpaid list, ambiguous scan resolution (F-11, F-10, F-07) |
 | S6 | Missed class then recording, with a grace period | Partial | Recording works; month-cliff, no grace (F-05) |
-| S7 | Zoom live, recording, automatic attendance | Partial | Live token works; automatic attendance very likely cannot match SDK guests (F-14; by code, Zoom-side behaviour not observed); validation branch risk (F-54) |
+| S7 | Zoom live, recording, automatic attendance | Partial | Live token works; automatic attendance very likely cannot match SDK guests (F-14; by code, Zoom-side behaviour not observed); webhook hardening needed (F-54) |
 | S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher cannot mark; hall marks and ranking absent (F-67, F-13, F-73) |
 | S9 | Parent SMS | Gap | No guardian contact; three events, all to the student (F-25, F-76) |
 | S10 | Low-end phone, bank slip | Planned | Bank slip is in the spec; no upload retry for exam PDFs, shared rate limiter (F-22, F-02) |
@@ -177,15 +181,16 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M, no owner decision):** F-01 session lifetime; F-04 remove `MARKER`
-  and `ADMIN` from the recording gate; F-06 enrollment check on `GET /videos/:id`; F-09 scope attendance reads
-  to the course or the student; F-54 Zoom validation branch; F-55 production boot check for the keys actually
-  used; F-02 keep SSR traffic out of the per-IP limiter; F-07 unambiguous scan resolution.
+- **Wave 0 — stop the bleeding (all S/M; F-04 and F-07 need a quick owner confirmation, §9.12):** F-01 session
+  lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
+  enrollment check on recording metadata reads; F-09 scope attendance reads
+  to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually
+  used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution.
 - **Wave 1 — give each role a working day:** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
   entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation.
 - **Wave 2 — make access coherent (needs owner decisions, §9):** the single content gate with mode and
-  payment rules (F-05, F-23, F-65, HYBRID), the branch dimension (F-52, F-53, F-37), money edges (F-58 to F-65),
+  payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37), money edges (F-58 to F-65),
   guardian contact and notification events (F-25, F-76).
 - **Wave 3 — hardening and polish:** the remaining mediums and lows in doc 18, with Vitest matrices for every
   new guard as `04-ai-workflow-rules.md` §3.4 requires.
@@ -228,8 +233,11 @@ These change what gets built and cannot be settled from code.
    whether WhatsApp is wanted).
 10. **Roles (F-27, F-31, F-32).** Keep the per-user `Permission` override model or remove it from the docs; owner
     invariants; who may deactivate staff.
-11. Carried over: per-mode fees, `LMS-<index>` QR values versus random tokens (F-08), a tenant export/restore
+11. Carried over: per-mode fees, the QR value scheme versus random tokens (F-08), a tenant export/restore
     tool, Sinhala and Tamil at launch.
+12. **Wave 0 confirmations (F-04, F-07).** May front-desk or marker accounts ever open recordings (for support or
+    marking)? The proposed default is no. And is scan identity required to be unique across both code kinds?
+    The proposed default is yes.
 
 ## 10. UI evidence (rendered per role)
 
@@ -247,15 +255,14 @@ Checked in a browser against the local stack, one login per role:
 - **Front desk** — nav Dashboard, Classes, Timetable, Attendance, Payments, Administration, Users; dashboard
   tiles are generic. The Payments page offers filters by status (Pending, Success, Failed, Refunded) and a
   month, never "unpaid", plus Collect payment (search or scan) and a prominent **Bulk upload**; it has no
-  enroll action, no per-collector or per-day tally and no branch column (F-10, F-11, F-77, F-58, `live`).
+  enroll action, no per-collector or per-day tally and no branch column (UI observed live; F-10, F-11, F-77 and F-58 are also code-verified).
 
-Not covered: mobile widths and screenshots of every screen; the staff and student UX tracers read page source
+Not covered: mobile widths and screenshots of every screen; the staff and student UX audits read page source
 for the rest.
 
 ## 11. How this audit was produced and how to resume
 
-Raw tracer output (JSONL per domain), the route matrix, the merge script that generates doc 18, and the
-hypothesis list were kept outside the repository. Re-running a domain is cheap if the scenario list in §6 and
+The per-domain audit output, the route matrix, the merge script that generated doc 18 and the hypothesis list were kept outside the repository (the repository holds only the conclusions in this file and doc 18, so line-level evidence has to be re-located from the endpoint or function named in each finding). Re-running a domain is cheap if the scenario list in §6 and
 the hypotheses H1 (setup enforced only in the browser), H2 (stateless access token), H3 (month boundary),
 H4 (nav against backend), H6 (unguarded reads), H7 (front desk not branch-scoped) and H8 (missing flows) are
 reused. Verdicts on those: H1 confirmed (F-29), H2 confirmed (F-15), H3 confirmed with Asia/Colombo offset

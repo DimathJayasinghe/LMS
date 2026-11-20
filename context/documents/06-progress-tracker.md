@@ -16,7 +16,7 @@
 
 ### 2026-11-19 — Roles, scope and flow audit (docs only)
 
-- [x] Audited the role model, permission/scope enforcement and the end-to-end journeys against Sri Lankan tuition operations: route matrix of 145 endpoints, service guards, frontend gates, nine tracer audits, live probes per role on a disposable stack. **No code changed.**
+- [x] Audited the role model, permission/scope enforcement and the end-to-end journeys against Sri Lankan tuition operations: route matrix of 145 endpoints, service guards, frontend gates, nine per-domain audits, live probes per role on a disposable stack. **No code changed.**
 - [x] Findings: [17-roles-permissions-and-flows.md](./17-roles-permissions-and-flows.md) (verdict, scope model, capability matrix, per-role journeys, content-access rule today and target, scenario status, fix sequence, owner decisions) and [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) (90 findings `F-01`…, 1 critical, 17 high, 59 medium, 13 low, each with a fix and effort; every high finding was either reproduced live or re-read by an independent second auditor).
 - [x] Doc drift fixed in the same change: doc 01 (no pending-account queue, attendance reality check, NIC glossary), doc 15 (rows R-ATT-01, R-ATT-03, R-EXM-06, R-EXM-07 and open decisions 12–15), `CLAUDE.md` (content-protection gap, doc range).
 - [ ] Owner decisions in doc 17 §9 (fee unlock model, exams and payment, teacher marking, branch model, minors and NIC, scan policy, attendance authority, money edges, guardian SMS, roles).
