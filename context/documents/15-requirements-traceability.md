@@ -48,7 +48,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-STU-01 | Registration with school, A/L batch, stream, medium, trilingual name | Gap | `User` has name/NIC/phone/address/city only; no school, batch, stream or medium fields |
 | R-STU-02 | Unique student ID as QR/barcode, printable ID card | Partial | `User.barcode` auto-issued and shown as a QR in the app; no printable card layout |
 | R-STU-03 | Class setup: subject, teacher, fee, timetable, branch | Done | `Subject → Course`, `TimetableSlot`, `Institute` |
-| R-STU-04 | Class capacity and teaching medium | Gap | No `capacity` or `medium` on `Course` Audit 2026-11-19: F-92. |
+| R-STU-04 | Class capacity and teaching medium | Gap | No `capacity` or `medium` on `Course`. Audit 2026-11-19: F-92. |
 | R-STU-05 | Enrol/unenrol; transfer between classes or branches | Partial | Enrol/cancel/reactivate exist; mode change is specified in the HYBRID design; no transfer workflow |
 | R-STU-06 | Physical, online and hybrid attendance of one student | Planned | Sessions support all three; **enrollment** gains `HYBRID` per the payment/enrollment spec §4 |
 | R-STU-07 | Free-card, half-fee, scholarship, sibling discounts | Planned | Roadmap P1 "Payments operations"; gap analysis Phase G |
@@ -66,7 +66,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-ATT-05 | Absent alerts to guardians by SMS | Gap | SMS infrastructure exists; needs R-USR-02 |
 | R-ATT-06 | Attendance reports by student, class, month | Partial | Teacher/admin reports exist; per-student history and month rollups not verified |
 | R-ATT-07 | Excused absence, dispute and correction | Planned | Gap analysis Phase F |
-| R-ATT-08 | Make-up / revision class tracking | Gap | Not planned Audit 2026-11-19: F-96. |
+| R-ATT-08 | Make-up / revision class tracking | Gap | Not planned. Audit 2026-11-19: F-96. |
 
 ### 1.4 Fees and payments
 
@@ -81,7 +81,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | Hard gate in `access.service.ts`; grace/waiver/dispute exceptions planned as `AccessException` (gap analysis Phase G, flagged P0 for fairness) |
 | R-PAY-08 | Refunds and adjustments with an audit trail | Done | `PaymentAdjustment` immutable ledger; provider-executed refunds planned |
 | R-PAY-09 | Defaulter list and automatic reminders | Partial | Outstanding totals exist; no scheduled reminder job |
-| R-PAY-10 | Teacher/institute revenue share or commission | Gap | Teachers see own-class aggregates only; no payout/settlement model Audit 2026-11-19: F-91. |
+| R-PAY-10 | Teacher/institute revenue share or commission | Gap | Teachers see own-class aggregates only; no payout/settlement model. Audit 2026-11-19: F-91. |
 | R-PAY-11 | Advance payment, multi-month, installments | Planned | Phase G; explicitly out of the slip spec |
 | R-PAY-12 | Per-mode fees (online / physical / hybrid) | Decide | Payment channels spec §4.4 |
 
@@ -171,7 +171,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-NFR-05 | Backups and recovery | Partial | Scheduled verified dumps; encryption, off-site copy and restore drill outstanding (P0) |
 | R-NFR-06 | OTP/2FA login | Gap | Not built; propose roadmap P2 |
 | R-NFR-07 | Rate limiting, secure headers, audit logs | Done | Helmet, Redis rate limits, `AuditLog` |
-| R-NFR-08 | PDPA 2022 compliance, consent, retention, data export/delete | Gap | Gap analysis P0 "Privacy"; no policy pages, retention schedule or subject-access workflow Audit 2026-11-19: F-99. |
+| R-NFR-08 | PDPA 2022 compliance, consent, retention, data export/delete | Gap | Gap analysis P0 "Privacy"; no policy pages, retention schedule or subject-access workflow. Audit 2026-11-19: F-99. |
 | R-NFR-09 | Minors' consent | Gap | Part of R-NFR-08 |
 | R-NFR-10 | Accessibility | Planned | WCAG 2.2 AA audit is P0 |
 
@@ -196,7 +196,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-NTH-03 | Marketplace of teachers/classes | Deferred | Out of scope in 01 §6 |
 | R-NTH-04 | Certificates and achievement showcase | Planned | Roadmap P2 "Credentials" |
 | R-NTH-05 | Parent mobile app | Deferred | Parent web access first (R-USR-02) |
-| R-NTH-06 | Free trial classes, referrals | Gap | Not planned Audit 2026-11-19: F-94. |
+| R-NTH-06 | Free trial classes, referrals | Gap | Not planned. Audit 2026-11-19: F-94. |
 
 ## 2. Where the generic list conflicts with earlier decisions
 

@@ -226,7 +226,7 @@ These change what gets built and cannot be settled from code.
 3. **Marking authority (F-67).** May a teacher enter marks on their own exam, or only through assigned markers?
 4. **Branch model (F-52, F-53).** Does the same course run at several branches with separate rosters and fees,
    and can a branch host parallel classes?
-5. **Identity and minors (F-19, F-30).** Are NIC photos required for minors at all, who may view them, how long
+5. **Identity and minors (F-19, F-30, F-98).** Are NIC photos required for minors at all, who may view them, how long
    are they kept (see the PDPA row in doc 15)?
 6. **Scan policy (F-12, F-43).** Should the entrance scan refuse or only warn on unpaid, unenrolled or wrong-mode
    students, and inside what time window?
@@ -242,7 +242,7 @@ These change what gets built and cannot be settled from code.
 12. **Wave 0 confirmations (F-04, F-07).** May front-desk or marker accounts ever open recordings (for support or
     marking)? The proposed default is no. And is scan identity required to be unique across both code kinds?
     The proposed default is yes.
-13. **Commercial model (F-91, F-92, F-94, F-95, F-96, F-97, F-99, F-101, F-102, F-110).** Teacher revenue share and
+13. **Commercial model (F-91, F-92, F-93, F-94, F-95, F-96, F-97, F-99, F-101, F-102, F-110).** Teacher revenue share and
     who bears concessions, class medium and capacity, which fee products exist beyond the monthly fee, whether
     teachers or assistants handle money, substitute and co-teacher rules, year rollover and how long past
     students keep recordings, data retention, teacher-exit terms, rank visibility for minors, who may change a
