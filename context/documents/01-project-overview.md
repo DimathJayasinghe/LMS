@@ -46,7 +46,7 @@ Each organization has one owner, many teachers, front-desk staff, markers, and s
 
 ### 3.3 Admin (front-desk staff) — many
 - Institute managers / front-desk staff.
-- **Daily operations**: scan student barcodes at the physical entrance, upload monthly payment Excel sheets, verify pending student accounts, resolve access issues.
+- **Daily operations**: scan student barcodes at the physical entrance, upload monthly payment Excel sheets, reassign lost cards, activate or deactivate accounts, resolve access issues (there is no pending-account approval queue; see §4.1).
 - **Cannot** change system settings or user roles.
 
 ### 3.4 Marker (paper-marking crew) — many
@@ -55,7 +55,7 @@ Each organization has one owner, many teachers, front-desk staff, markers, and s
 - View only the exams and submissions they are assigned to.
 
 ### 3.5 Student — many
-- **Must complete account setup** before using the platform (see §4.1): upload NIC front/back photos and register any physical-institute barcodes.
+- **Must complete account setup** before using the platform (see §4.1): upload NIC front/back photos and, only if attending physical classes, optionally register institute barcodes (barcodes never gate completion).
 - Enroll in one or more courses; view scheduled classes; watch recordings; join live classes.
 - Sit online MCQ exams (server-authoritative timers), upload answer PDFs, or sit in-class exams.
 - View published results, attendance records, and payment history; pay monthly fees via PayHere.
@@ -97,14 +97,15 @@ Physical classes are held at **pre-configured physical centers ("institutes")** 
 
 > **Barcode uniqueness is per-institute, not global.** Two students at two different institutes may legitimately hold the *same* barcode value. Uniqueness is enforced as `@@unique([instituteId, barcode])`; the LMS QR (`User.barcode`) stays globally unique because the LMS issues it.
 
-> **Attendance-marking reality check (2026-07-10)**: the schema/docs describe three ways to mark
-> attendance (QR/barcode scan, live Zoom join, recorded-video watch), but only the *live Zoom join*
-> path is fully wired end-to-end today. The entrance-scan endpoint only resolves via the LMS QR
-> (`User.barcode`) — `StudentBarcode`/institute-scoped scanning isn't consumed anywhere yet, so
-> registering an institute barcode currently has no effect beyond being stored. The recorded-video
-> endpoint exists server-side but the video player never calls it. See
-> `context/api_endpoints/attendance.endpoints.md`'s "Attendance channels" section for the precise,
-> per-channel breakdown.
+> **Attendance-marking reality check (audited 2026-11-19; supersedes the 2026-07-10 note)**: the schema and
+> docs describe three ways to mark attendance (QR/barcode scan, live Zoom join, recorded-video watch). The
+> entrance scan resolves a code against both the LMS QR (`User.barcode`) and a student's institute barcode
+> (`StudentBarcode`), but it does **not** check enrollment, delivery mode or payment, and scan resolution
+> between the two code kinds can be ambiguous (findings F-07, F-12). The live-Zoom
+> automatic path matches a participant only by email, which the embedded Meeting SDK join does not supply, so
+> it is unreliable as built (F-14). The recorded-video flag is client-asserted (F-24). See
+> [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) and
+> `context/api_endpoints/attendance.endpoints.md`'s "Attendance channels" section.
 
 **Account setup (mandatory, after registration; implemented 2026-07-10):**
 1. Register → account is **immediately active** (no pending/approval state — see below).
@@ -204,5 +205,5 @@ Physical classes are held at **pre-configured physical centers ("institutes")** 
 | **Bank slip** | Planned payment evidence: a student uploads a bank-transfer slip that `ADMIN`/`SUPER_ADMIN` approve or reject. |
 | **Institute Barcode** | An institute-issued scan code a student registers during setup; unique **per institute**, one per institute per student. Distinct from the LMS QR. |
 | **LMS QR** | The LMS-issued, globally-unique code (`User.barcode`) shown in-app for LMS-native entrance attendance. |
-| **NIC** | Sri Lankan National Identity Card; front + back photos uploaded during account setup and verified on approval. |
+| **NIC** | Sri Lankan National Identity Card; front + back photos uploaded during account setup and stored privately. There is no approval or verification step (§4.1), and staff currently cannot view them (audit F-30); whether minors should be asked for one is an open decision (F-19). |
 | **Permission** | Optional per-user JSON grant that fine-tunes what a specific user can do beyond their role. |

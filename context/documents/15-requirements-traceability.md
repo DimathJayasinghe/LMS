@@ -19,6 +19,8 @@
 | **Decide** | Conflicts with an earlier recorded decision; needs an owner ruling (see §2) |
 
 Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-product-roadmap.md),
+[17 roles, permissions and flows](./17-roles-permissions-and-flows.md) and
+[18 findings register](./18-flow-audit-findings-register.md) (audit of 2026-11-19, which tests these rows against the actual role journeys),
 [14 multi-tenancy ADR](./14-multi-tenancy-readiness.md),
 [gap analysis 2026-08-20](../../docs/reports/2026-08-20-full-system-gap-analysis.md),
 [payment channels and HYBRID spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md).
@@ -57,9 +59,9 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 
 | ID | Requirement | Status | Evidence / where tracked |
 |---|---|---|---|
-| R-ATT-01 | QR/barcode scan at the entrance, institute-aware | Done | `AttendanceSource.QR/BARCODE`; `attendance.endpoints.md` |
+| R-ATT-01 | QR/barcode scan at the entrance, institute-aware | Partial | `AttendanceSource.QR/BARCODE`; `attendance.endpoints.md`. Audit 2026-11-19: scan resolves LMS QR and institute barcode but checks no enrollment, mode, payment or time window and is not branch-aware in the UI; ambiguous code resolution and a static QR (F-07, F-08, F-12, F-37, F-43) |
 | R-ATT-02 | NFC tap | Gap | Not planned |
-| R-ATT-03 | Online attendance from live join or video watch | Done | Zoom webhook + reconciliation; `2026-07-12-video-watch-attendance-design.md` |
+| R-ATT-03 | Online attendance from live join or video watch | Partial | Zoom webhook + reconciliation; `2026-07-12-video-watch-attendance-design.md`. Audit 2026-11-19: by code, the webhook matches by email, which the Meeting SDK join very likely does not supply (Zoom-side behaviour not observed), and the video flag is client-asserted (F-14, F-24, F-40, F-54) |
 | R-ATT-04 | Hybrid sessions record from either source without duplicates | Done | `@@unique([userId, classSessionId])` |
 | R-ATT-05 | Absent alerts to guardians by SMS | Gap | SMS infrastructure exists; needs R-USR-02 |
 | R-ATT-06 | Attendance reports by student, class, month | Partial | Teacher/admin reports exist; per-student history and month rollups not verified |
@@ -119,8 +121,8 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-EXM-03 | Server-timed exams | Done | 02 §5.3 |
 | R-EXM-04 | Anti-cheat (shuffle, tab-switch detection) | Planned | Roadmap P2 "Academic integrity" |
 | R-EXM-05 | Reusable question bank by unit/difficulty/past paper | Planned | Roadmap P1 |
-| R-EXM-06 | Marking workflow, marker groups | Done / Partial | Exact assignment done; groups E1 done; scoped allocations with preview/confirm/history (E2, #85) done; physical-result entry next |
-| R-EXM-07 | Physical-paper marks entered by staff | Planned | Tracker 2026-09-06: Phase E must add the staff API |
+| R-EXM-06 | Marking workflow, marker groups | Done / Partial (audit F-67: the owning teacher cannot enter marks) | Exact assignment done; groups E1 done; scoped allocations with preview/confirm/history (E2, #85) done; physical-result entry next |
+| R-EXM-07 | Physical-paper marks entered by staff | Planned | Tracker 2026-09-06: Phase E must add the staff API. Audit F-13: `INCLASS` exams are offered in the UI today with no entry path, so this is a live dead end, not only a future feature |
 | R-EXM-08 | Rankings and percentiles | Planned | Roadmap P1 "Gradebook" |
 | R-EXM-09 | Student progress charts and weak-topic analysis | Planned | Roadmap P2 "Learning analytics" |
 | R-EXM-10 | Shared or separate exam instances per audience | Partial | Exam papers, revisions, audiences and participants are merged on `dev`; the design and delivery plan are in `docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md` and the matching plan; scoped allocations are merged, physical-result entry and the guided workflow remain |
@@ -210,10 +212,14 @@ decision stands.
 | 5 | Native Android app | Native apps deferred; PWA planned | Keep web/PWA; revisit only for OS-level capture blocking |
 | 6 | Discussion forums and announcements | 01 §6 said forums are out of scope for v1, while roadmap P1 lists threaded discussions | Reconcile: announcements in P1, threaded discussions later. 01 now points at the roadmap |
 | 7 | Block screen recording | Documented as an accepted limitation of the Web SDK | Keep; rely on watermark, device limits and DRM where available |
-| 8 | NIC approval and verification | Decision 2026-07-10: no approval gate | Keep; revisit alongside PDPA work (R-NFR-08) |
+| 8 | NIC approval and verification | Decision 2026-07-10: no approval gate | Keep; revisit alongside PDPA work (R-NFR-08). The 2026-11-19 audit adds: the photos are write-only (no staff view or delete, F-30) and are demanded of minors who mostly have no NIC (F-19); decide whether NIC is mandatory for under-18s |
 | 9 | Hard payment lock | Gap analysis flags it as unfair without exceptions | Build `AccessException` (Phase G) before a public launch |
 | 10 | "Super admin can do everything" | Global oversight, not impersonation (gap analysis §2) | Keep |
 | 11 | PHYSICAL-only students and online content | Today the gate ignores `classType` | **Resolved 2026-11-19:** physical-only students lose live/recording access unless `HYBRID` or the session opts in (`onlineForPhysical`); payment/enrollment spec §4.4 |
+| 12 | Which month's fee unlocks which content | Gate = current UTC month `SUCCESS` payment (access.service.ts); doc 02 silent on past months | Audit F-05, F-65, F-66: decide current-month-only versus "any recording while paid", a grace window, and per-enrollment versus per-course gating; resolve before HYBRID work touches the same gate |
+| 13 | Who may mark an exam | Markers mark; teachers only publish and correct | Audit F-67: allow the owning teacher to enter marks on their own exam, or document that every exam needs an assigned marker |
+| 14 | Branch dimension | Institute = branch (ADR 14), but `Course`, `Enrollment` and `ClassSession` carry no branch | Audit F-52, F-53, F-37: decide whether one course runs at several branches with separate rosters and fees before building the physical roster and scanner |
+| 15 | Exams and payment | Exams gated by enrollment only | Audit F-23: decide whether an unpaid student may sit the monthly test |
 
 ## 3. Candidate roadmap additions
 

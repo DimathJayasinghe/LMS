@@ -119,9 +119,12 @@ collected; don't rely on prior Zoom SDK knowledge here.
 
 ### Content protection
 
-Recorded video and live-class access both require: authenticated, an active `Enrollment`, and the
-current month's `Payment.status = SUCCESS` — checked in the service layer before any token/signature
-is issued. VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
+For a `STUDENT`, recorded video and live-class access both require: authenticated, an active `Enrollment`,
+and the current month's `Payment.status = SUCCESS` — checked in the service layer before any
+token/signature is issued. **Known gap (audit 2026-11-19, `context/documents/18-flow-audit-findings-register.md`
+F-04):** `assertStudentContentAccess` returns immediately for any non-student role, so `MARKER` and `ADMIN`
+currently pass the recording stream gate for every course; the gate also looks only at the current month
+(F-05), ignores `classType` (planned fix) and is not applied to exams (F-23). VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
 classes get the same watermark treatment but the Web Meeting SDK has no OS-level capture-blocking
 (that's a documented, accepted limitation, not a bug to fix).
 
@@ -140,7 +143,10 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 - **Planned, not built:** `HYBRID` enrollment and a bank-slip payment channel
   (`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`). Today the
   content gate ignores `Enrollment.classType`.
-- Requirement-by-requirement status lives in `context/documents/15-requirements-traceability.md`.
+- Requirement-by-requirement status lives in `context/documents/15-requirements-traceability.md`. The role, scope and
+  flow audit of 2026-11-19 (what each role can and cannot actually do, with a fix for each finding) is
+  `context/documents/17-roles-permissions-and-flows.md` and `18-flow-audit-findings-register.md`; read them
+  before changing any access rule, because several flows there are dead ends rather than missing features.
 - Offline local development uses provider **drivers** (`STORAGE_DRIVER`, `SMS_DRIVER`, more planned) that default to the real providers and are refused when `NODE_ENV=production`; run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. See `context/documents/16-local-development.md`. A local video driver is planned and will have no DRM.
 
 ### Invariants (see `context/documents/02-architecture.md §5` for the full list)
@@ -157,7 +163,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 
 ## Working with `context/`
 
-`context/documents/` (numbered `01`-`16`) is the source of truth for architecture, code standards,
+`context/documents/` (numbered `01`-`18`) is the source of truth for architecture, code standards,
 DB design, and AI workflow rules — read the relevant one before a non-trivial change.
 `context/api_endpoints/*.md` documents the actual current API surface per domain.
 `context/plan/` is historical brainstorming only; where it conflicts with `documents/`, `documents/`
