@@ -171,6 +171,8 @@ Do **not** add a repository layer, a base controller, or a mapper. The four file
 
 Infrastructure numbers are environment variables with defaults in `backend/src/config/env.ts` (business numbers belong to the owner settings registry, not here). Restart the backend after changing one.
 
+Before deploying the Bunny production guard, set `BUNNY_READ_ONLY_API_KEY` (webhook signature verification) and `BUNNY_TOKEN_KEY` (playback signing) in the backend environment. Both backend and worker load `backend/.env` and will not boot in production without both keys. `BUNNY_WEBHOOK_SECRET` is unused and may be left unset.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `JWT_ACCESS_EXPIRES_IN` | `15m` | Lifetime of the access JWT. The cookie itself lives as long as the refresh cookie, so changing this does not sign anyone out early; shorter values only make revocation tighter and refreshes more frequent. Set `1m` locally to exercise silent refresh. |

@@ -23,6 +23,8 @@ All endpoints require the standard `access_token` HTTP-only cookie (except where
 Teachers upload the recording file **straight from the browser to Bunny.net** — it never passes through our
 server (architecture §5.6, same principle as R2 presigned uploads). This is a two-step, webhook-confirmed flow:
 
+Production boot requires `BUNNY_READ_ONLY_API_KEY` for webhook verification and `BUNNY_TOKEN_KEY` for playback, along with the other Bunny configuration. The legacy `BUNNY_WEBHOOK_SECRET` is unused.
+
 1. **`POST /uploads`** (TEACHER/SUPER_ADMIN) — creates the Bunny video entry + a `VideoRecording` row with
    `status: UPLOADING`, and returns a signed **TUS** (resumable upload) authorization. Use with
    [`tus-js-client`](https://github.com/tus/tus-js-client) directly against Bunny — set these headers on the
