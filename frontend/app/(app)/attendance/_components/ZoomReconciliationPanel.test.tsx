@@ -13,6 +13,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const session: ClassSession = {
   id: "session-1",
+  hasRecording: false,
   title: "Physics revision",
   classType: "ONLINE",
   date: "2026-08-17T10:00:00.000Z",

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Role } from '@prisma/client';
 import { asyncHandler } from '@/utils/async-handler';
 import { logger } from '@/config/logger';
 import { extractAuditContext } from '@/utils/audit-context';
@@ -141,7 +142,7 @@ export const deleteVideo = asyncHandler(
 );
 
 // ─── GET /api/videos/class/:classId ──────────────────────────
-// List all videos for a course (any authenticated user)
+// List a course's videos (enrolled student, owning teacher or owner)
 export const listVideosForClass = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { classId } = classIdParamSchema.parse(req.params);
@@ -159,7 +160,7 @@ export const listVideosForClass = asyncHandler(
 );
 
 // ─── GET /api/videos/:id ──────────────────────────────────────
-// Get a single video's metadata (any authenticated user)
+// Get a single video's metadata (enrolled student, owning teacher or owner)
 export const getVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
@@ -173,9 +174,9 @@ export const getVideo = asyncHandler(
 );
 
 // ─── GET /api/videos/:id/stream ──────────────────────────────
-// Student requests an IP-bound signed stream URL
-// The client IP from req.ip is embedded in the Bunny token signature,
-// so sharing the URL externally results in a 403 from Bunny's CDN.
+// Student, owning teacher or owner requests a signed embed URL. The URL is
+// token-authenticated with a 4-hour TTL and is NOT bound to the viewer's IP.
+// Staff opens (teacher, owner) are audited; student opens are not.
 export const getStreamUrl = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
@@ -184,6 +185,16 @@ export const getStreamUrl = asyncHandler(
       id,
       req.user!,
     );
+
+    if (req.user!.role !== Role.STUDENT) {
+      void AuditService.log({
+        action: AUDIT_ACTION.RECORDING_STREAM_STAFF,
+        description: 'Staff opened a recording',
+        targetType: 'VideoRecording',
+        targetId: video.id,
+        context: extractAuditContext(req),
+      });
+    }
 
     res.status(200).json({
       status: 'success',

@@ -87,9 +87,9 @@ and manual attachment require an `Idempotency-Key`.
 | `POST` | `/` | `TEACHER`, `SUPER_ADMIN` | Attach an already-on-Bunny video to an owned class session (legacy manual flow). |
 | `PATCH` | `/:id` | `TEACHER`, `SUPER_ADMIN` | Update owned video title or duration metadata. |
 | `DELETE` | `/:id` | `TEACHER`, `SUPER_ADMIN` | Remove an owned video DB record (Bunny asset untouched). |
-| `GET` | `/class/:classId` | Any authenticated | List videos for a course (paginated); students see only `READY`. |
-| `GET` | `/:id` | Any authenticated | Get single video metadata. |
-| `GET` | `/:id/stream` | Any authenticated | Get token-authenticated signed embed URL (+ watermark). `409 VIDEO_NOT_READY` if not yet processed. |
+| `GET` | `/class/:classId` | `STUDENT` (enrolled), `TEACHER` (own course), `SUPER_ADMIN` | List videos for a course (paginated); students see only `READY` and never the provider video id. |
+| `GET` | `/:id` | `STUDENT` (enrolled), `TEACHER` (own course), `SUPER_ADMIN` | Get single video metadata (no provider video id for students). |
+| `GET` | `/:id/stream` | `STUDENT` (enrolled and paid), `TEACHER` (own course), `SUPER_ADMIN` | Get token-authenticated signed embed URL (+ watermark). `409 VIDEO_NOT_READY` if not yet processed. Teacher and owner opens are audited (`RECORDING_STREAM_STAFF`). |
 
 ---
 
@@ -208,7 +208,7 @@ Lists all video recordings attached to sessions belonging to a specific course. 
 
 A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
 
-**Roles:** Any authenticated user
+**Roles:** `STUDENT` (enrolled), `TEACHER` (own course), `SUPER_ADMIN`. Front-desk (`ADMIN`) and `MARKER` accounts get `403 FORBIDDEN_ROLE` before any lookup. Students are checked for enrollment (`403 NOT_ENROLLED`); the response omits `bunnyVideoId` for students.
 
 **Path Parameter:** `classId` — UUID of the Course
 
@@ -250,7 +250,7 @@ Fetches metadata for a single video recording. Does **not** generate a stream UR
 
 A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
 
-**Roles:** Any authenticated user
+**Roles:** `STUDENT` (enrolled), `TEACHER` (own course), `SUPER_ADMIN`; `ADMIN` and `MARKER` get `403 FORBIDDEN_ROLE` (checked before the video is looked up, so a refused role learns nothing about which ids exist). Enrollment only, no payment check; `bunnyVideoId` is omitted for students.
 
 **Success (200)**
 
@@ -279,7 +279,7 @@ per-student watermark client-side.
 
 A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
 
-**Roles:** Any authenticated user (student path runs the enrolled+paid gate)
+**Roles:** `STUDENT` (enrolled, then current-month paid: `403 NOT_ENROLLED` before `402 PAYMENT_REQUIRED`), `TEACHER` (own course), `SUPER_ADMIN`. `ADMIN` and `MARKER` get `403 FORBIDDEN_ROLE`. A teacher or owner open writes an audit row. The signed URL is token-authenticated with a 4-hour TTL and is **not** IP-bound.
 
 **Security model**
 

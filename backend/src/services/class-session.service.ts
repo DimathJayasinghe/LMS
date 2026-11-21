@@ -1,4 +1,4 @@
-import { ClassType, Prisma, Role } from '@prisma/client';
+import { ClassType, Prisma, Role, VideoStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import type { AuthenticatedUser } from '@/types/auth.types';
@@ -20,6 +20,7 @@ interface ClassSessionSummary {
   durationMinutes: number;
   zoomMeetingId: string | null;
   liveScheduled: boolean;
+  hasRecording: boolean;
   courseId: string;
   deletedAt: Date | null;
   createdAt: Date;
@@ -38,13 +39,20 @@ const classSessionSelect = {
   deletedAt: true,
   createdAt: true,
   updatedAt: true,
+  // Only a boolean leaves the service: staff who cannot open recordings still see
+  // whether one exists without learning anything about it.
+  _count: { select: { videoRecordings: { where: { status: VideoStatus.READY } } } },
 } satisfies Prisma.ClassSessionSelect;
 
 type ClassSessionRow = Prisma.ClassSessionGetPayload<{ select: typeof classSessionSelect }>;
 
-const presentSession = (session: ClassSessionRow, actor: AuthenticatedUser): ClassSessionSummary => ({
+const presentSession = (
+  { _count, ...session }: ClassSessionRow,
+  actor: AuthenticatedUser,
+): ClassSessionSummary => ({
   ...session,
   liveScheduled: Boolean(session.zoomMeetingId),
+  hasRecording: _count.videoRecordings > 0,
   // Operational staff need the provider meeting number for attendance reconciliation.
   // Students only need the boolean state; the token endpoint supplies credentials after
   // its enrolled + paid check. Markers are denied session reads below.

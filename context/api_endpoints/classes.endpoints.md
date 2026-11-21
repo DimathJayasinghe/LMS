@@ -126,12 +126,15 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 	"durationMinutes": 90,
 	"zoomMeetingId": null,
 	"liveScheduled": true,
+	"hasRecording": false,
 	"courseId": "uuid",
 	"deletedAt": null,
 	"createdAt": "2026-05-13T06:00:00.000Z",
 	"updatedAt": "2026-05-13T06:00:00.000Z"
 }
 ```
+
+`hasRecording` is `true` when the session has at least one `READY` recording. Every role that may read sessions sees it, including front desk, who cannot open recordings; it carries no count or identifier.
 
 ## Endpoints Summary
 

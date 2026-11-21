@@ -47,6 +47,7 @@ const institutes: Institute[] = [
 const sessions: ClassSession[] = [
   {
     id: "s1",
+    hasRecording: false,
     title: "Lecture 1",
     classType: "PHYSICAL",
     date: new Date().toISOString(),

@@ -55,6 +55,9 @@ export default async function ClassDetailPage({
     redirect("/auth/login");
   }
 
+  // Front desk and marker accounts never open recordings (the API refuses them).
+  const canOpenRecordings = user.role !== "ADMIN" && user.role !== "MARKER";
+
   let course: Course;
   try {
     course = (await api.get<ApiSuccess<Course>>(`/classes/${classId}`, { cookie })).data;
@@ -97,8 +100,10 @@ export default async function ClassDetailPage({
         return { sessions: [], gated };
       }
     })(),
-    // Recordings — students without an active enrollment get 403.
+    // Recordings — students without an active enrollment get 403. Roles that can
+    // never open recordings skip the call, as it would only 403.
     (async (): Promise<{ videos: VideoRecording[]; gated: boolean }> => {
+      if (!canOpenRecordings) return { videos: [], gated: false };
       try {
         const res = await api.get<ApiList<VideoRecording>>(
           `/videos/class/${classId}?limit=50`,
@@ -259,7 +264,19 @@ export default async function ClassDetailPage({
             )}
           </section>
 
-          {!videosGated && (
+          {!canOpenRecordings && (
+            <section>
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                <PlayCircle className="size-4" aria-hidden />
+                Recordings
+              </h2>
+              <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
+                Recordings are available to students and the class teacher.
+              </div>
+            </section>
+          )}
+
+          {canOpenRecordings && !videosGated && (
             <section>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
