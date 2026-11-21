@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { CheckCircle2, ClipboardCheck, FileText } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -20,14 +20,14 @@ export default async function SubmissionsPage() {
   if (user.role === "STUDENT") redirect("/exams");
 
   const [exams, courses] = await Promise.all([
-    api
-      .get<ApiList<Exam>>("/exams", { cookie })
+    guard401(api
+      .get<ApiList<Exam>>("/exams", { cookie }))
       .then((r) => r.data)
-      .catch(() => [] as Exam[]),
-    api
-      .get<ApiList<Course>>("/classes", { cookie })
+      .catch((error) => { unstable_rethrow(error); return [] as Exam[]; }),
+    guard401(api
+      .get<ApiList<Course>>("/classes", { cookie }))
       .then((r) => r.data)
-      .catch(() => [] as Course[]),
+      .catch((error) => { unstable_rethrow(error); return [] as Course[]; }),
   ]);
 
   const courseName = new Map(courses.map((c) => [c.id, c.name]));

@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -54,9 +54,9 @@ export default async function ReportsPage({
   const viewer = await requireUser(cookie);
   if (viewer.role !== "SUPER_ADMIN" && viewer.role !== "TEACHER") redirect("/dashboard");
 
-  const courses = (await api.get<ApiList<Course>>("/classes", { cookie })).data;
+  const courses = (await guard401(api.get<ApiList<Course>>("/classes", { cookie }))).data;
   const teachers = viewer.role === "SUPER_ADMIN"
-    ? (await api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie })).data
+    ? (await guard401(api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie }))).data
     : [];
   const visibleCourses = viewer.role === "SUPER_ADMIN" && sp.teacherId
     ? courses.filter((course) => course.teacherId === sp.teacherId)
@@ -69,7 +69,7 @@ export default async function ReportsPage({
   if (viewer.role === "SUPER_ADMIN" && sp.teacherId) query.set("teacherId", sp.teacherId);
   if (selectedCourseId) query.set("courseId", selectedCourseId);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
-  const report = (await api.get<ApiSuccess<FinancialReport>>(`/payments/reports${suffix}`, { cookie })).data;
+  const report = (await guard401(api.get<ApiSuccess<FinancialReport>>(`/payments/reports${suffix}`, { cookie }))).data;
 
   const thisMonth = report.trend.at(-1);
   const collected = thisMonth?.collected ?? "0";

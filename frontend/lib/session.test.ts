@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "./api";
-import { requireUser } from "./session";
+import { guard401, requireUser } from "./session";
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn(() => { throw new Error("redirected"); }) }));
 vi.mock("./api", async (importOriginal) => {
@@ -27,5 +27,22 @@ describe("requireUser", () => {
     const error = new Error("offline");
     vi.mocked(api.get).mockRejectedValue(error);
     await expect(requireUser("cookie")).rejects.toBe(error);
+  });
+});
+
+describe("guard401", () => {
+  it("returns successful values", async () => {
+    expect(await guard401(Promise.resolve("ok"))).toBe("ok");
+  });
+  it("redirects on 401", async () => {
+    await expect(guard401(Promise.reject(new ApiError(401, "unauthorized")))).rejects.toThrow("redirected");
+  });
+  it.each([429, 500])("propagates status %i", async (status) => {
+    const error = new ApiError(status, "failed");
+    await expect(guard401(Promise.reject(error))).rejects.toBe(error);
+  });
+  it("propagates network failures", async () => {
+    const error = new Error("offline");
+    await expect(guard401(Promise.reject(error))).rejects.toBe(error);
   });
 });

@@ -1,4 +1,5 @@
-import { requireUser } from "@/lib/session";
+import { unstable_rethrow } from "next/navigation";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { Search } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -25,8 +26,8 @@ export default async function ClassesPage({
 
   const [me, classList, subjectList] = await Promise.all([
     requireUser(cookie),
-    api.get<ApiList<Course>>(`/classes${query}`, { cookie }),
-    api.get<ApiList<Subject>>("/subjects", { cookie }),
+    guard401(api.get<ApiList<Course>>(`/classes${query}`, { cookie })),
+    guard401(api.get<ApiList<Subject>>("/subjects", { cookie })),
   ]);
   const user = me;
   const courses = classList.data;
@@ -39,9 +40,10 @@ export default async function ClassesPage({
   let learningByCourse = new Map<string, LearningEnrollment["learning"]>();
   if (user.role === "STUDENT") {
     try {
-      const mine = await api.get<ApiList<LearningEnrollment>>("/enrollments/learning", { cookie });
+      const mine = await guard401(api.get<ApiList<LearningEnrollment>>("/enrollments/learning", { cookie }));
       learningByCourse = new Map(mine.data.map((e) => [e.courseId, e.learning]));
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       // Leave badges off if enrollments can't be loaded.
     }
   }

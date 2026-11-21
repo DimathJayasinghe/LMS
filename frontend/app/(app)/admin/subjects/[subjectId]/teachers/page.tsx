@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { SubjectTeacherManager } from "./_components/SubjectTeacherManager";
@@ -17,15 +17,16 @@ export default async function SubjectTeachersPage({ params }: { params: Promise<
 
   let subject: Subject;
   try {
-    subject = (await api.get<ApiSuccess<Subject>>(`/subjects/${subjectId}`, { cookie })).data;
+    subject = (await guard401(api.get<ApiSuccess<Subject>>(`/subjects/${subjectId}`, { cookie }))).data;
   } catch (error) {
+    unstable_rethrow(error);
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
 
   const [teachers, assignments] = await Promise.all([
-    api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie }),
-    api.get<ApiList<SubjectTeacherAssignment>>(`/subjects/${subjectId}/teachers`, { cookie }),
+    guard401(api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie })),
+    guard401(api.get<ApiList<SubjectTeacherAssignment>>(`/subjects/${subjectId}/teachers`, { cookie })),
   ]);
 
   return (

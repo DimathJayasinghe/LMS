@@ -187,7 +187,7 @@ Expose the current user app-wide via a small provider (Doc 02 §4 pattern). Fetc
 ```
 
 - **Route protection:** the authenticated shell `app/(app)/layout.tsx` checks the session (server-side
-  `/auth/me` with forwarded cookies). A 401 redirects to login; other errors reach a retry boundary. `requireUser` shares the lookup within a render. Server API calls use `api-server` to forward nginx's client address only over the configured internal API path.
+  `/auth/me` with forwarded cookies). A 401 redirects to login; other errors reach a retry boundary. `requireUser` shares the lookup within a render. Protected server-rendered data requests use `guard401` so a 401 redirects even when requests run in parallel; fallback handlers rethrow framework redirects. Server API calls use `api-server` to forward nginx's client address only over the configured internal API path.
 - **Silent refresh for server renders:** a Server Component cannot set cookies, so `frontend/proxy.ts` (Next 16's
   replacement for `middleware.ts`) runs first. On a `GET` navigation whose `access_token` cookie is present but
   expired (it reads the unverified `exp` claim, a routing hint only; the backend still verifies), it redirects to

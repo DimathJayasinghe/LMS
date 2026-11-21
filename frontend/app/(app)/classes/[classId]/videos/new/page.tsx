@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { VideoForm } from "./_components/VideoForm";
@@ -21,10 +21,10 @@ export default async function NewVideoPage({
   const user = await requireUser(cookie);
   if (user.role !== "TEACHER" && user.role !== "SUPER_ADMIN") redirect(`/classes/${classId}`);
 
-  const sessions = await api
-    .get<ApiList<ClassSession>>(`/classes/${classId}/sessions`, { cookie })
+  const sessions = await guard401(api
+    .get<ApiList<ClassSession>>(`/classes/${classId}/sessions`, { cookie }))
     .then((r) => r.data)
-    .catch(() => [] as ClassSession[]);
+    .catch((error) => { unstable_rethrow(error); return [] as ClassSession[]; });
 
   return (
     <div className="mx-auto max-w-3xl">

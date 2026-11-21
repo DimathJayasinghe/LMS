@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { ArrowLeft, CalendarDays, Clock, Info } from "lucide-react";
 import { VideoPlayer } from "@/components/features/VideoPlayer";
 import { api } from "@/lib/api-server";
@@ -26,8 +26,9 @@ export default async function VideoPage({
 
   let video: VideoRecording;
   try {
-    video = (await api.get<ApiSuccess<VideoRecording>>(`/videos/${videoId}`, { cookie })).data;
+    video = (await guard401(api.get<ApiSuccess<VideoRecording>>(`/videos/${videoId}`, { cookie }))).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     if (e instanceof ApiError && e.status === 403) {
       return (

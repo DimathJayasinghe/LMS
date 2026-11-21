@@ -1,6 +1,6 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -35,9 +35,9 @@ export default async function UsersPage({
   if (sp.search) query.set("search", sp.search);
   if (role) query.set("role", role);
 
-  const res = await api
-    .get<ApiList<User>>(`/users?${query.toString()}`, { cookie })
-    .catch(() => ({ data: [] as User[], count: 0 }) as ApiList<User>);
+  const res = await guard401(api
+    .get<ApiList<User>>(`/users?${query.toString()}`, { cookie }))
+    .catch((error) => { unstable_rethrow(error); return ({ data: [] as User[], count: 0 }) as ApiList<User>; });
 
   const total = res.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

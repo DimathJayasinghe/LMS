@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft, Ban, FileText, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ExamStatusBadge } from "@/components/features/ExamStatusBadge";
@@ -44,8 +44,9 @@ export default async function GradeExamPage({
 
   let exam: ExamDetail;
   try {
-    exam = (await api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie })).data;
+    exam = (await guard401(api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie }))).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
@@ -55,9 +56,10 @@ export default async function GradeExamPage({
   let gateError: string | null = null;
   try {
     submissions = (
-      await api.get<ApiList<ExamSubmission>>(`/submissions/exam/${examId}`, { cookie })
+      await guard401(api.get<ApiList<ExamSubmission>>(`/submissions/exam/${examId}`, { cookie }))
     ).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && (e.code === "MARKER_NOT_ASSIGNED" || e.status === 403)) {
       gateError = "You're not assigned to mark this exam.";
     } else {
@@ -71,14 +73,14 @@ export default async function GradeExamPage({
   const total = submissions?.length ?? 0;
   const [availableMarkers, assignedMarkers] = canPublish
     ? await Promise.all([
-        api
-          .get<ApiList<AcademicStaff>>("/users/academic-staff?role=MARKER", { cookie })
+        guard401(api
+          .get<ApiList<AcademicStaff>>("/users/academic-staff?role=MARKER", { cookie }))
           .then((response) => response.data)
-          .catch(() => [] as AcademicStaff[]),
-        api
-          .get<ApiList<ExamMarkerAssignment>>(`/exams/${examId}/markers`, { cookie })
+          .catch((error) => { unstable_rethrow(error); return [] as AcademicStaff[]; }),
+        guard401(api
+          .get<ApiList<ExamMarkerAssignment>>(`/exams/${examId}/markers`, { cookie }))
           .then((response) => response.data)
-          .catch(() => [] as ExamMarkerAssignment[]),
+          .catch((error) => { unstable_rethrow(error); return [] as ExamMarkerAssignment[]; }),
       ])
     : [[], []];
 

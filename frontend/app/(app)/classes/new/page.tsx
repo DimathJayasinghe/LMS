@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -12,15 +12,15 @@ export default async function NewClassPage() {
   if (viewer.role !== "TEACHER" && viewer.role !== "SUPER_ADMIN") redirect("/classes");
 
   const subjectPath = viewer.role === "TEACHER" ? "/subjects/mine" : "/subjects";
-  const subjects = (await api.get<ApiList<Subject>>(subjectPath, { cookie })).data;
+  const subjects = (await guard401(api.get<ApiList<Subject>>(subjectPath, { cookie }))).data;
   let teachers: AcademicStaff[] = [];
   const allowedTeacherIdsBySubject: Record<string, string[]> = {};
 
   if (viewer.role === "SUPER_ADMIN") {
-    teachers = (await api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie })).data;
+    teachers = (await guard401(api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie }))).data;
     const assignments = await Promise.all(
       subjects.map((subject) =>
-        api.get<ApiList<SubjectTeacherAssignment>>(`/subjects/${subject.id}/teachers`, { cookie }),
+        guard401(api.get<ApiList<SubjectTeacherAssignment>>(`/subjects/${subject.id}/teachers`, { cookie })),
       ),
     );
     subjects.forEach((subject, index) => {

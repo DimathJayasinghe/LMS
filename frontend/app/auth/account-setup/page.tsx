@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AccountSetupForm } from "./_components/AccountSetupForm";
 import { api } from "@/lib/api-server";
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import type { ApiList, Institute, StudentBarcode } from "@/lib/types";
 
 export default async function AccountSetupPage() {
@@ -16,8 +16,8 @@ export default async function AccountSetupPage() {
   }
 
   const [institutes, barcodes] = await Promise.all([
-    api.get<ApiList<Institute>>("/institutes", { cookie }).then((r) => r.data),
-    api.get<ApiList<StudentBarcode>>("/users/me/institute-barcodes", { cookie }).then((r) => r.data),
+    guard401(api.get<ApiList<Institute>>("/institutes", { cookie })).then((r) => r.data),
+    guard401(api.get<ApiList<StudentBarcode>>("/users/me/institute-barcodes", { cookie })).then((r) => r.data),
   ]);
 
   return (

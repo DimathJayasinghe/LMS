@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { ExamForm } from "./_components/ExamForm";
@@ -16,10 +16,10 @@ export default async function NewExamPage() {
   const user = await requireUser(cookie);
   if (user.role !== "TEACHER" && user.role !== "SUPER_ADMIN") redirect("/exams");
 
-  const courses = await api
-    .get<ApiList<Course>>("/classes", { cookie })
+  const courses = await guard401(api
+    .get<ApiList<Course>>("/classes", { cookie }))
     .then((r) => r.data)
-    .catch(() => [] as Course[]);
+    .catch((error) => { unstable_rethrow(error); return [] as Course[]; });
 
   return (
     <div className="mx-auto max-w-3xl">

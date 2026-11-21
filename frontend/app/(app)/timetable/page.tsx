@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -45,10 +45,10 @@ export default async function TimetablePage() {
   const now = new Date();
   const to = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const [slotList, classList, instituteList, upcomingList, me] = await Promise.all([
-    api.get<ApiList<TimetableSlot>>("/timetable/slots", { cookie }),
-    api.get<ApiList<Course>>("/classes", { cookie }),
-    api.get<ApiList<Institute>>("/institutes", { cookie }),
-    api.get<ApiList<UpcomingTimetableSession>>(`/timetable/sessions?from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, { cookie }),
+    guard401(api.get<ApiList<TimetableSlot>>("/timetable/slots", { cookie })),
+    guard401(api.get<ApiList<Course>>("/classes", { cookie })),
+    guard401(api.get<ApiList<Institute>>("/institutes", { cookie })),
+    guard401(api.get<ApiList<UpcomingTimetableSession>>(`/timetable/sessions?from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, { cookie })),
     requireUser(cookie),
   ]);
   const slots = slotList.data;

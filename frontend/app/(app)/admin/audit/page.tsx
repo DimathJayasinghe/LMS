@@ -1,6 +1,6 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -34,9 +34,9 @@ export default async function AuditLogPage({
   if (sp.from) query.set("from", sp.from);
   if (sp.to) query.set("to", sp.to);
 
-  const res = await api
-    .get<ApiList<AuditLogEntry>>(`/audit-logs?${query.toString()}`, { cookie })
-    .catch(() => ({ data: [] as AuditLogEntry[], count: 0 }) as ApiList<AuditLogEntry>);
+  const res = await guard401(api
+    .get<ApiList<AuditLogEntry>>(`/audit-logs?${query.toString()}`, { cookie }))
+    .catch((error) => { unstable_rethrow(error); return ({ data: [] as AuditLogEntry[], count: 0 }) as ApiList<AuditLogEntry>; });
 
   const total = res.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

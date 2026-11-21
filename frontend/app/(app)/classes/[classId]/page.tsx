@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { ArrowLeft, CalendarDays, Clock, Lock, Pencil, PlayCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,8 +56,9 @@ export default async function ClassDetailPage({
 
   let course: Course;
   try {
-    course = (await api.get<ApiSuccess<Course>>(`/classes/${classId}`, { cookie })).data;
+    course = (await guard401(api.get<ApiSuccess<Course>>(`/classes/${classId}`, { cookie }))).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
@@ -67,17 +68,19 @@ export default async function ClassDetailPage({
     (async () => {
       try {
         return (
-          await api.get<ApiSuccess<Subject>>(`/subjects/${course.subjectId}`, { cookie })
+          await guard401(api.get<ApiSuccess<Subject>>(`/subjects/${course.subjectId}`, { cookie }))
         ).data.name;
-      } catch {
+      } catch (error) {
+        unstable_rethrow(error);
         return undefined;
       }
     })(),
     (async (): Promise<{ modules: CourseModule[]; gated: boolean }> => {
       try {
-        const res = await api.get<ApiList<CourseModule>>(`/classes/${classId}/modules`, { cookie });
+        const res = await guard401(api.get<ApiList<CourseModule>>(`/classes/${classId}/modules`, { cookie }));
         return { modules: res.data, gated: false };
       } catch (e) {
+        unstable_rethrow(e);
         const gated = e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403);
         return { modules: [], gated };
       }
@@ -85,12 +88,13 @@ export default async function ClassDetailPage({
     // Sessions — students who aren't enrolled get 403 NOT_ENROLLED.
     (async (): Promise<{ sessions: ClassSession[]; gated: boolean }> => {
       try {
-        const res = await api.get<ApiList<ClassSession>>(
+        const res = await guard401(api.get<ApiList<ClassSession>>(
           `/classes/${classId}/sessions`,
           { cookie },
-        );
+        ));
         return { sessions: res.data, gated: false };
       } catch (e) {
+        unstable_rethrow(e);
         const gated =
           e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403);
         return { sessions: [], gated };
@@ -101,12 +105,13 @@ export default async function ClassDetailPage({
     (async (): Promise<{ videos: VideoRecording[]; gated: boolean }> => {
       if (!canOpenRecordings) return { videos: [], gated: false };
       try {
-        const res = await api.get<ApiList<VideoRecording>>(
+        const res = await guard401(api.get<ApiList<VideoRecording>>(
           `/videos/class/${classId}?limit=50`,
           { cookie },
-        );
+        ));
         return { videos: res.data, gated: false };
       } catch (e) {
+        unstable_rethrow(e);
         const gated =
           e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403);
         return { videos: [], gated };
@@ -117,13 +122,14 @@ export default async function ClassDetailPage({
       if (user.role !== "STUDENT") return null;
       try {
         const mine = (
-          await api.get<ApiList<Enrollment>>(
+          await guard401(api.get<ApiList<Enrollment>>(
             `/enrollments/my?courseId=${classId}&isActive=true`,
             { cookie },
-          )
+          ))
         ).data;
         return mine[0] ? { id: mine[0].id, classType: mine[0].classType } : null;
-      } catch {
+      } catch (error) {
+        unstable_rethrow(error);
         return null;
       }
     })(),

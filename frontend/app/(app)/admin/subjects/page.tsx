@@ -1,6 +1,6 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { SubjectManager } from "./_components/SubjectManager";
 import { api } from "@/lib/api-server";
@@ -23,9 +23,9 @@ export default async function AdminSubjectsPage({
   const search = sp.search?.trim() ?? "";
   const query = search ? `?search=${encodeURIComponent(search)}` : "";
 
-  const res = await api
-    .get<ApiList<Subject>>(`/subjects${query}`, { cookie })
-    .catch(() => ({ data: [] as Subject[], count: 0 }) as ApiList<Subject>);
+  const res = await guard401(api
+    .get<ApiList<Subject>>(`/subjects${query}`, { cookie }))
+    .catch((error) => { unstable_rethrow(error); return ({ data: [] as Subject[], count: 0 }) as ApiList<Subject>; });
 
   return (
     <div className="mx-auto max-w-5xl">
