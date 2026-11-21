@@ -161,8 +161,12 @@ const changeUser = async (id: string, actor: Actor, change: { role: Role } | { i
 		if (removesOwner && await tx.user.count({ where: { organizationId: user.organizationId, role: Role.SUPER_ADMIN, deletedAt: null } }) <= 1) {
 			throw new AppError('LAST_OWNER', 409, 'The last active owner cannot be changed.');
 		}
-		const updated = await tx.user.update({ where: { id }, data: 'role' in change ? { role: change.role } : { deletedAt: change.isActive ? null : new Date() }, select: userSelect });
-		if ('role' in change || !change.isActive) await tx.refreshToken.deleteMany({ where: { userId: id } });
+		// A role change or deactivation ends every session at once: the version bump kills access tokens on their next request, the delete kills refresh tokens.
+		const endsSessions = 'role' in change || !change.isActive;
+		const data: Prisma.UserUpdateInput = 'role' in change ? { role: change.role } : { deletedAt: change.isActive ? null : new Date() };
+		if (endsSessions) data.tokenVersion = { increment: 1 };
+		const updated = await tx.user.update({ where: { id }, data, select: userSelect });
+		if (endsSessions) await tx.refreshToken.deleteMany({ where: { userId: id } });
 		return updated;
 	});
 };

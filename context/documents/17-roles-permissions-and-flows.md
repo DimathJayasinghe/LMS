@@ -52,8 +52,9 @@ Roles: `SUPER_ADMIN` (the owner; one organization), `TEACHER`, `ADMIN` (front de
 
 Enforcement has three layers, and the gaps are always between them:
 
-1. **Authentication** — `verifyToken` verifies the JWT cookie only and sets `{userId, role}`. There is **no
-   database lookup**, so a deactivation or role change lags up to 15 minutes (F-15, `live`).
+1. **Authentication** — `verifyToken` verifies the JWT cookie, then reads the user's `tokenVersion`,
+   `deletedAt`, role and `mustChangePassword` by primary key, so a deactivation, role change or password
+   change takes effect on the next request (F-15, fixed in #108, unreleased).
 2. **Role gate** — `requireRole(...)` checks the *caller's* role only. **29 authenticated routes have no
    `requireRole`** and rely entirely on service scoping (class, session, module, material, video, attendance
    by student, timetable, notifications, stream, subjects, institutes).
@@ -91,9 +92,9 @@ Enforcement has three layers, and the gaps are always between them:
 | Publish results, post-publish correction | ✔ | ✔ own | – | – | read own |
 | Roster of enrolled students | ✔ | **– (F-83)** | ✔ | – | – |
 | Create staff account | **no flow (F-21)** | – | – | – | – |
+| Reset a password | ✔ any non-owner account, with password step-up for staff targets (F-03, #108) | – | ✔ student accounts only (F-03, #108) | – | – |
 
 This table is the current state. The proposed extra authority for the teacher and the owner is in §12.
-| Reset a password | **nobody (F-03)** | – | – | – | – |
 
 ## 4. Journeys: as designed against as built
 
@@ -171,7 +172,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher cannot mark; hall marks and ranking absent (F-67, F-13, F-73) |
 | S9 | Parent SMS | Gap | No guardian contact; three events, all to the student (F-25, F-76) |
 | S10 | Low-end phone, bank slip | Planned | Bank slip is in the spec; no upload retry for exam PDFs, shared rate limiter (F-22, F-02) |
-| S11 | Staff turnover and deactivation | Partial | Refresh blocked at once, access token lives up to 15 minutes; no handover check (F-15, F-32, F-82) |
+| S11 | Staff turnover and deactivation | Partial | Sessions end on the next request since #108 (F-15, unreleased); no handover check (F-32, F-82) |
 | S12 | Minors' data privacy | Gap | NIC photos mandatory, write-only, no retention policy; registration hardening (F-19, F-30, F-33) |
 | S13 | Teacher settlement, commission and concessions | Gap | No revenue share, statement or concession attribution; teacher income view is gross-only (F-91, F-79) |
 | S14 | Year-end rollover, repeaters and teacher substitution | Gap | No clone-to-new-year, batch end, substitute or make-up session (F-97, F-93, F-96) |
@@ -189,7 +190,7 @@ letters are S (hours), M (days), L (a week or more).
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
 - **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
-  entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation; F-104 timetable-generated classes
+  entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset (done, #108) and F-21 staff creation; F-104 timetable-generated classes
   that can go live (a live-checked S fix; done in #107, unreleased); F-127 read-only owner console.
 - **Wave 2 — make access coherent (decisions made, doc 19; sub-order 2a enrollment migration with HYBRID, 2b money core and single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority):** the single content gate with mode and
   payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105 residual: session branch), money and enrollment lifecycle (F-59 to F-65, F-91, F-93, F-94),

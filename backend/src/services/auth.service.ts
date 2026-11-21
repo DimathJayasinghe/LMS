@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import type { Role } from '@prisma/client';
 import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
@@ -32,6 +33,8 @@ interface SafeUser {
   city: string | null;
   createdAt: Date;
   profileImage: string | null;
+  /** True after a staff-assisted reset: only the password change flow works until the user sets a new password. */
+  mustChangePassword: boolean;
   organization?: { id: string; name: string; timezone: string } | null;
   /** Present on `/auth/me` — the caller's own account fields. */
   barcode?: string | null;
@@ -109,6 +112,7 @@ const toSafeUser = (user: {
   city: string | null;
   createdAt: Date;
   profileImage?: string | null;
+  mustChangePassword: boolean;
 }): SafeUser => ({
   id: user.id,
   indexNumber: user.indexNumber,
@@ -121,6 +125,7 @@ const toSafeUser = (user: {
   city: user.city,
   createdAt: user.createdAt,
   profileImage: user.profileImage ?? null,
+  mustChangePassword: user.mustChangePassword,
 });
 
 // ─── Public Service Methods ──────────────────────────────────
@@ -186,7 +191,7 @@ export const register = async (
       throw error;
     });
 
-  const tokens = await issueTokenPair(user.id, user.role);
+  const tokens = await issueTokenPair(user.id, user.role, user.tokenVersion);
 
   logger.info({ userId: user.id, email: user.email }, 'New student registered');
 
@@ -224,7 +229,8 @@ export const login = async (
     throw new AppError('INVALID_CREDENTIALS', 401, 'Invalid email or password.');
   }
 
-  const tokens = await issueTokenPair(user.id, user.role);
+  // The version is the one read with the credential: a reset or revocation that lands after this read leaves these tokens dead.
+  const tokens = await issueTokenPair(user.id, user.role, user.tokenVersion);
 
   logger.info({ userId: user.id }, 'User logged in');
 
@@ -261,6 +267,20 @@ export const refreshTokens = async (
   try {
     decoded = jwt.verify(oldRefreshToken, env.JWT_REFRESH_SECRET) as JwtPayload;
   } catch {
+    throw new AppError('INVALID_REFRESH_TOKEN', 401, 'Invalid refresh token. Please log in again.');
+  }
+
+  // Account state first: a deactivated account or a token from before the last revocation must not rotate anything,
+  // and a stale token answers a plain 401. Only a current-version token with no row is treated as reuse (theft).
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.userId },
+  });
+
+  if (!user || user.deletedAt) {
+    throw new AppError('ACCOUNT_DEACTIVATED', 403, 'Account no longer active.');
+  }
+
+  if ((decoded.tokenVersion ?? 0) !== user.tokenVersion) {
     throw new AppError('INVALID_REFRESH_TOKEN', 401, 'Invalid refresh token. Please log in again.');
   }
 
@@ -306,17 +326,8 @@ export const refreshTokens = async (
     return revokeAfterReuse(decoded.userId);
   }
 
-  // Verify the user still exists and is active
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.userId },
-  });
-
-  if (!user || user.deletedAt) {
-    throw new AppError('ACCOUNT_DEACTIVATED', 403, 'Account no longer active.');
-  }
-
   // Issue a fresh token pair
-  const tokens = await issueTokenPair(user.id, user.role);
+  const tokens = await issueTokenPair(user.id, user.role, user.tokenVersion);
 
   // Rotated rows older than the tolerance window can never be accepted again.
   await prisma.refreshToken.deleteMany({
@@ -374,6 +385,7 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
       nicBackUrl: true,
       emailChangedAt: true,
       passwordChangedAt: true,
+      mustChangePassword: true,
       organization: { select: { id: true, name: true, timezone: true } },
     },
   });
@@ -408,8 +420,9 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
 export const issueTokenPair = async (
   userId: string,
   role: string,
+  tokenVersion: number,
 ): Promise<AuthTokens> => {
-  const payload: JwtPayload = { userId, role: role as JwtPayload['role'] };
+  const payload: JwtPayload = { userId, role: role as JwtPayload['role'], tokenVersion };
 
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
@@ -430,4 +443,25 @@ export const issueTokenPair = async (
 /** Deletes every refresh-token row for a user (used on password change). */
 export const revokeAllRefreshTokens = async (userId: string): Promise<void> => {
   await prisma.refreshToken.deleteMany({ where: { userId } });
+};
+
+/** What the per-request session check needs about an account; read by primary key on every authenticated request. */
+export const getSessionState = async (
+  userId: string,
+): Promise<{ role: Role; deletedAt: Date | null; tokenVersion: number; mustChangePassword: boolean } | null> =>
+  prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, deletedAt: true, tokenVersion: true, mustChangePassword: true },
+  });
+
+/**
+ * Checks the acting user's own password for a sensitive action (step-up). The value is only compared, never
+ * stored or logged. A wrong password is 403, not 401, because a 401 makes the browser end the session.
+ */
+export const verifyActorPassword = async (actorId: string, password: string): Promise<void> => {
+  const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { password: true } });
+  const ok = actor ? await bcrypt.compare(password, actor.password) : false;
+  if (!ok) {
+    throw new AppError('ACTOR_PASSWORD_INVALID', 403, 'Your password is incorrect.');
+  }
 };

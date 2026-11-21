@@ -126,7 +126,7 @@ current password → cooldown → same-value → uniqueness.
 { "currentPassword": "…", "newPassword": "at-least-8-chars" }
 ```
 
-On success the server hashes + stores the new password, sets `passwordChangedAt`, **revokes every
+On success the server hashes + stores the new password, sets `passwordChangedAt`, clears `mustChangePassword`, bumps the account's `tokenVersion` (every other session answers `401 SESSION_REVOKED` on its next request), **revokes every
 refresh token for the user**, and **reissues a fresh access + refresh cookie pair** for the current
 session (so the calling device stays signed in while all other devices are signed out on their next
 refresh).
@@ -145,7 +145,7 @@ refresh).
 
 ## Cooldown
 
-The gap between self email/password changes is 7 days (`CREDENTIAL_CHANGE_COOLDOWN_MS`), enforced via
+The gap between self email/password changes is 7 days (`CREDENTIAL_CHANGE_COOLDOWN_MS`; a change forced by a staff reset is exempt), enforced via
 the durable `emailChangedAt` / `passwordChangedAt` columns (not Redis TTL keys — survives a Redis
 flush and stays auditable). The two counters are independent.
 

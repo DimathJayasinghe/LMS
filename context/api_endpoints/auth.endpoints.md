@@ -65,6 +65,19 @@ Current error shapes in use today:
 }
 ```
 
+Beyond an expired token, `verifyToken` reads the account row on every request (primary key lookup): the role comes from the database, and the token must carry the account's current `tokenVersion`. A deactivated account, a role change, a password change or a staff reset therefore applies on the very next request:
+
+```json
+{
+	"status": "error",
+	"code": "SESSION_REVOKED",
+	"message": "Your session has ended. Please log in again.",
+	"data": { "expired": false }
+}
+```
+
+`403 PASSWORD_CHANGE_REQUIRED` is returned for every route except `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/refresh` and `PATCH /api/users/me/password` while the account has `mustChangePassword` set (after a staff reset).
+
 ## User Object Shape
 
 Returned in `register`, `login`, `refresh`, and `me`:
@@ -78,9 +91,12 @@ Returned in `register`, `login`, `refresh`, and `me`:
 	"role": "STUDENT",
 	"phone": "0771234567",
 	"nic": "200012345678",
-	"createdAt": "2026-05-10T09:32:03.340Z"
+	"createdAt": "2026-05-10T09:32:03.340Z",
+	"mustChangePassword": false
 }
 ```
+
+`mustChangePassword` is `true` after a staff-assisted reset; the client must send the user to the change-password screen (`/auth/change-password`).
 
 > **`GET /me` additionally returns** the caller's own `barcode` (the global LMS entrance QR value, may be
 > `null`) and `setupCompleted` (boolean). These are `me`-only — `register`/`login`/`refresh` omit them.
@@ -171,7 +187,7 @@ Authenticates and sets auth cookies.
 
 Rotates refresh token and issues a new access token. Requires `refresh_token` cookie.
 
-The presented token is marked rotated (`RefreshToken.rotatedAt`), not deleted. If the same token is presented again within `REFRESH_REUSE_GRACE_SECONDS` (default 10; `0` disables) it is treated as a duplicate from another tab or a retried request and a fresh pair is issued without revoking anything. Presented after that window, or when the hash is unknown, it is reuse: every refresh token of the user is revoked and `REFRESH_TOKEN_REUSED` is returned. Refresh is exempt from the global limiter and has its own per-user limit, with an address fallback for invalid or missing tokens.
+The presented token is marked rotated (`RefreshToken.rotatedAt`), not deleted. If the same token is presented again within `REFRESH_REUSE_GRACE_SECONDS` (default 10; `0` disables) it is treated as a duplicate from another tab or a retried request and a fresh pair is issued without revoking anything. Presented after that window, or when the hash is unknown for a current-version token, it is reuse: every refresh token of the user is revoked and `REFRESH_TOKEN_REUSED` is returned. A token issued before the last revocation (role change, deactivation, password change or reset: `tokenVersion` moved on) answers a plain `401 INVALID_REFRESH_TOKEN` and revokes nothing, so a stale device cannot end the user's newer sessions. Tokens carry the `tokenVersion` read with the credential at login or refresh, so a login or refresh that races a reset produces tokens that are dead on arrival. Refresh is exempt from the global limiter and has its own per-user limit, with an address fallback for invalid or missing tokens.
 
 **Request body**
 

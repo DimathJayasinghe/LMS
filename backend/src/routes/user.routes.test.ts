@@ -21,6 +21,7 @@ vi.mock('@/controllers/user.controller', () => ({
   updateRole: vi.fn(),
   updateStatus: vi.fn(),
   assignBarcode: vi.fn(),
+  resetPassword: vi.fn(),
 }));
 vi.mock('@/controllers/profile.controller', () => ({
   updateProfile: vi.fn(),
@@ -32,7 +33,7 @@ vi.mock('@/controllers/profile.controller', () => ({
 }));
 
 import { userRoutes } from './user.routes';
-import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import { checkIdempotency, checkOneTimeSecretIdempotency } from '@/middleware/idempotency.middleware';
 import * as UserController from '@/controllers/user.controller';
 
 interface RouterLayer {
@@ -104,4 +105,32 @@ const roleGate = (role: Role): string => {
 describe('role change route', () => {
   it('allows the owner', () => expect(roleGate(Role.SUPER_ADMIN)).toBe('allowed'));
   it.each([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT])('refuses %s', role => expect(roleGate(role)).toBe('FORBIDDEN_ROLE'));
+});
+
+describe('user routes — staff-assisted password reset', () => {
+  const stack = () => handlesFor(userRoutes, 'post', '/:id/reset-password') as Array<(req: Request, res: Response, next: () => void) => void>;
+  const roleGuard = () => stack()[1]!;
+  const call = (role: Role) => {
+    const json = vi.fn();
+    const res = { status: vi.fn().mockReturnValue({ json }) } as unknown as Response;
+    const next = vi.fn();
+    roleGuard()({ user: { userId: 'u', role } } as Request, res, next);
+    return { next, status: res.status as ReturnType<typeof vi.fn> };
+  };
+
+  it.each([Role.SUPER_ADMIN, Role.ADMIN])('lets %s through the role guard', (role) => {
+    expect(call(role).next).toHaveBeenCalled();
+  });
+
+  it.each([Role.TEACHER, Role.MARKER, Role.STUDENT])('refuses %s with 403 at the route', (role) => {
+    const { next, status } = call(role);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('uses the one-time-secret idempotency variant immediately before the controller', () => {
+    const handles = stack() as unknown[];
+    expect(handles).not.toContain(checkIdempotency);
+    expect(handles.indexOf(checkOneTimeSecretIdempotency)).toBe(handles.indexOf(UserController.resetPassword) - 1);
+  });
 });

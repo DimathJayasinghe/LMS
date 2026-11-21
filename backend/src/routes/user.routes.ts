@@ -5,7 +5,7 @@ import * as ProfileController from '@/controllers/profile.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
-import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import { checkIdempotency, checkOneTimeSecretIdempotency } from '@/middleware/idempotency.middleware';
 import {
     assignBarcodeSchema,
     academicStaffQuerySchema,
@@ -13,6 +13,7 @@ import {
     listUsersQuerySchema,
     nicUploadUrlSchema,
     nicConfirmSchema,
+    resetPasswordSchema,
     resolveBarcodeQuerySchema,
     studentBarcodeIdParamSchema,
     updateRoleSchema,
@@ -191,4 +192,15 @@ userRoutes.patch(
     validateBody(assignBarcodeSchema),
     checkIdempotency,
     UserController.assignBarcode,
+);
+
+// POST /api/users/:id/reset-password — Staff-assisted reset: one-time temporary password, shown once (Admin + Super Admin)
+userRoutes.post(
+    '/:id/reset-password',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+    validateParams(userIdParamSchema),
+    validateBody(resetPasswordSchema),
+    checkOneTimeSecretIdempotency,
+    UserController.resetPassword,
 );

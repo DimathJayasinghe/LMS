@@ -16,17 +16,22 @@ vi.mock('@/config/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { checkIdempotency } from './idempotency.middleware';
+import { checkIdempotency, checkOneTimeSecretIdempotency } from './idempotency.middleware';
 
 const KEY = '11111111-1111-1111-1111-111111111111';
 
 // Minimal Express req/res doubles. res.status/json are chainable and record state.
-type MockResponse = Response & { body: unknown };
+type MockResponse = Response & { body: unknown; headers: Record<string, string> };
 
 function mockRes(): MockResponse {
   const response = {
     statusCode: 200,
     body: undefined as unknown,
+    headers: {} as Record<string, string>,
+    set(name: string, value: string) {
+      this.headers[name] = value;
+      return this;
+    },
     status(code: number) {
       this.statusCode = code;
       return this;
@@ -133,5 +138,55 @@ describe('checkIdempotency middleware', () => {
     await checkIdempotency(mockReq({ 'idempotency-key': KEY }), res, next);
     expect(redisDel).toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('checkOneTimeSecretIdempotency middleware', () => {
+  const secretReq = () => ({ headers: { 'idempotency-key': KEY }, originalUrl: '/api/users/u1/reset-password', method: 'POST', user: { userId: 'actor' } }) as unknown as Request;
+
+  it('stores a placeholder instead of a successful body, so a replay never returns the secret', async () => {
+    findUnique.mockResolvedValue(null);
+    redisSet.mockResolvedValue('OK');
+    create.mockResolvedValue({});
+    const res = mockRes();
+    await checkOneTimeSecretIdempotency(secretReq(), res, vi.fn());
+    res.status(200).json({ status: 'success', data: { temporaryPassword: 'the-secret-value' } });
+    const stored = create.mock.calls[0]![0].data;
+    expect(stored.responseCode).toBe(200);
+    expect(JSON.stringify(stored)).not.toContain('the-secret-value');
+    expect(stored.responseBody).toEqual({ status: 'success', message: 'Already processed; the one-time password was shown once.' });
+    expect(res.body).toMatchObject({ data: { temporaryPassword: 'the-secret-value' } });
+  });
+
+  it('still stores an error response as it is', async () => {
+    findUnique.mockResolvedValue(null);
+    redisSet.mockResolvedValue('OK');
+    create.mockResolvedValue({});
+    const res = mockRes();
+    await checkOneTimeSecretIdempotency(secretReq(), res, vi.fn());
+    res.status(403).json({ status: 'error', code: 'FORBIDDEN', message: 'no' });
+    expect(create.mock.calls[0]![0].data.responseBody).toEqual({ status: 'error', code: 'FORBIDDEN', message: 'no' });
+  });
+
+  it('replays the placeholder with no-store, and a missing key is still 400', async () => {
+    findUnique.mockResolvedValue({ responseCode: 200, responseBody: { status: 'success', message: 'Already processed; the one-time password was shown once.' } });
+    const res = mockRes();
+    await checkOneTimeSecretIdempotency(secretReq(), res, vi.fn());
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toHaveProperty('data');
+    expect(res.headers['Cache-Control']).toBe('no-store');
+    const missing = mockRes();
+    await checkOneTimeSecretIdempotency({ headers: {}, originalUrl: '/x', method: 'POST', user: { userId: 'a' } } as unknown as Request, missing, vi.fn());
+    expect(missing.statusCode).toBe(400);
+  });
+
+  it('keeps the key private to the acting user and the target', async () => {
+    findUnique.mockResolvedValue(null);
+    redisSet.mockResolvedValue('OK');
+    await checkOneTimeSecretIdempotency(secretReq(), mockRes(), vi.fn());
+    await checkOneTimeSecretIdempotency({ ...secretReq(), user: { userId: 'someone-else' } } as unknown as Request, mockRes(), vi.fn());
+    const [first, second] = findUnique.mock.calls.map((call) => call[0].where.key);
+    expect(first).not.toBe(KEY);
+    expect(first).not.toBe(second);
   });
 });

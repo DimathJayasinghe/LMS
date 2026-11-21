@@ -25,7 +25,7 @@ const nimal = {
   deletedAt: null,
 } as User;
 
-const baseProps = { users: [nimal], canChangeRole: true, viewerId: "admin-1", roles };
+const baseProps = { users: [nimal], canChangeRole: true, viewerId: "admin-1", viewerRole: "SUPER_ADMIN" as Role, roles };
 
 // Every mutation must carry a UUID Idempotency-Key in the request options.
 const IDEM = expect.objectContaining({
@@ -62,3 +62,18 @@ describe("UsersTable — Idempotency-Key on mutations", () => {
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/barcode", { barcode: "A-0002" }, IDEM));
   });
 });
+
+describe("UsersTable — reset password action", () => {
+  it("shows the action where the backend would accept it", () => {
+    render(<UsersTable {...baseProps} viewerRole="ADMIN" canChangeRole={false} />);
+    expect(screen.getByRole("button", { name: "Reset password for Nimal" })).toBeInTheDocument();
+  });
+
+  it("hides it for staff targets when the viewer is front desk, and on the viewer's own row", () => {
+    const teacher = { ...nimal, id: "u2", name: "Kamal", role: "TEACHER" } as User;
+    const self = { ...nimal, id: "admin-1", name: "Me" } as User;
+    render(<UsersTable {...baseProps} users={[teacher, self]} viewerRole="ADMIN" canChangeRole={false} />);
+    expect(screen.queryByRole("button", { name: /Reset password for/ })).toBeNull();
+  });
+});
+

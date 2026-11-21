@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as UserService from '@/services/user.service';
+import * as PasswordResetService from '@/services/password-reset.service';
 import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import {
@@ -14,6 +15,7 @@ import {
 	studentBarcodeIdParamSchema,
 	resolveBarcodeQuerySchema,
 	type AssignBarcodeInput,
+	type ResetPasswordInput,
 	type UpdateRoleInput,
 	type UpdateStatusInput,
 } from '@/schemas/user.schema';
@@ -206,5 +208,19 @@ export const resolveBarcode = asyncHandler(async (req: Request, res: Response): 
 	res.status(200).json({
 		status: 'success',
 		data,
+	});
+});
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { id } = userIdParamSchema.parse(req.params);
+	const { ip, userAgent } = extractAuditContext(req);
+	const { temporaryPassword } = await PasswordResetService.resetPassword(id, req.body as ResetPasswordInput, req.user!, { ip, userAgent });
+
+	// The password is in this response only: no-store, and the idempotency record keeps a placeholder instead of this body.
+	res.set('Cache-Control', 'no-store');
+	res.status(200).json({
+		status: 'success',
+		data: { temporaryPassword, mustChangePassword: true },
+		message: 'Password reset. Give the temporary password to the account holder; it is not shown again.',
 	});
 });

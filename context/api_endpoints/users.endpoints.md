@@ -88,6 +88,19 @@ Current error shapes in use today:
 }
 ```
 
+Beyond an expired token, `verifyToken` reads the account row on every request (primary key lookup): the role comes from the database, and the token must carry the account's current `tokenVersion`. A deactivated account, a role change, a password change or a staff reset therefore applies on the very next request:
+
+```json
+{
+	"status": "error",
+	"code": "SESSION_REVOKED",
+	"message": "Your session has ended. Please log in again.",
+	"data": { "expired": false }
+}
+```
+
+`403 PASSWORD_CHANGE_REQUIRED` is returned for every route except `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/refresh` and `PATCH /api/users/me/password` while the account has `mustChangePassword` set (after a staff reset).
+
 ## User Object Shape
 
 Returned in list and detail endpoints:
@@ -117,6 +130,7 @@ Returned in list and detail endpoints:
 | PATCH | `/:id/role` | ADMIN | Update user role. |
 | PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
+| POST | `/:id/reset-password` | SUPER_ADMIN, ADMIN | Staff-assisted reset: one-time temporary password, shown once. |
 | GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
 | GET | `/academic-staff?role=TEACHER|MARKER` | SUPER_ADMIN; TEACHER for MARKER only | Minimal active staff directory (id/name/role only). |
 
@@ -270,7 +284,7 @@ Activates or deactivates a user.
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
 keys return 400; replaying the same key returns the original stored response.
 
-> An ADMIN cannot change an ADMIN or SUPER_ADMIN target. Nobody can change their own status; the last active SUPER_ADMIN cannot be deactivated. Deactivation revokes refresh sessions; existing access tokens expire normally until per-request revocation is implemented.
+> An ADMIN cannot change an ADMIN or SUPER_ADMIN target. Nobody can change their own status; the last active SUPER_ADMIN cannot be deactivated. Deactivation and role changes end every session at once (`tokenVersion` bump plus refresh-token deletion); the next request of an existing session answers `401 SESSION_REVOKED`.
 
 **Request body**
 
@@ -298,6 +312,41 @@ keys return 400; replaying the same key returns the original stored response.
 - 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`, or the target is the actor
 - 409 `LAST_OWNER` when the last active owner would be deactivated
 - 404 `USER_NOT_FOUND` (service error shape)
+
+### POST `/:id/reset-password`
+
+Staff-assisted password reset for an account holder who forgot the password. Generates a one-time temporary password, forces a change at next sign-in, and ends every session of the target.
+
+**Required header:** `Idempotency-Key: <uuid>`. Missing or malformed keys return 400. A replay of the same key returns `200` with a placeholder body that does **not** contain the password (the secret is never stored or replayed); the response itself carries `Cache-Control: no-store`.
+
+**Who may reset whom:** `ADMIN` (front desk) resets `STUDENT` targets only. `SUPER_ADMIN` resets any other non-self target except another `SUPER_ADMIN` (owner recovery stays an operator command, doc 10). Nobody resets their own account here; use the change-password flow. A deactivated target must be activated first.
+
+**Request body**
+
+```json
+{ "identityCheck": "IN_PERSON_CARD", "currentPassword": "actor's own password (staff targets only)" }
+```
+
+`identityCheck` is one of `IN_PERSON_CARD`, `GUARDIAN_PHONE`, `OWNER_KNOWS` and is recorded in the audit row (action `PASSWORD_RESET_BY_STAFF`, metadata `{ identityCheck }`, never the password). A staff target (not a student) requires the actor's own `currentPassword` (step-up) while `identity.stepUp.required` is on and `STAFF_PASSWORD_RESET` is in `identity.stepUp.actions`.
+
+**Success (200)**
+
+```json
+{ "status": "success", "data": { "temporaryPassword": "…", "mustChangePassword": true }, "message": "Password reset. Give the temporary password to the account holder; it is not shown again." }
+```
+
+The temporary password has `identity.tempPassword.length` characters (default 10) from an alphabet without `0 O 1 l I`. The target's `passwordChangedAt` is not touched, so a reset does not start the self-service cooldown, and the forced change is exempt from the cooldown.
+
+**Errors**
+
+- 400 validation error or missing `Idempotency-Key`
+- 401 auth middleware error
+- 403 `FORBIDDEN_ROLE` (route guard) or `FORBIDDEN` (target not allowed, or self)
+- 403 `STEP_UP_REQUIRED` (staff target without `currentPassword`) and `ACTOR_PASSWORD_INVALID` (wrong password; 403, not 401, so the actor's session is not ended)
+- 404 `USER_NOT_FOUND`
+- 409 `ACCOUNT_DEACTIVATED`
+- 409 `TARGET_CHANGED` (the account's role changed while the reset ran; retry)
+- 429 `RESET_LIMIT_ACTOR` (`identity.reset.maxPerActorPerDay`, default 40) and `RESET_LIMIT_TARGET` (`identity.reset.maxPerTargetPer24h`, default 3), counted from the audit rows of the last 24 hours
 
 ### PATCH `/:id/barcode`
 

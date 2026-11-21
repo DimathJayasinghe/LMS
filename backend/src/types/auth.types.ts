@@ -4,6 +4,8 @@ import { Role } from '@prisma/client';
 export interface JwtPayload {
   userId: string;
   role: Role;
+  /** `User.tokenVersion` read with the credential; any later bump makes this token dead. Absent on tokens issued before the field existed (read as 0). */
+  tokenVersion?: number;
 }
 
 /** Authenticated user attached to req.user by verifyToken middleware */
