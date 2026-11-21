@@ -276,12 +276,16 @@ describe('getStudentAttendance - role and target scoping', () => {
 		},
 	);
 
-	it('owner and front desk can still read a soft-deleted student (history survives); teacher cannot', async () => {
+	it('owner and front desk can still read a soft-deleted student (history survives); teacher and the student themselves cannot', async () => {
 		setTarget('soft-deleted student');
-		await expect(getStudentAttendance('student-1', SUPER_ADMIN, query)).resolves.toBeTruthy();
-		await expect(getStudentAttendance('student-1', ADMIN, query)).resolves.toBeTruthy();
+		await expect(getStudentAttendance('student-1', SUPER_ADMIN, query)).resolves.toEqual({ records: [], total: 0 });
+		await expect(getStudentAttendance('student-1', ADMIN, query)).resolves.toEqual({ records: [], total: 0 });
 		await expect(getStudentAttendance('student-1', owningTeacher, query)).rejects.toMatchObject({
 			code: 'USER_NOT_FOUND',
+		});
+		await expect(getStudentAttendance('student-1', studentSelf, query)).rejects.toMatchObject({
+			code: 'USER_NOT_FOUND',
+			statusCode: 404,
 		});
 	});
 
@@ -324,6 +328,7 @@ describe('getStudentAttendance - role and target scoping', () => {
 		setTarget('student');
 		attendanceFindMany.mockResolvedValueOnce([]);
 		await expect(getStudentAttendance('student-1', otherTeacher, query)).resolves.toEqual({ records: [], total: 0 });
+		expect(attendanceFindMany.mock.calls[0]![0].where.classSession.course).toEqual({ teacherId: otherTeacher.userId });
 	});
 
 	it.each([
