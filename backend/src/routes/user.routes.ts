@@ -9,6 +9,7 @@ import { checkIdempotency, checkOneTimeSecretIdempotency } from '@/middleware/id
 import {
     assignBarcodeSchema,
     academicStaffQuerySchema,
+    createStaffSchema,
     createStudentBarcodeSchema,
     listUsersQuerySchema,
     nicUploadUrlSchema,
@@ -192,6 +193,16 @@ userRoutes.patch(
     validateBody(assignBarcodeSchema),
     checkIdempotency,
     UserController.assignBarcode,
+);
+
+// POST /api/users/staff — Create a teacher, front-desk or marker account with a one-time password (Super Admin)
+userRoutes.post(
+    '/staff',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN),
+    validateBody(createStaffSchema),
+    checkOneTimeSecretIdempotency,
+    UserController.createStaff,
 );
 
 // POST /api/users/:id/reset-password — Staff-assisted reset: one-time temporary password, shown once (Admin + Super Admin)

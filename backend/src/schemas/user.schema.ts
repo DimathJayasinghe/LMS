@@ -86,6 +86,28 @@ export const resolveBarcodeQuerySchema = z.object({
 
 export type ResolveBarcodeQuery = z.infer<typeof resolveBarcodeQuerySchema>;
 
+// ─── Staff account creation (owner only) ────────────────────
+/** The roles the owner can create here; owners come from the operator command and students register themselves. */
+export const STAFF_ROLES = [Role.TEACHER, Role.ADMIN, Role.MARKER] as const;
+
+export const createStaffSchema = z.object({
+	name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name must be under 100 characters').trim(),
+	email: z
+		.string()
+		.email('Invalid email address')
+		.max(255, 'Email must be under 255 characters')
+		.transform((value) => value.toLowerCase().trim()),
+	phone: z
+		.string()
+		.regex(/^(?:\+94|0)[0-9]{9}$/, 'Invalid Sri Lankan phone number')
+		.optional(),
+	role: z.enum(STAFF_ROLES),
+	/** The owner's own password; required while the step-up is on for this action. */
+	currentPassword: z.string().min(1).max(72).optional(),
+});
+
+export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+
 // ─── Staff-assisted password reset ──────────────────────────
 export const IDENTITY_CHECKS = ['IN_PERSON_CARD', 'GUARDIAN_PHONE', 'OWNER_KNOWS'] as const;
 

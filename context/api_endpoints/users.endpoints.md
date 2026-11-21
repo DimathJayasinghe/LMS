@@ -130,6 +130,7 @@ Returned in list and detail endpoints:
 | PATCH | `/:id/role` | ADMIN | Update user role. |
 | PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
+| POST | `/staff` | SUPER_ADMIN | Create a teacher, front-desk or marker account with a one-time temporary password, shown once. |
 | POST | `/:id/reset-password` | SUPER_ADMIN, ADMIN | Staff-assisted reset: one-time temporary password, shown once. |
 | GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
 | GET | `/academic-staff?role=TEACHER|MARKER` | SUPER_ADMIN; TEACHER for MARKER only | Minimal active staff directory (id/name/role only). |
@@ -312,6 +313,35 @@ keys return 400; replaying the same key returns the original stored response.
 - 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`, or the target is the actor
 - 409 `LAST_OWNER` when the last active owner would be deactivated
 - 404 `USER_NOT_FOUND` (service error shape)
+
+### POST `/staff`
+
+Owner-only creation of a `TEACHER`, `ADMIN` (front desk) or `MARKER` account. It replaces the old "register as a student, then promote" route, which left a student record and an LMS card behind; that route still works but is deprecated. Owners are never created here (operator command, doc 10) and students register themselves.
+
+**Required header:** `Idempotency-Key: <uuid>`. A replay of the same key returns the status of the first answer with a placeholder body that does **not** contain the password; the response carries `Cache-Control: no-store`.
+
+**Request body**
+
+```json
+{ "name": "Nimal Perera", "email": "nimal@example.com", "phone": "0771234567", "role": "TEACHER", "currentPassword": "the owner's own password" }
+```
+
+`phone` is optional (Sri Lankan format). `role` is `TEACHER`, `ADMIN` or `MARKER`; `SUPER_ADMIN` and `STUDENT` are validation errors. `currentPassword` is the owner's own password (step-up) and is required while `identity.stepUp.required` is on and `STAFF_CREATE` is in `identity.stepUp.actions` (both defaults). The email is lowercased. Unknown fields are dropped: the caller cannot choose the password or waive the forced change.
+
+**Success (201)**
+
+```json
+{ "status": "success", "data": { "user": { "id": "uuid", "name": "Nimal Perera", "email": "nimal@example.com", "role": "TEACHER", "phone": "0771234567" }, "temporaryPassword": "…", "mustChangePassword": true }, "message": "Staff account created. Give the temporary password to the new user; it is not shown again." }
+```
+
+The account is created active with `mustChangePassword = true` and `setupCompleted = true` (no NIC photos or institute cards), so the new user can sign in only to the forced password-change flow until they choose a password. The temporary password has `identity.tempPassword.length` characters (default 10). One audit row (`STAFF_ACCOUNT_CREATED`, metadata `{ role }`) is written in the same transaction as the account; neither the password nor its hash is stored in it.
+
+**Errors**
+
+- 400 validation error, missing `Idempotency-Key`, or `INVALID_STAFF_ROLE`
+- 401 auth middleware error
+- 403 `FORBIDDEN_ROLE` (route guard), `STEP_UP_REQUIRED` (no `currentPassword`) and `ACTOR_PASSWORD_INVALID` (wrong password; 403, not 401, so the owner's session is not ended)
+- 409 `EMAIL_ALREADY_EXISTS`
 
 ### POST `/:id/reset-password`
 

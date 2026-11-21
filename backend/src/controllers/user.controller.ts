@@ -3,6 +3,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as UserService from '@/services/user.service';
 import * as PasswordResetService from '@/services/password-reset.service';
+import * as StaffAccountService from '@/services/staff-account.service';
 import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import {
@@ -15,6 +16,7 @@ import {
 	studentBarcodeIdParamSchema,
 	resolveBarcodeQuerySchema,
 	type AssignBarcodeInput,
+	type CreateStaffInput,
 	type ResetPasswordInput,
 	type UpdateRoleInput,
 	type UpdateStatusInput,
@@ -222,5 +224,17 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response): P
 		status: 'success',
 		data: { temporaryPassword, mustChangePassword: true },
 		message: 'Password reset. Give the temporary password to the account holder; it is not shown again.',
+	});
+});
+
+export const createStaff = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { user, temporaryPassword } = await StaffAccountService.createStaff(req.body as CreateStaffInput, req.user!, extractAuditContext(req));
+
+	// The password is in this response only: no-store, and the idempotency record keeps a placeholder instead of this body.
+	res.set('Cache-Control', 'no-store');
+	res.status(201).json({
+		status: 'success',
+		data: { user, temporaryPassword, mustChangePassword: true },
+		message: 'Staff account created. Give the temporary password to the new user; it is not shown again.',
 	});
 });

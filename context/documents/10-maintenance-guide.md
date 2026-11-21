@@ -219,6 +219,10 @@ docker compose exec -it backend node dist/scripts/owner-reset-password.js --emai
 
 Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset ends every session of that account at once (it bumps the account's session version and revokes refresh tokens) and both commands record an audit event. `owner-add` refuses to create a co-owner beyond the registered `identity.maxOwners` (default 2, read from the organization's settings). Step-up confirmation for role change and deactivation is still deferred.
 
+### Creating staff accounts
+
+The owner adds teachers, front-desk staff and markers under **Users, Add staff**. The owner enters the person's name, email, optional phone, role and the owner's own password. The system creates the account with a one-time temporary password, shown once on screen. Give it to the new person in person; they must choose their own password at the first sign-in. If the screen is closed before the password is noted, reset the new account's password (below). A new owner is added only with the operator command above.
+
 ### Staff-assisted password reset
 
 The owner may reset any other non-owner account; front-desk staff may reset student accounts only. A reset sets a one-time temporary password, shown once to the person who performed it, ends the account's sessions at once and forces a password change at the next sign-in. The temporary password is never written to the audit log, the request log or the stored idempotency record; if the response is lost, reset again. Resetting a staff account asks the acting owner to re-enter their own password. Limits are per actor per day and per target per 24 hours (`identity.reset.*` settings), counted from audit rows, and a hit returns 429. Owner accounts are reset only with the operator command above.
