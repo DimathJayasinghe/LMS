@@ -15,7 +15,7 @@ export {};
 
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
 import {
@@ -73,6 +73,7 @@ const main = async (): Promise<void> => {
 
   if (outPath) {
     writeFileSync(outPath, reportToCsv(rows), { mode: 0o600 });
+    chmodSync(outPath, 0o600);
     console.log(`Wrote ${rows.length} row(s) to ${path.resolve(outPath)}`);
   } else if (rows.length > 0) {
     console.log('Re-run with --out <path outside the repository> to write the rows.');
