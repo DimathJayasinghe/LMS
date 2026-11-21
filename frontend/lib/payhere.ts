@@ -8,8 +8,11 @@ import { api } from "./api";
 import type { ApiSuccess } from "./types";
 
 /** Current billing month in the API's "YYYY-MM" format. */
-export function currentPaymentMonth(): string {
-  return new Date().toISOString().slice(0, 7);
+export function currentPaymentMonth(timezone: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).formatToParts(now);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  return `${year}-${month}`;
 }
 
 /** PayHere checkout initiation returned by POST /payments/initiate. */

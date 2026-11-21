@@ -98,7 +98,7 @@ const assertRecordingReaderRole = (actor: AuthenticatedUser): void => {
 /**
  * One access function for the list, metadata and stream paths. Owner passes; a
  * teacher must own the course; a student must be enrolled (and, for a stream,
- * have paid the current month: enrollment is checked before payment).
+ * be covered for the billing month: enrollment is checked before coverage).
  */
 const assertRecordingAccess = async (
   actor: AuthenticatedUser,
@@ -354,7 +354,7 @@ export const generateStreamUrl = async (
     throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
   }
 
-  // Gate: a student must be enrolled AND have paid the current month before we
+  // Gate: a student must be enrolled and covered for the billing month before we
   // ever mint a signed Bunny embed token (architecture §7.1 — content protection).
   await assertRecordingAccess(actor, stored.classSession.courseId, { requirePaid: true });
 

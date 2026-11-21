@@ -217,4 +217,8 @@ docker compose exec -it backend node dist/scripts/owner-add.js --email owner@exa
 docker compose exec -it backend node dist/scripts/owner-reset-password.js --email owner@example.com
 ```
 
-Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset revokes refresh sessions and both commands record an audit event. Until the Wave 1 settings registry is available, the owner count is not capped; API step-up confirmation and per-request access-token revocation are also deferred.
+Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset revokes refresh sessions and both commands record an audit event. The registry records the planned owner cap, but owner creation is not yet capped; API step-up confirmation and per-request access-token revocation are also deferred.
+
+## Organization settings
+
+Owners can change registered settings under **Access rules and fees**. Changes are audited and apply to future decisions. The billing month uses the organization timezone. Set `fees.graceDays` to 0 to restore a strict current-month content gate; the default is 10 days with a successful previous-month payment. The settings table is additive and remains unused if this feature is reverted. Settings for later work are registered but do not take effect until their corresponding feature is implemented.

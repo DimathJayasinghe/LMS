@@ -217,7 +217,7 @@ Once its foundation steps land, every review also checks:
 - Provider credentials, R2 keys, Redis keys, SSE channels and job payloads are organization-scoped; webhooks identify the organization before verifying signatures.
 - A table-driven tenant-isolation test covers every new route.
 
-M1 (2026-11-19) added the `Organization` table, the default row and a nullable `organizationId` on every model, with a registry test and a CI tenant integrity check. Until M2–M3 land the system has exactly one organization and no query filters by it, and new code should not add anything that would block these steps (for example new global uniques on user-visible values until M3; until M5 hand-built storage and cache keys; until M4 new provider-credential reads from env; M4–M7 wait for a second organization).
+M1 (2026-11-19) added the `Organization` table, the default row and a nullable `organizationId` on every model, with a registry test and a CI tenant integrity check. Until M2–M3 land the system has exactly one organization and most queries are not yet tenant-scoped, and new code should not add anything that would block these steps (for example new global uniques on user-visible values until M3; until M5 hand-built storage and cache keys; until M4 new provider-credential reads from env; M4–M7 wait for a second organization).
 
 ---
 
@@ -258,7 +258,7 @@ Teachers deliver classes **live through the site** and publish **recorded classe
 > **Local development:** DRM exists only with a real Bunny Stream library. The offline stack will replace Bunny with a **planned** local video driver (not yet implemented) that emulates the upload/webhook/embed contract and has **no copy protection** ([16-local-development.md](./16-local-development.md)). Verify DRM and token behaviour against real Bunny before launch.
 
 **Access gate (applies to both live and recorded):**
-- The requesting user must be authenticated, have an **active `Enrollment`** in the course, and have the **current month paid** (`Payment.status = SUCCESS` for `paymentMonth`). The service layer checks this before issuing any stream token.
+- The requesting user must be authenticated, have an **active `Enrollment`** in the course, and be covered by a SUCCESS payment for the organization billing month or the configured grace rule (default: first 10 days with the previous month paid). The service layer checks this before issuing any stream token.
 - Access decisions live in the service layer — no signed URL or SDK signature is ever handed out without passing the gate.
 
 **Recorded classes (Bunny.net Stream, embedded in the site):**
@@ -299,3 +299,7 @@ never a raw zoom.us link) and `LiveClassRoom` at `/classes/[classId]/live/[sessi
 `context/frontend/06-frontend-roadmap.md` for the packaging notes (React 19 peer-dep override, private
 `@zoom/download-manager` stub). Verified against the full production container stack via a downstream Prisma
 fixture (Zoom credentials are still placeholders) — see that doc's entry for what was and wasn't exercised.
+
+### Organization settings and billing clock
+
+`OrganizationSetting` holds owner changes keyed by organization and registry key. Missing rows use typed registry defaults; only `SUPER_ADMIN` can edit, and changes and audit rows commit together. Reads use a per-request memo with no shared cache. Billing months and grace use `Organization.timezone` (default `Asia/Colombo`); setting `fees.graceDays` to 0 restores the strict monthly gate.

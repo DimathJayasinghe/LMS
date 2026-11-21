@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 
-const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindFirst } = vi.hoisted(() => ({
+const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindFirst, userFindUnique, settingsFindUnique } = vi.hoisted(() => ({
 	enrollmentFindFirst: vi.fn(),
 	paymentFindFirst: vi.fn(),
 	markerAssignmentFindUnique: vi.fn(),
 	markerAssignmentFindFirst: vi.fn(),
 	examFindUnique: vi.fn(),
 	participantFindFirst: vi.fn(),
+	userFindUnique: vi.fn(),
+	settingsFindUnique: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
 		enrollment: { findFirst: enrollmentFindFirst },
+		user: { findUnique: userFindUnique },
+		organizationSetting: { findUnique: settingsFindUnique },
 		payment: { findFirst: paymentFindFirst },
 	markerAssignment: { findUnique: markerAssignmentFindUnique, findFirst: markerAssignmentFindFirst },
 	exam: { findUnique: examFindUnique },
@@ -29,6 +33,8 @@ beforeEach(() => {
 	markerAssignmentFindFirst.mockReset();
 	examFindUnique.mockReset();
 	participantFindFirst.mockReset();
+	userFindUnique.mockReset().mockResolvedValue({ organizationId: 'org', organization: { timezone: 'Asia/Colombo' } });
+	settingsFindUnique.mockReset().mockResolvedValue(null);
 });
 
 describe('assertStudentExamStartAccess', () => {
@@ -98,8 +104,8 @@ describe('assertStudentContentAccess', () => {
 	});
 
 	it('rejects an enrolled student without a successful current-month payment', async () => {
-		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
-		paymentFindFirst.mockResolvedValueOnce(null);
+		enrollmentFindFirst.mockResolvedValue({ id: 'enrollment-1' });
+		paymentFindFirst.mockResolvedValue(null);
 
 		await expect(
 			assertStudentContentAccess(student, 'course-1', { requirePaid: true }),
@@ -108,14 +114,14 @@ describe('assertStudentContentAccess', () => {
 			where: {
 				status: 'SUCCESS',
 				paymentMonth: expect.stringMatching(/^\d{4}-\d{2}$/),
-				enrollment: { userId: student.userId, courseId: 'course-1' },
+				enrollment: { userId: student.userId, courseId: 'course-1', isActive: true },
 			},
 			select: { id: true },
 		});
 	});
 
 	it('allows paid content only after both enrollment and payment checks pass', async () => {
-		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
+		enrollmentFindFirst.mockResolvedValue({ id: 'enrollment-1' });
 		paymentFindFirst.mockResolvedValueOnce({ id: 'payment-1' });
 
 		await expect(

@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Library,
   ScanLine,
+  Settings,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -102,6 +103,7 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: ClipboardList,
         roles: ["SUPER_ADMIN"],
       },
+      { label: "Access rules and fees", href: "/admin/settings", icon: Settings, roles: ["SUPER_ADMIN"] },
       {
         label: "Notification settings",
         href: "/admin/notification-settings",

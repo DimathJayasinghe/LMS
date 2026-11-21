@@ -32,7 +32,7 @@ predecessor — do not install it.
 ## Content gate
 
 Same premium-content gate as recorded video (architecture §7.1): a **student must be enrolled AND have paid
-the current month** before a join token is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Staff
+the current organization billing month or be covered by configured grace** before a join token is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Staff
 (course's `TEACHER` or `SUPER_ADMIN`) get a **host** token instead, gated on course ownership, not payment.
 
 ## Anti-recording — what this actually achieves (read before assuming more)
@@ -127,7 +127,7 @@ traceability, so a spoofable client-supplied name would defeat it.
 | `LIVE_CLASS_NOT_SCHEDULED` | 404 | `POST /schedule` hasn't been called yet |
 | `TOKEN_RATE_LIMITED` | 429 | Same user requested a token for this session within the throttle window |
 | `NOT_ENROLLED` | 403 | Student not enrolled (participant path) |
-| `PAYMENT_REQUIRED` | 402 | Student hasn't paid the current month (participant path) |
+| `PAYMENT_REQUIRED` | 402 | Student is not covered for the current billing month (participant path) |
 | `FORBIDDEN_COURSE` | 403 | Teacher doesn't own this course (host path) |
 | `ZOOM_SDK_NOT_CONFIGURED` | 503 | Meeting SDK env vars missing |
 | `ZOOM_ZAK_FAILED` | 502 | Zoom rejected the ZAK request (host path only) |

@@ -11,10 +11,12 @@ import { PaymentStatus, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import type { AuthenticatedUser } from '@/types/auth.types';
+import { billingMonthOf, dayOfMonthInTz } from '@/utils/org-time';
+import { createSettingsReader } from '@/services/settings.service';
 
 /** Current billing month in the Payment.paymentMonth format ("YYYY-MM"). */
-export const getCurrentPaymentMonth = (now: Date = new Date()): string =>
-  now.toISOString().slice(0, 7);
+export const getCurrentPaymentMonth = (now: Date = new Date(), timezone = 'Asia/Colombo'): string =>
+  billingMonthOf(now, timezone);
 
 const findActiveEnrollment = async (
   userId: string,
@@ -29,8 +31,8 @@ const findActiveEnrollment = async (
  * Gate a STUDENT's access to a course's content. No-op for non-students.
  *
  *  - requirePaid = false → must hold an active enrollment (see schedule, list).
- *  - requirePaid = true  → must ALSO have a SUCCESS payment for the CURRENT
- *    month on that course (stream video / premium content). Plan §13.
+ *  - requirePaid = true  → must ALSO be covered for the organization billing
+ *    month, including the configured grace period.
  */
 export const assertStudentContentAccess = async (
   actor: AuthenticatedUser,
@@ -45,23 +47,36 @@ export const assertStudentContentAccess = async (
   }
 
   if (opts.requirePaid) {
-    const month = getCurrentPaymentMonth();
-    const paid = await prisma.payment.findFirst({
-      where: {
-        status: PaymentStatus.SUCCESS,
-        paymentMonth: month,
-        enrollment: { userId: actor.userId, courseId },
-      },
-      select: { id: true },
-    });
-    if (!paid) {
-      throw new AppError(
-        'PAYMENT_REQUIRED',
-        402,
-        `Please pay the ${month} fee for this course to access its content.`,
-      );
+    const coverage = await isStudentCovered({ userId: actor.userId, courseId, now: new Date() });
+    if (!coverage.covered) {
+      throw new AppError('PAYMENT_REQUIRED', 402, `Please pay the ${coverage.month} fee for this course to access its content.`);
     }
   }
+};
+
+export const isStudentCovered = async ({ userId, courseId, enrollmentId, now }: {
+  userId: string; courseId: string; enrollmentId?: string; now: Date;
+}): Promise<{ covered: boolean; reason: 'PAID' | 'GRACE' | 'UNPAID'; month: string; graceUntil: string | null }> => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { organizationId: true, organization: { select: { timezone: true } } } });
+  if (!user?.organizationId || !user.organization) throw new AppError('ORGANIZATION_NOT_FOUND', 404, 'Organization not found.');
+  const tz = user.organization.timezone;
+  const month = billingMonthOf(now, tz);
+  const settings = createSettingsReader(user.organizationId);
+  const graceDays = await settings('fees.graceDays');
+  const [year, monthNumber] = month.split('-').map(Number) as [number, number];
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const graceUntil = graceDays ? `${month}-${String(Math.min(graceDays, lastDay)).padStart(2, '0')}` : null;
+  const enrollment = { userId, courseId, isActive: true, ...(enrollmentId ? { id: enrollmentId } : {}) };
+  const active = await prisma.enrollment.findFirst({ where: enrollment, select: { id: true } });
+  if (!active) return { covered: false, reason: 'UNPAID', month, graceUntil };
+  const paid = (paymentMonth: string) => prisma.payment.findFirst({ where: { status: PaymentStatus.SUCCESS, paymentMonth, enrollment }, select: { id: true } });
+  if (await paid(month)) return { covered: true, reason: 'PAID', month, graceUntil };
+  if (dayOfMonthInTz(now, tz) <= graceDays) {
+    const requiresPrevious = await settings('fees.graceRequiresPreviousMonthPaid');
+    const previous = new Date(Date.UTC(year, monthNumber - 2, 1)).toISOString().slice(0, 7);
+    if (!requiresPrevious || await paid(previous)) return { covered: true, reason: 'GRACE', month, graceUntil };
+  }
+  return { covered: false, reason: 'UNPAID', month, graceUntil };
 };
 
 /**

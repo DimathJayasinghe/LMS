@@ -14,7 +14,7 @@ All endpoints require the standard `access_token` HTTP-only cookie (except where
 
 ## Content gate (2026-07-09)
 
-- **`GET /:id/stream`** — a student must be **enrolled AND have paid the current month** before a token-authenticated Bunny embed is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Privileged roles bypass. Additionally rate-limited (30/min/IP).
+- **`GET /:id/stream`** — a student must be **enrolled AND be covered for the current organization billing month, including configured grace** before a token-authenticated Bunny embed is issued (`403 NOT_ENROLLED` / `402 PAYMENT_REQUIRED`). Privileged roles bypass. Additionally rate-limited (30/min/IP).
 - **`GET /class/:classId`** (list) — requires an **active enrollment** for students.
 - **Manage videos** (create/update/delete) — `SUPER_ADMIN` or the course's **`TEACHER`** (older tables say `ADMIN`).
 
@@ -338,7 +338,7 @@ This is an HDCP triggering issue with their hardware — the DRM is working as i
 | 403 | `FORBIDDEN_ROLE` | Front desk (`ADMIN`) or `MARKER` account |
 | 403 | `FORBIDDEN_COURSE` | `TEACHER` who does not teach the course |
 | 403 | `NOT_ENROLLED` | Student without an active enrollment |
-| 402 | `PAYMENT_REQUIRED` | Student has not paid the current month |
+| 402 | `PAYMENT_REQUIRED` | Student is not covered for the current billing month |
 | 404 | `VIDEO_NOT_FOUND` | Video does not exist |
 
 ---

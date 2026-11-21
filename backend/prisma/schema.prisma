@@ -163,6 +163,7 @@ model Organization {
   smsLogs                     SmsLog[]
   notifications               Notification[]
   notificationSettings        NotificationSetting[]
+  organizationSettings        OrganizationSetting[]
   institutes                  Institute[]
   timetableSlots              TimetableSlot[]
   studentBarcodes             StudentBarcode[]
@@ -216,6 +217,7 @@ model User {
   smsLogs                           SmsLog[]
   notifications                     Notification[]
   refreshTokens                     RefreshToken[]
+  updatedOrganizationSettings       OrganizationSetting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1175,5 +1177,19 @@ model StudentBarcode {
   @@unique([userId, instituteId]) // one barcode per student per institute
   @@index([userId])
   @@index([instituteId])
+  @@index([organizationId])
+}
+
+model OrganizationSetting {
+  id String @id @default(uuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  key String
+  value Json
+  updatedById String
+  updatedBy User @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, key])
   @@index([organizationId])
 }

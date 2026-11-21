@@ -22,6 +22,7 @@ interface Props {
   statuses: PaymentStatus[];
   summary: PaymentSummary | null;
   canOverride: boolean;
+  timezone: string;
 }
 
 const inputClass =
@@ -37,6 +38,7 @@ export function AdminPayments({
   statuses,
   summary,
   canOverride,
+  timezone,
 }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -238,7 +240,7 @@ export function AdminPayments({
       )}
 
       {/* Collect at entrance */}
-      <CollectPayment />
+      <CollectPayment timezone={timezone} />
 
       {/* Bulk upload */}
       <section className="rounded-2xl border border-border bg-card p-4">

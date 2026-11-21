@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 
-const { adjustmentCreate, paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, paymentCreate, enrollmentFindUnique, dispatch, getCurrentPaymentMonth, transaction, readSheet } = vi.hoisted(() => ({
+const { adjustmentCreate, paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, paymentCreate, enrollmentFindUnique, dispatch, getCurrentPaymentMonth, transaction, readSheet, userFindUnique, paymentGroupBy, queryRaw } = vi.hoisted(() => ({
 	adjustmentCreate: vi.fn(),
 	paymentAggregate: vi.fn(),
 	paymentCount: vi.fn(),
@@ -13,6 +13,9 @@ const { adjustmentCreate, paymentAggregate, paymentCount, paymentFindUnique, pay
 	getCurrentPaymentMonth: vi.fn(() => '2026-07'),
 	transaction: vi.fn(),
 	readSheet: vi.fn(),
+	userFindUnique: vi.fn(),
+	paymentGroupBy: vi.fn(),
+	queryRaw: vi.fn(),
 }));
 
 const transactionClient = {
@@ -23,8 +26,11 @@ const transactionClient = {
 vi.mock('@/config/database', () => ({
 	prisma: {
 		$transaction: transaction,
+		$queryRaw: queryRaw,
+		user: { findUnique: userFindUnique },
 		payment: {
 			aggregate: paymentAggregate,
+			groupBy: paymentGroupBy,
 			count: paymentCount,
 			findUnique: paymentFindUnique,
 			update: paymentUpdate,
@@ -38,7 +44,7 @@ vi.mock('@/services/notification.service', () => ({ dispatch }));
 vi.mock('@/services/access.service', () => ({ getCurrentPaymentMonth }));
 vi.mock('read-excel-file/node', () => ({ readSheet }));
 
-import { bulkUploadPayments, getPaymentsSummary, overridePayment, collectEntrancePayment } from './payment.service';
+import { bulkUploadPayments, getPaymentsSummary, getFinancialReport, overridePayment, collectEntrancePayment } from './payment.service';
 
 beforeEach(() => {
 	adjustmentCreate.mockReset();
@@ -53,6 +59,9 @@ beforeEach(() => {
 	transaction.mockReset();
 	transaction.mockImplementation(async (callback) => callback(transactionClient));
 	readSheet.mockReset();
+	userFindUnique.mockReset();
+	paymentGroupBy.mockReset();
+	queryRaw.mockReset();
 });
 
 describe('bulkUploadPayments — safe .xlsx parsing', () => {
@@ -212,6 +221,7 @@ describe('collectEntrancePayment', () => {
 	const activeEnrollment = {
 		id: 'e1',
 		isActive: true,
+		organization: { timezone: 'Asia/Colombo' },
 		userId: 'u1',
 		course: { name: 'Physics', monthlyFee: new Prisma.Decimal('2500') },
 	};
@@ -223,6 +233,14 @@ describe('collectEntrancePayment', () => {
 		paymentMonth: '2026-07',
 		enrollment: { userId: 'u1', course: { name: 'Physics' } },
 	};
+
+	it('uses the enrollment organization timezone for the current month', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce(null);
+		paymentCreate.mockResolvedValueOnce(created);
+		await collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' });
+		expect(getCurrentPaymentMonth).toHaveBeenCalledWith(expect.any(Date), 'Asia/Colombo');
+	});
 
 	it('creates a new SUCCESS/ENTRANCE payment when none exists, defaulting the amount to monthlyFee', async () => {
 		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
@@ -318,5 +336,25 @@ describe('collectEntrancePayment', () => {
 				}),
 			}),
 		);
+	});
+});
+
+describe('financial report default month', () => {
+	it('uses the actor organization timezone when no month is supplied', async () => {
+		userFindUnique.mockResolvedValue({ organization: { timezone: 'Pacific/Auckland' } });
+		paymentGroupBy.mockResolvedValue([]);
+		queryRaw.mockResolvedValue([]);
+		const report = await getFinancialReport(undefined, {}, { userId: 'owner', role: Role.SUPER_ADMIN });
+		expect(report.month).toBe('2026-07');
+		expect(getCurrentPaymentMonth).toHaveBeenCalledWith(expect.any(Date), 'Pacific/Auckland');
+	});
+	it('rejects a non-owner before looking up an organization', async () => {
+		await expect(getFinancialReport(undefined, {}, { userId: 'student', role: Role.STUDENT })).rejects.toMatchObject({ statusCode: 403 });
+		expect(userFindUnique).not.toHaveBeenCalled();
+	});
+	it('rejects an absent organization', async () => {
+		userFindUnique.mockResolvedValue(null);
+		await expect(getFinancialReport(undefined, {}, { userId: 'owner', role: Role.SUPER_ADMIN })).rejects.toMatchObject({ code: 'ORGANIZATION_NOT_FOUND' });
+		expect(paymentGroupBy).not.toHaveBeenCalled();
 	});
 });

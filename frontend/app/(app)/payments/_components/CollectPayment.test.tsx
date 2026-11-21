@@ -112,7 +112,7 @@ async function selectStudentByName(user: ReturnType<typeof userEvent.setup>) {
 describe("CollectPayment — search → select → collect", () => {
   it("cancels a pending search when the query becomes too short", async () => {
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     const input = screen.getByLabelText("Search student");
     await user.type(input, "Ni");
@@ -127,7 +127,7 @@ describe("CollectPayment — search → select → collect", () => {
   it("collects the current outstanding month with the pre-filled amount", async () => {
     post.mockResolvedValueOnce({ data: paymentFixture() });
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     await selectStudentByName(user);
     await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
@@ -147,7 +147,7 @@ describe("CollectPayment — search → select → collect", () => {
   it("lets staff edit the pre-filled amount before submitting", async () => {
     post.mockResolvedValueOnce({ data: paymentFixture({ amount: "1000.00" }) });
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     await selectStudentByName(user);
     await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
@@ -168,7 +168,7 @@ describe("CollectPayment — barcode scan resolution", () => {
   it("captures institute + barcode from a scan and includes them in the submit body", async () => {
     post.mockResolvedValueOnce({ data: paymentFixture() });
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     await user.click(screen.getByLabelText("Turn camera on"));
     await screen.findByText("Nimal Perera");
@@ -194,7 +194,7 @@ describe("CollectPayment — already-paid months are excluded", () => {
   it("does not offer a month that already has a SUCCESS payment", async () => {
     mockGet([paymentFixture({ paymentMonth: "2026-07", method: "ONLINE", payhereId: "pay_1" })]);
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     await selectStudentByName(user);
     await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
@@ -223,7 +223,7 @@ describe("CollectPayment — receipt link survives an exhausted outstanding list
     });
     post.mockResolvedValueOnce({ data: paymentFixture() });
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     await selectStudentByName(user);
     await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
@@ -249,7 +249,7 @@ describe("CollectPayment — session summary", () => {
       .mockResolvedValueOnce({ data: paymentFixture({ id: "p1" }) })
       .mockResolvedValueOnce({ data: paymentFixture({ id: "p2", paymentMonth: "2026-06" }) });
     const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
-    render(<CollectPayment />);
+    render(<CollectPayment timezone="Asia/Colombo" />);
 
     await selectStudentByName(user);
     await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");

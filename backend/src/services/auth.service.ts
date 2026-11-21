@@ -32,6 +32,7 @@ interface SafeUser {
   city: string | null;
   createdAt: Date;
   profileImage: string | null;
+  organization?: { id: string; name: string; timezone: string } | null;
   /** Present on `/auth/me` — the caller's own account fields. */
   barcode?: string | null;
   setupCompleted?: boolean;
@@ -373,6 +374,7 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
       nicBackUrl: true,
       emailChangedAt: true,
       passwordChangedAt: true,
+      organization: { select: { id: true, name: true, timezone: true } },
     },
   });
 
@@ -386,6 +388,7 @@ export const getMe = async (userId: string): Promise<SafeUser> => {
   // check doesn't pay for a signed-URL round trip it doesn't need.
   return {
     ...toSafeUser(user),
+    organization: user.organization,
     barcode: user.barcode,
     setupCompleted: user.setupCompleted,
     nicFrontUploaded: Boolean(user.nicFrontUrl),

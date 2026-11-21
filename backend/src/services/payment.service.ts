@@ -517,12 +517,17 @@ const money = (v: unknown): string => new Prisma.Decimal((v as Prisma.Decimal | 
  * Only aggregate values are returned—never individual student payment records.
  */
 export const getFinancialReport = async (
-	month: string,
+	month: string | undefined,
 	query: FinancialReportQuery,
 	actor: AuthenticatedUser,
 ): Promise<FinancialReport> => {
 	if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.TEACHER) {
 		throw new AppError('FORBIDDEN', 403, 'You do not have permission to view financial reports.');
+	}
+	if (!month) {
+		const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { organization: { select: { timezone: true } } } });
+		if (!user?.organization) throw new AppError('ORGANIZATION_NOT_FOUND', 404, 'Organization not found.');
+		month = getCurrentPaymentMonth(new Date(), user.organization.timezone);
 	}
 	const trendMonths = monthsEndingAt(month, 12);
 	const teacherId = actor.role === Role.TEACHER ? actor.userId : query.teacherId;
@@ -726,7 +731,7 @@ export const collectEntrancePayment = async (
 ): Promise<PaymentSummary> => {
 	const enrollment = await prisma.enrollment.findUnique({
 		where: { id: input.enrollmentId },
-		include: { course: true },
+		include: { course: true, organization: { select: { timezone: true } } },
 	});
 
 	if (!enrollment) {
@@ -737,7 +742,8 @@ export const collectEntrancePayment = async (
 		throw new AppError('ENROLLMENT_NOT_ACTIVE', 400, 'This enrollment is not active.');
 	}
 
-	if (input.paymentMonth > getCurrentPaymentMonth()) {
+	if (!enrollment.organization) throw new AppError('ORGANIZATION_NOT_FOUND', 404, 'Organization not found.');
+	if (input.paymentMonth > getCurrentPaymentMonth(new Date(), enrollment.organization.timezone)) {
 		throw new AppError('FUTURE_MONTH', 400, 'Cannot collect a payment for a future month.');
 	}
 

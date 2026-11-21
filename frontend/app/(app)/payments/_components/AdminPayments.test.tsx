@@ -44,6 +44,7 @@ const payment = (id: string, name: string, status: PaymentStatus): Payment => ({
 });
 
 const baseProps = {
+  timezone: "Asia/Colombo",
   payments: [payment("p1", "Nimal", "SUCCESS")],
   total: 1,
   pageSize: 20,

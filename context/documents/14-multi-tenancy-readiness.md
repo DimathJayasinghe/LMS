@@ -334,3 +334,5 @@ hall-mark design (D-EXAMS-2) adds columns only and does not need M2.
    before the uniqueness rule is enforced.
 3. ~~Is a tenant data export/restore tool required before the second customer?~~ **Decided 2026-11-20 (D-IDENTITY-13): yes**, and
    it gates M4–M7.
+
+`OrganizationSetting` is tenant-owned and has a required organization relation, organization index and unique `(organizationId, key)` pair. The settings service resolves the actor organization from the database; general request scoping still awaits M2.
