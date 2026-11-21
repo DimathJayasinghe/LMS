@@ -109,14 +109,44 @@ async function request<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   return parsed as T;
 }
 
-/** Rotate tokens via the refresh cookie. Returns true on success. */
-async function refresh(): Promise<boolean> {
+/** Outcome of a refresh attempt; `status` is null for a network failure. */
+export type RefreshResult = { ok: true } | { ok: false; status: number | null };
+
+const REFRESH_LOCK = "lms-auth-refresh";
+
+/** The one refresh this tab has in flight; every concurrent caller shares it. */
+let inflight: Promise<RefreshResult> | null = null;
+
+async function runRefresh(): Promise<RefreshResult> {
   try {
     await request("/auth/refresh", { method: "POST", _retry: true });
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, status: err instanceof ApiError ? err.status : null };
   }
+}
+
+/**
+ * Rotate tokens via the refresh cookie. Single flight: parallel callers in one
+ * tab share one request, and `navigator.locks` serialises it across tabs so two
+ * tabs do not present the same refresh token at once.
+ */
+export function refreshSession(): Promise<RefreshResult> {
+  if (!inflight) {
+    inflight = runLocked().finally(() => {
+      inflight = null;
+    });
+  }
+  return inflight;
+}
+
+async function runLocked(): Promise<RefreshResult> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  return locks ? await locks.request(REFRESH_LOCK, () => runRefresh()) : runRefresh();
+}
+
+async function refresh(): Promise<boolean> {
+  return (await refreshSession()).ok;
 }
 
 export const api = {

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
@@ -12,6 +12,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { safeNext } from "@/lib/safe-next";
 import type { ApiSuccess, User } from "@/lib/types";
 
 type FormValues = {
@@ -19,8 +20,9 @@ type FormValues = {
   password: string;
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { refresh } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -36,7 +38,7 @@ export default function LoginPage() {
     try {
       await api.post<ApiSuccess<User>>("/auth/login", values);
       await refresh();
-      router.push("/dashboard");
+      router.push(safeNext(searchParams.get("next")));
     } catch (err) {
       if (err instanceof ApiError) {
         err.fields?.forEach((f) =>
@@ -136,5 +138,14 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams needs a Suspense boundary so the page can still be prerendered.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

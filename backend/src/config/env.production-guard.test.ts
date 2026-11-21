@@ -13,7 +13,7 @@ const requiredEnv = {
 const loadEnv = async (vars: Record<string, string>) => {
 	vi.resetModules();
 	// Clear anything the host shell or a previous test left behind.
-	for (const k of ['NODE_ENV', 'STORAGE_DRIVER', 'SMS_DRIVER', 'R2_PRESIGN_ENDPOINT']) delete process.env[k];
+	for (const k of ['NODE_ENV', 'STORAGE_DRIVER', 'SMS_DRIVER', 'R2_PRESIGN_ENDPOINT', 'REFRESH_REUSE_GRACE_SECONDS']) delete process.env[k];
 	for (const [k, v] of Object.entries({ ...requiredEnv, ...vars })) process.env[k] = v;
 	return import('./env');
 };
@@ -63,5 +63,35 @@ describe('env provider-driver guard', () => {
 
 	it('rejects an unknown driver value', async () => {
 		await expect(loadEnv({ NODE_ENV: 'development', SMS_DRIVER: 'twilio' })).rejects.toThrow('exit:1');
+	});
+});
+
+describe('env REFRESH_REUSE_GRACE_SECONDS', () => {
+	const saved = { ...process.env };
+
+	beforeEach(() => {
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+			throw new Error(`exit:${code}`);
+		}) as never);
+	});
+
+	afterEach(() => {
+		process.env = { ...saved };
+		vi.restoreAllMocks();
+	});
+
+	it('defaults to 10 seconds', async () => {
+		const { env } = await loadEnv({ NODE_ENV: 'development' });
+		expect(env.REFRESH_REUSE_GRACE_SECONDS).toBe(10);
+	});
+
+	it.each([['0', 0], ['60', 60]])('accepts the boundary value %s', async (raw, expected) => {
+		const { env } = await loadEnv({ NODE_ENV: 'development', REFRESH_REUSE_GRACE_SECONDS: raw });
+		expect(env.REFRESH_REUSE_GRACE_SECONDS).toBe(expected);
+	});
+
+	it.each(['-1', '61', 'abc', '1.5'])('rejects %s', async (raw) => {
+		await expect(loadEnv({ NODE_ENV: 'development', REFRESH_REUSE_GRACE_SECONDS: raw })).rejects.toThrow('exit:1');
 	});
 });

@@ -164,3 +164,17 @@ Do **not** add a repository layer, a base controller, or a mapper. The four file
 - **Logs** are structured Pino JSON — always pass a context object first: `logger.error({ err, userId }, 'msg')`. Never `console.log`.
 - **Errors** surface in Sentry with stack + context. A caught-and-handled `AppError` is expected flow; an unhandled throw is a bug to fix, not to swallow.
 - When adding real unit tests, target **services** (pure, no `req`/`res`) — they are the testable core by design.
+
+---
+
+## 8. Operator settings (environment variables)
+
+Infrastructure numbers are environment variables with defaults in `backend/src/config/env.ts` (business numbers belong to the owner settings registry, not here). Restart the backend after changing one.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `JWT_ACCESS_EXPIRES_IN` | `15m` | Lifetime of the access JWT. The cookie itself lives as long as the refresh cookie, so changing this does not sign anyone out early; shorter values only make revocation tighter and refreshes more frequent. Set `1m` locally to exercise silent refresh. |
+| `JWT_REFRESH_EXPIRES_IN` | `7d` | Session length without re-login. Also the lifetime of both cookies. |
+| `REFRESH_REUSE_GRACE_SECONDS` | `10` | A refresh token presented again within this many seconds of its rotation is treated as a duplicate (several tabs, retried request) instead of theft. `0` restores strict single use; range 0-60. A `Refresh token reuse detected` line in the backend log outside this window is a real signal. |
+
+**Rolling back the session change:** before reverting the backend code run `DELETE FROM "RefreshToken" WHERE "rotatedAt" IS NOT NULL;`, because the previous code would treat a rotated row as a live token. The `rotatedAt` column can stay.

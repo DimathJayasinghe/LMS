@@ -226,12 +226,27 @@ export const login = async (
   return { user: toSafeUser(user), tokens };
 };
 
+const revokeAfterReuse = async (userId: string): Promise<never> => {
+  // Revoke ALL tokens for this user as a security precaution.
+  await prisma.refreshToken.deleteMany({ where: { userId } });
+
+  logger.warn({ userId }, 'Refresh token reuse detected — all tokens revoked (possible theft)');
+
+  throw new AppError(
+    'REFRESH_TOKEN_REUSED',
+    401,
+    'Session compromised. All sessions have been revoked. Please log in again.',
+  );
+};
+
 /**
  * Rotates the refresh token — issues a new pair and invalidates the old one.
  * This is the "silent refresh" flow from the plan doc (§1, JWT Expiration Trap).
  *
  * Security: if a stolen refresh token is reused after rotation, the entire
- * token family is revoked (all tokens for that user are deleted).
+ * token family is revoked (all tokens for that user are deleted). A presentation
+ * within REFRESH_REUSE_GRACE_SECONDS of the rotation is treated as a legitimate
+ * duplicate (several tabs, or a retried request) and gets a fresh pair instead.
  */
 export const refreshTokens = async (
   oldRefreshToken: string,
@@ -251,28 +266,28 @@ export const refreshTokens = async (
   });
 
   if (!storedToken) {
-    // Token was already used or never existed — possible token theft.
-    // Revoke ALL tokens for this user as a security precaution.
-    await prisma.refreshToken.deleteMany({
-      where: { userId: decoded.userId },
-    });
-
-    logger.warn(
-      { userId: decoded.userId },
-      'Refresh token reuse detected — all tokens revoked (possible theft)',
-    );
-
-    throw new AppError(
-      'REFRESH_TOKEN_REUSED',
-      401,
-      'Session compromised. All sessions have been revoked. Please log in again.',
-    );
+    // Token was never issued or has been deleted — possible token theft.
+    return revokeAfterReuse(decoded.userId);
   }
 
-  // Delete the old token (one-time use)
-  await prisma.refreshToken.delete({
-    where: { id: storedToken.id },
-  });
+  const graceMs = env.REFRESH_REUSE_GRACE_SECONDS * 1000;
+  const now = new Date();
+
+  if (storedToken.rotatedAt === null) {
+    // First use: mark the row rotated. updateMany with the rotatedAt guard means
+    // two concurrent first uses cannot both win; the loser (count 0) is a duplicate
+    // that was rotated an instant ago, so it takes the grace path below.
+    const { count } = await prisma.refreshToken.updateMany({
+      where: { id: storedToken.id, rotatedAt: null },
+      data: { rotatedAt: now },
+    });
+    if (count === 0 && graceMs === 0) {
+      return revokeAfterReuse(decoded.userId);
+    }
+  } else if (graceMs === 0 || now.getTime() - storedToken.rotatedAt.getTime() > graceMs) {
+    // Presented again after the tolerance window: genuine reuse.
+    return revokeAfterReuse(decoded.userId);
+  }
 
   // Verify the user still exists and is active
   const user = await prisma.user.findUnique({
@@ -285,6 +300,11 @@ export const refreshTokens = async (
 
   // Issue a fresh token pair
   const tokens = await issueTokenPair(user.id, user.role);
+
+  // Rotated rows older than the tolerance window can never be accepted again.
+  await prisma.refreshToken.deleteMany({
+    where: { userId: user.id, rotatedAt: { lt: new Date(now.getTime() - graceMs) } },
+  });
 
   return { user: toSafeUser(user), tokens };
 };

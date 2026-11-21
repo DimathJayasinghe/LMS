@@ -239,7 +239,7 @@ M1 (2026-11-19) added the `Organization` table, the default row and a nullable `
 |-------|-----------|
 | Transport | HTTPS everywhere (Vercel TLS + nginx/Let's Encrypt on the VPS) |
 | Authentication | JWT access token (15 min) + refresh token (7 days), both in HTTP-only cookies |
-| Refresh tokens | Hashed (SHA-256) before DB storage; rotated on use; reuse detection revokes the whole family |
+| Refresh tokens | Hashed (SHA-256) before DB storage; rotated on use (row marked `rotatedAt`); reuse beyond a short tolerance (`REFRESH_REUSE_GRACE_SECONDS`, default 10 s) revokes the whole family; the access cookie outlives the JWT and the frontend refreshes silently (`proxy.ts` → `/auth/session`, single flight) |
 | Authorization | Role-based middleware guard (`requireRole('SUPER_ADMIN', 'ADMIN')`) gates by the **caller's** role only; course-scoped content (exams/videos/submissions/sessions) additionally requires `assertCourseAccess` in the service layer so a `TEACHER` is scoped to courses they actually teach — see CLAUDE.md's "Auth & authorization" section. The unused per-user `Permission` model is removed (D-IDENTITY-4) |
 | Input Validation | Zod schemas in middleware — reject before reaching the controller |
 | Rate Limiting | `express-rate-limit` with Redis store (auth routes tightened to 10/min/IP) |

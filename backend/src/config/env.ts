@@ -27,6 +27,8 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  // A refresh token presented again within this many seconds of its rotation is a duplicate, not theft. 0 disables.
+  REFRESH_REUSE_GRACE_SECONDS: z.coerce.number().int().min(0).max(60).default(10),
 
   // Frontend URL (CORS)
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),

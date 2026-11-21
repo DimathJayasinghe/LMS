@@ -16,7 +16,7 @@ The auth system uses HTTP-only cookies.
 
 | Cookie | Purpose | Path | Notes |
 | --- | --- | --- | --- |
-| `access_token` | Access token | `/` | Used by protected routes. |
+| `access_token` | Access token | `/` | Used by protected routes. The cookie lives as long as the refresh cookie (7 days); the JWT inside expires after `JWT_ACCESS_EXPIRES_IN` (15 minutes) and the backend answers an expired one with `data.expired = true`. |
 | `refresh_token` | Refresh token | `/api/auth` | Used only by `/refresh`. |
 
 ## Response Shapes (Current Implementation)
@@ -169,6 +169,8 @@ Authenticates and sets auth cookies.
 ### POST `/refresh`
 
 Rotates refresh token and issues a new access token. Requires `refresh_token` cookie.
+
+The presented token is marked rotated (`RefreshToken.rotatedAt`), not deleted. If the same token is presented again within `REFRESH_REUSE_GRACE_SECONDS` (default 10; `0` disables) it is treated as a duplicate from another tab or a retried request and a fresh pair is issued without revoking anything. Presented after that window, or when the hash is unknown, it is reuse: every refresh token of the user is revoked and `REFRESH_TOKEN_REUSED` is returned. This route is limited separately from the global limiter so silent refreshes cannot exhaust a shared bucket.
 
 **Request body**
 
