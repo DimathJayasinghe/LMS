@@ -43,6 +43,11 @@ enum PaymentAdjustmentType {
   REFUND
 }
 
+enum SubmissionSource {
+  ONLINE
+  HALL
+}
+
 enum SubmissionStatus {
   UPLOADING
   COMPLETED
@@ -200,6 +205,7 @@ model User {
   studentBarcodes                   StudentBarcode[] // per-institute barcodes
   attendance                        Attendance[]
   submissions                       Submission[]
+  gradedSubmissions                 Submission[]                 @relation("SubmissionGrader")
   actorAuditLogs                    AuditLog[]                   @relation("AuditActor")
   markerAssignments                 MarkerAssignment[]           @relation("AssignedMarker")
   markerAllocationRevisions         MarkerAllocationRevision[]   @relation("MarkerAllocationActor")
@@ -787,6 +793,9 @@ model ExamParticipant {
 model Submission {
   id             String           @id @default(uuid())
   status         SubmissionStatus @default(UPLOADING)
+  source         SubmissionSource @default(ONLINE)
+  gradedById     String?
+  gradedBy       User?            @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: Restrict)
   answerPdfUrl   String? // R2 URL — uploaded PDF answer
   answers        Json? // MCQ selections — MCQ/HYBRID
   writtenAnswers Json? // typed essay/structured answers written online
@@ -811,6 +820,7 @@ model Submission {
   @@index([userId])
   @@index([examId])
   @@index([status])
+  @@index([gradedById])
   @@index([organizationId])
 }
 

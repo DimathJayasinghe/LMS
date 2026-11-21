@@ -11,6 +11,7 @@ const {
 	submissionUpdate,
 	assertCourseAccess,
 	assertMarkerAssignedToExam,
+	assertMarkerAssignedToExamAudience,
 	broadcastResultsPublished,
 } =
 	vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const {
 		submissionUpdate: vi.fn(),
 		assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
 		assertMarkerAssignedToExam: vi.fn(),
+		assertMarkerAssignedToExamAudience: vi.fn(),
 		broadcastResultsPublished: vi.fn(),
 	}));
 
@@ -40,7 +42,7 @@ vi.mock('@/config/database', () => ({
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
 vi.mock('@/services/access.service', () => ({
   assertMarkerAssignedToExam,
-  assertMarkerAssignedToExamAudience: vi.fn(),
+  assertMarkerAssignedToExamAudience,
   assertStudentContentAccess: vi.fn(),
   assertStudentExamStartAccess: vi.fn(),
 }));
@@ -79,8 +81,10 @@ const query = { status: 'all' as const, graded: 'all' as const };
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	submissionUpdate.mockReset();
 	assertCourseAccess.mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' });
 	assertMarkerAssignedToExam.mockResolvedValue(undefined);
+	assertMarkerAssignedToExamAudience.mockResolvedValue(undefined);
 	submissionFindMany.mockResolvedValue([]);
 	broadcastResultsPublished.mockResolvedValue(undefined);
 	markerAssignmentFindFirst.mockResolvedValue({ id: 'assignment-1' });
@@ -113,14 +117,14 @@ describe('published-result immutability and correction', () => {
 	it.each([{ examParticipants: [] }, { examParticipants: [{ examId: 'exam-1', audienceId: undefined }] }, { examParticipants: [{ examId: 'other-exam', audienceId: 'audience-a' }] }])('denies scoped grading without a usable participant audience: %j', async ({ examParticipants }) => {
 		submissionFindUnique.mockResolvedValueOnce({ ...publishedSubmission, exam: { ...publishedSubmission.exam, isPublished: false, paperRevisionId: 'paper' }, user: { examParticipants } });
 		submissionUpdate.mockResolvedValueOnce(publishedSubmission);
-		await expect(submitMarks('submission-1', { marks: 75 }, 'marker-1')).rejects.toMatchObject({ statusCode: 403 });
+		await expect(submitMarks('submission-1', { marks: 75 }, marker)).rejects.toMatchObject({ statusCode: 403 });
 		expect(submissionUpdate).not.toHaveBeenCalled();
 	});
 	it('locks assigned markers out once results are published', async () => {
 		submissionFindUnique.mockResolvedValueOnce(publishedSubmission);
 
 		await expect(
-			submitMarks('submission-1', { marks: 75 }, 'marker-1'),
+			submitMarks('submission-1', { marks: 75 }, marker),
 		).rejects.toMatchObject({ code: 'RESULTS_ALREADY_PUBLISHED', statusCode: 409 });
 		expect(submissionUpdate).not.toHaveBeenCalled();
 	});
@@ -157,7 +161,7 @@ describe('published-result immutability and correction', () => {
 		expect(submissionUpdate).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: { id: 'submission-1' },
-				data: expect.objectContaining({ marks: 75, feedback: 'Corrected feedback' }),
+				data: expect.objectContaining({ marks: 75, feedback: 'Corrected feedback', gradedById: teacher.userId }),
 			}),
 		);
 		expect(broadcastResultsPublished).toHaveBeenCalledWith(
@@ -252,5 +256,72 @@ describe('listSubmissions — MARKER assignment gate is unaffected by the new TE
 		// SUPER_ADMIN test above for the assertion that actually distinguishes the two.
 		expect(assertMarkerAssignedToExam).not.toHaveBeenCalled();
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', teacher);
+	});
+});
+
+
+describe('grading access and overwrite rules', () => {
+	const row = { ...publishedSubmission, exam: { ...publishedSubmission.exam, isPublished: false, paperRevisionId: null }, user: { examParticipants: [] }, gradedBy: null };
+	it.each([teacher, superAdmin, marker])('allows authorized $role to grade and records the actor', async (actor) => {
+		submissionFindUnique.mockResolvedValueOnce(row);
+		submissionUpdate.mockResolvedValueOnce({ ...row, marks: 75 });
+		await expect(submitMarks('submission-1', { marks: 75 }, actor)).resolves.toMatchObject({ marks: 75 });
+		expect(submissionUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ gradedById: actor.userId }) }));
+	});
+	it('rejects another teacher before checking publication', async () => {
+		submissionFindUnique.mockResolvedValueOnce({ ...row, exam: { ...row.exam, isPublished: true } });
+		assertCourseAccess.mockRejectedValueOnce(forbidden);
+		await expect(submitMarks('submission-1', { marks: 101 }, otherTeacher)).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE' });
+	});
+	it('rejects an unassigned marker', async () => {
+		submissionFindUnique.mockResolvedValueOnce(row);
+		assertMarkerAssignedToExam.mockRejectedValueOnce(new AppError('MARKER_NOT_ASSIGNED', 403));
+		await expect(submitMarks('submission-1', { marks: 75 }, marker)).rejects.toMatchObject({ code: 'MARKER_NOT_ASSIGNED' });
+	});
+	it('honors the scoped marker audience grant', async () => {
+		submissionFindUnique.mockResolvedValueOnce({ ...row, exam: { ...row.exam, paperRevisionId: 'paper' }, user: { examParticipants: [{ examId: 'exam-1', audienceId: 'audience-1' }] } });
+		submissionUpdate.mockResolvedValueOnce(row);
+		await submitMarks('submission-1', { marks: 75 }, marker);
+		expect(assertMarkerAssignedToExamAudience).toHaveBeenCalledWith('marker-1', 'exam-1', 'audience-1');
+	});
+	it('rejects a marker without the scoped audience grant', async () => {
+		submissionFindUnique.mockResolvedValueOnce({ ...row, exam: { ...row.exam, paperRevisionId: 'paper' }, user: { examParticipants: [{ examId: 'exam-1', audienceId: 'audience-1' }] } });
+		assertMarkerAssignedToExamAudience.mockRejectedValueOnce(new AppError('MARKER_NOT_ASSIGNED', 403));
+		await expect(submitMarks('submission-1', { marks: 75 }, marker)).rejects.toMatchObject({ code: 'MARKER_NOT_ASSIGNED' });
+	});
+	it('checks existence before authorization', async () => {
+		submissionFindUnique.mockResolvedValueOnce(null);
+		await expect(submitMarks('missing', { marks: 75 }, teacher)).rejects.toMatchObject({ code: 'SUBMISSION_NOT_FOUND' });
+		expect(assertCourseAccess).not.toHaveBeenCalled();
+	});
+	it.each([Role.ADMIN, Role.STUDENT])('rejects %s', async (role) => {
+		submissionFindUnique.mockResolvedValueOnce(row);
+		await expect(submitMarks('submission-1', { marks: 75 }, { userId: 'other', role })).rejects.toMatchObject({ statusCode: 403 });
+	});
+	it.each([
+		[{ ...row, exam: { ...row.exam, isPublished: true }, status: 'UPLOADING' }, 101, 'RESULTS_ALREADY_PUBLISHED'],
+		[{ ...row, status: 'UPLOADING' }, 101, 'SUBMISSION_INCOMPLETE'],
+		[{ ...row, gradedBy: { role: Role.TEACHER } }, 101, 'MARKS_EXCEED_TOTAL'],
+	] as const)('validates state and range in order', async (submission, marks, code) => {
+		submissionFindUnique.mockResolvedValueOnce(submission);
+		await expect(submitMarks('submission-1', { marks }, marker)).rejects.toMatchObject({ code });
+	});
+	it.each([null, Role.MARKER, Role.TEACHER, Role.SUPER_ADMIN])('applies overwrite rule for existing grader %s', async (role) => {
+		submissionFindUnique.mockResolvedValueOnce({ ...row, gradedBy: role ? { role } : null });
+		submissionUpdate.mockResolvedValueOnce(row);
+		const result = submitMarks('submission-1', { marks: 75 }, marker);
+		if (role === Role.TEACHER || role === Role.SUPER_ADMIN) await expect(result).rejects.toMatchObject({ code: 'MARKS_SET_BY_TEACHER', statusCode: 409 });
+		else await expect(result).resolves.toBeDefined();
+	});
+	it('guards a marker write against a concurrent teacher grade', async () => {
+		submissionFindUnique.mockResolvedValueOnce(row);
+		submissionUpdate.mockRejectedValueOnce({ code: 'P2025' });
+		await expect(submitMarks('submission-1', { marks: 75 }, marker)).rejects.toMatchObject({ code: 'MARKS_SET_BY_TEACHER' });
+		expect(submissionUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'submission-1', OR: expect.any(Array) }) }));
+	});
+	it.each([null, Role.MARKER, Role.TEACHER])('allows a teacher to overwrite marks from %s', async (role) => {
+		submissionFindUnique.mockResolvedValueOnce({ ...row, gradedBy: role ? { role } : null });
+		submissionUpdate.mockResolvedValueOnce(row);
+		await expect(submitMarks('submission-1', { marks: 75 }, teacher)).resolves.toBeDefined();
 	});
 });

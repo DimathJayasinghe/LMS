@@ -86,7 +86,7 @@ export const listSubmissions = asyncHandler(
 
 export const authorizeMarks = asyncHandler(async (req, _res, next) => {
   const { id } = submissionIdParamSchema.parse(req.params);
-  await SubmissionService.assertMarkerMayGradeSubmission(id, req.user!.userId);
+  await SubmissionService.assertMayGradeSubmission(id, req.user!);
   next();
 });
 
@@ -94,7 +94,7 @@ export const submitMarks = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = submissionIdParamSchema.parse(req.params);
     const input = submitMarksSchema.parse(req.body);
-    const submission = await SubmissionService.submitMarks(id, input, req.user!.userId);
+    const submission = await SubmissionService.submitMarks(id, input, req.user!);
 
     void AuditService.log({
       action: AUDIT_ACTION.MARKS_SUBMITTED,

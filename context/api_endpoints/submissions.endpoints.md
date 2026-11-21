@@ -32,12 +32,12 @@ until results are published. No marker physical-entry roster endpoint exists in 
 | POST | `/api/submissions` | STUDENT | Start submission (get upload URL or submit MCQ/typed) |
 | PATCH | `/api/submissions/:id/complete` | STUDENT | Mark PDF upload as complete |
 | GET | `/api/submissions/mine` | STUDENT | List the caller's own submissions (marks gated on publish) |
-| GET | `/api/submissions/exam/:examId` | ADMIN, MARKER (assigned) | List submissions for an exam |
-| PATCH | `/api/submissions/:id/marks` | MARKER (assigned) | Submit marks (idempotent) |
-| POST | `/api/submissions/exam/:examId/publish` | ADMIN | Publish results for an exam |
+| GET | `/api/submissions/exam/:examId` | SUPER_ADMIN, TEACHER (own course), MARKER (assigned) | List submissions for an exam |
+| PATCH | `/api/submissions/:id/marks` | SUPER_ADMIN, TEACHER (own course), MARKER (assigned) | Submit marks (idempotent) |
+| POST | `/api/submissions/exam/:examId/publish` | SUPER_ADMIN, TEACHER (own course) | Publish results for an exam |
 | PATCH | `/api/submissions/:id/result-correction` | Owning TEACHER, SUPER_ADMIN | Correct a published result with an audited reason |
 
-> **Roles updated (2026-07-09)**: `ADMIN` → **`SUPER_ADMIN`**; list + publish now also allow the exam's **`TEACHER`**; grading stays **`MARKER`** (assigned).
+> **Roles updated (2026-07-09)**: `ADMIN` → **`SUPER_ADMIN`**; list + publish now also allow the exam's **`TEACHER`**; grading also allows the owning **`TEACHER`** and **`SUPER_ADMIN`**.
 >
 > **Released-result control (2026-08-20):** assigned markers may grade only before publication.
 > After publication, only the owning TEACHER or SUPER_ADMIN may call `PATCH
@@ -242,7 +242,7 @@ from a `MARKER`'s `403 MARKER_NOT_ASSIGNED`, which checks assignment rather than
 
 ### Auth
 - Requires: `access_token` cookie
-- Role: `ADMIN` or `MARKER` (must be assigned to the exam)
+- Role: `SUPER_ADMIN`, owning `TEACHER`, or assigned `MARKER`
 
 ### URL Params
 - `examId` — Exam UUID
@@ -290,11 +290,11 @@ from a `MARKER`'s `403 MARKER_NOT_ASSIGNED`, which checks assignment rather than
 
 ## PATCH `/api/submissions/:id/marks`
 
-**Submit Marks** — Marker grades a specific submission.
+**Submit Marks** — An assigned marker, owning teacher, or owner grades a specific submission before publication. The actor is recorded in `gradedById`; a marker cannot overwrite marks last set by a teacher or owner. Legacy or automatically graded rows without a grader remain editable by assigned markers. `source` is `ONLINE` by default; `HALL` is reserved for hall submissions.
 
 ### Auth
 - Requires: `access_token` cookie
-- Role: `MARKER` (must be assigned to the exam)
+- Role: `SUPER_ADMIN`, owning `TEACHER`, or assigned `MARKER`
 - Requires: `Idempotency-Key` header (UUID)
 
 ### URL Params
@@ -317,6 +317,8 @@ from a `MARKER`'s `403 MARKER_NOT_ASSIGNED`, which checks assignment rather than
   "data": {
     "id": "uuid",
     "status": "COMPLETED",
+    "source": "ONLINE",
+    "gradedById": "grader-uuid",
     "marks": 85,
     "feedback": "Good work on the essay section.",
     "gradedAt": "2026-05-20T10:00:00.000Z"
@@ -333,6 +335,8 @@ from a `MARKER`'s `403 MARKER_NOT_ASSIGNED`, which checks assignment rather than
 | `MARKER_NOT_ASSIGNED` | 403 | Marker not assigned to this exam |
 | `SUBMISSION_INCOMPLETE` | 400 | Submission still uploading |
 | `MARKS_EXCEED_TOTAL` | 400 | Marks > exam.totalMarks |
+| `MARKS_SET_BY_TEACHER` | 409 | A marker cannot overwrite marks set by a teacher or owner |
+| `RESULTS_ALREADY_PUBLISHED` | 409 | Use the correction route for published results |
 
 ---
 
