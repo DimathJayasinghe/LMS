@@ -171,7 +171,7 @@ Authenticates and sets auth cookies.
 
 Rotates refresh token and issues a new access token. Requires `refresh_token` cookie.
 
-The presented token is marked rotated (`RefreshToken.rotatedAt`), not deleted. If the same token is presented again within `REFRESH_REUSE_GRACE_SECONDS` (default 10; `0` disables) it is treated as a duplicate from another tab or a retried request and a fresh pair is issued without revoking anything. Presented after that window, or when the hash is unknown, it is reuse: every refresh token of the user is revoked and `REFRESH_TOKEN_REUSED` is returned. A separate limiter for this route (so silent refreshes cannot exhaust the shared per-address bucket) arrives with the rate-limit keying change; until then it falls under the global limiter.
+The presented token is marked rotated (`RefreshToken.rotatedAt`), not deleted. If the same token is presented again within `REFRESH_REUSE_GRACE_SECONDS` (default 10; `0` disables) it is treated as a duplicate from another tab or a retried request and a fresh pair is issued without revoking anything. Presented after that window, or when the hash is unknown, it is reuse: every refresh token of the user is revoked and `REFRESH_TOKEN_REUSED` is returned. Refresh is exempt from the global limiter and has its own per-user limit, with an address fallback for invalid or missing tokens.
 
 **Request body**
 
@@ -231,3 +231,7 @@ Returns the authenticated user's profile. Requires `access_token` cookie.
 
 - 401 missing or invalid access cookie (auth middleware shape)
 - 404 `USER_NOT_FOUND` (service error shape)
+
+### Request limits
+
+Defaults per minute: global 100 per anonymous address or 200 per authenticated user; login 10 per normalized email and address plus 60 per address; registration 30 per address; refresh 20 per verified user or anonymous address. Operators can adjust these values with the `RATE_LIMIT_*` environment variables.
