@@ -181,13 +181,13 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, F-07 in #99, status per finding in doc 18):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, F-07 in #99, F-28 and F-31 in #102, F-02 in #103; code complete 2026-11-21, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom endpoint-validation handling hardened and route rate-limited (#101, staging verification pending); F-55 production boot check for the keys actually
   used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution; the owner-safety slice
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
-- **Wave 1 — give each role a working day (foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
+- **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
   entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation; F-104 timetable-generated classes
   that can go live (a live-checked S fix); F-127 read-only owner console.
