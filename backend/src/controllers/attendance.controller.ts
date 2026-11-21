@@ -177,15 +177,14 @@ export const getAttendanceByCourse = asyncHandler(
 );
 
 // ─── GET /api/attendance/student/:userId ─────────────────────
-// Get a student's attendance history (student sees own, admin sees any)
+// Get a student's attendance history (student sees own; owner and front desk any; a teacher only rows from their own courses)
 export const getStudentAttendance = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { userId } = attendanceStudentParamsSchema.parse(req.params);
     const query = attendanceQuerySchema.parse(req.query);
     const { records, total } = await AttendanceService.getStudentAttendance(
       userId,
-      req.user!.userId,
-      req.user!.role,
+      req.user!,
       query,
     );
 

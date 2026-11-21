@@ -21,6 +21,11 @@ interface AttendanceRecord {
   classSession?: { id: string; title: string; date: Date; courseId: string };
 }
 
+/** A history row as served to the reader of one student's attendance. */
+type AttendanceHistoryRecord = Omit<AttendanceRecord, 'user'> & {
+  user?: { id: string; name: string; indexNumber: number };
+};
+
 const attendanceSelect = {
   id: true,
   source: true,
@@ -30,6 +35,13 @@ const attendanceSelect = {
   classSessionId: true,
   createdAt: true,
   updatedAt: true,
+} satisfies Prisma.AttendanceSelect;
+
+// Per-student history: only the identity fields the reader needs (no email or barcode).
+const attendanceStudentViewSelect = {
+  ...attendanceSelect,
+  user: { select: { id: true, name: true, indexNumber: true } },
+  classSession: { select: { id: true, title: true, date: true, courseId: true } },
 } satisfies Prisma.AttendanceSelect;
 
 const attendanceWithRelationsSelect = {
@@ -337,33 +349,43 @@ export const getAttendanceByCourse = async (
 
 export const getStudentAttendance = async (
   userId: string,
-  requestingUserId: string,
-  requestingRole: Role,
+  actor: AuthenticatedUser,
   query: AttendanceQuery,
-): Promise<{ records: AttendanceRecord[]; total: number }> => {
-  // Students can only view their own attendance
-  if (requestingRole === Role.STUDENT && requestingUserId !== userId) {
+): Promise<{ records: AttendanceHistoryRecord[]; total: number }> => {
+  // Role gate first, before any lookup. Markers have no use for attendance history.
+  if (actor.role === Role.MARKER) {
+    throw new AppError('FORBIDDEN_ROLE', 403, 'You do not have permission to view attendance history.');
+  }
+  // Students can only view their own attendance.
+  if (actor.role === Role.STUDENT && actor.userId !== userId) {
     throw new AppError('FORBIDDEN', 403, 'You can only view your own attendance history.');
   }
 
   const student = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, deletedAt: true },
+    select: { id: true, role: true, deletedAt: true },
   });
 
-  if (!student) {
+  // A staff id is indistinguishable from a missing one. Owner and front desk may
+  // still read a deactivated student's history (it survives deactivation).
+  const readsDeleted = actor.role === Role.SUPER_ADMIN || actor.role === Role.ADMIN;
+  if (!student || student.role !== Role.STUDENT || (student.deletedAt && !readsDeleted)) {
     throw new AppError('USER_NOT_FOUND', 404, 'Student not found.');
   }
 
   const where: Prisma.AttendanceWhereInput = {
     userId,
-    classSession: { deletedAt: null },
+    classSession: {
+      deletedAt: null,
+      // A teacher sees only rows from the courses they teach.
+      ...(actor.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
+    },
   };
 
   const [records, total] = await Promise.all([
     prisma.attendance.findMany({
       where,
-      select: attendanceWithRelationsSelect,
+      select: attendanceStudentViewSelect,
       orderBy: { scannedAt: 'desc' },
       skip: (query.page - 1) * query.limit,
       take: query.limit,

@@ -22,6 +22,10 @@ Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` =
 - **`TEACHER` can now read attendance for their own courses (2026-07-10)** — `GET /session/:sessionId`
   and `GET /class/:classId` were `SUPER_ADMIN`+`ADMIN` only; added `TEACHER`, scoped via
   `assertCourseAccess` (same ownership gate as session/exam/video mutations).
+- **`GET /student/:userId` is role-scoped (2026-11-21, audit F-09).** Owner and front desk read any
+  student; a `TEACHER` sees only rows from their own courses; a `STUDENT` only their own history;
+  `MARKER` is refused. The route now has a role gate (`FORBIDDEN_ROLE`), the target must be a student,
+  and history rows omit the student's email and barcode.
 - **Zoom reconciliation is available to `SUPER_ADMIN` and the owning `TEACHER` (2026-08-17).**
   A read-only preview compares Zoom's completed-meeting participants with LMS attendance; the
   idempotent apply endpoint inserts only missing, actively enrolled students and writes an audit
@@ -105,7 +109,7 @@ Returned in most endpoints:
 | POST | `/session/:sessionId/reconciliation` | `SUPER_ADMIN`, `TEACHER`* | Idempotently add matched missing rows and audit the action. |
 | GET | `/session/:sessionId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get all attendance for a specific session. |
 | GET | `/class/:classId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`* | Get paginated attendance for a course. |
-| GET | `/student/:userId` | Any | Get student's attendance history (role-scoped). |
+| GET | `/student/:userId` | `SUPER_ADMIN`, `ADMIN`, `TEACHER`*, `STUDENT` (own) | Get a student's attendance history (role-scoped). |
 
 ## Endpoint Details
 
@@ -348,7 +352,14 @@ Get paginated attendance history across all sessions in a specific course.
 
 ### GET `/student/:userId`
 
-Get a student's attendance history. Students can only view their own history. Admins can view any student's history.
+Get a student's attendance history, newest first. Who sees what:
+
+- `SUPER_ADMIN` and `ADMIN`: any student, including a deactivated one.
+- `TEACHER`: only rows from sessions of courses they teach (other courses' rows are omitted, not refused).
+- `STUDENT`: only their own history.
+- `MARKER`: refused.
+
+The target must be an active-or-deactivated `STUDENT`; a staff id or an unknown id returns `404 USER_NOT_FOUND`, and a deactivated student is `404` for a teacher. Rows from deleted sessions are omitted. Each row carries only `user.id`, `user.name` and `user.indexNumber` for the student (no email or barcode) plus the session summary (`id`, `title`, `date`, `courseId`).
 
 **Query Parameters**
 
@@ -372,5 +383,6 @@ Get a student's attendance history. Students can only view their own history. Ad
 **Errors**
 
 - 401 unauthorized
+- 403 `FORBIDDEN_ROLE` (a role outside the table above, such as `MARKER`)
 - 403 `FORBIDDEN` (student attempting to view another student's history)
-- 404 `USER_NOT_FOUND`
+- 404 `USER_NOT_FOUND` (unknown id, not a student, or a deactivated student for a teacher)
