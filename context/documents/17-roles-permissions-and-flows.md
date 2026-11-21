@@ -116,7 +116,7 @@ Submit button disables at 0:00 (F-86); a failed PDF upload leaves a dead submiss
 **Front desk: the day at the counter.** Register or find a walk-in → enroll → take cash → scan in → chase
 unpaid → end-of-day tally. *Breaks:* no enroll UI (F-11; UI only, the API allows it and the student can self-enroll on a phone meanwhile), no bulk "who owes" list (F-10; one student's outstanding months can be checked at a time), scanner marks any active
 student present and shows nothing about enrollment, payment or mode (F-12), the scanner and cash desk resolve
-the same card with different rules (F-39), scan identity resolution needs hardening (F-07), the bulk Excel upload can set any month `SUCCESS` without a per-row trail (F-58),
+the same card with different rules (F-39), scan identity resolution was hardened in Wave 0 (F-07), the bulk Excel upload can set any month `SUCCESS` without a per-row trail (F-58),
 cash collection can silently overwrite an existing `SUCCESS` row (F-59), and there is no end-of-day cash tally
 (F-77).
 
@@ -165,7 +165,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S2 | One course taught at several branches | Gap | Course, enrollment and session carry no branch; one class per branch at a time (F-52, F-53) |
 | S3 | Theory, revision and paper classes; mediums; batch year | Gap | `ClassType` is only `ONLINE`/`PHYSICAL`; year exists, medium and class kind do not |
 | S4 | Teacher sees own roster and own income only | Partial | Income scoped to self (good, but history rewrites, F-79); roster missing (F-83) |
-| S5 | Front-desk walk-in: register, enroll, cash, card, scan, chase unpaid | Partial | Cash and scan work; no enroll UI, no unpaid list, ambiguous scan resolution (F-11, F-10, F-07) |
+| S5 | Front-desk walk-in: register, enroll, cash, card, scan, chase unpaid | Partial | Cash and scan work; no enroll UI, no unpaid list, no search fallback beside the scanner for an ambiguous code (F-11, F-10; F-07 resolver fixed in Wave 0) |
 | S6 | Missed class then recording, with a grace period | Partial | Recording works; month-cliff, no grace (F-05) |
 | S7 | Zoom live, recording, automatic attendance | Partial | Live token works; automatic attendance very likely cannot match SDK guests (F-14; by code, Zoom-side behaviour not observed); webhook hardening needed (F-54) |
 | S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher cannot mark; hall marks and ranking absent (F-67, F-13, F-73) |
@@ -181,7 +181,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, status per finding in doc 18):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, F-07 in #99, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually

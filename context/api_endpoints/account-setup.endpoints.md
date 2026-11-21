@@ -16,12 +16,14 @@ http://localhost:5000/api/users/me
 
 | Identifier | Field | Issued by | Scope | Purpose |
 |---|---|---|---|---|
-| **LMS QR** | `User.barcode` | The LMS itself, **automatically at registration** (decision 2026-07-10) | Globally unique | Shown as a QR in-app (`/attendance`); scanned at any LMS-operated entrance. |
-| **Institute barcode** | `StudentBarcode` | Each physical institute's own pre-existing card system | Unique **per institute** (`@@unique([instituteId, barcode])`), not global | A student types in a code an institute *already gave them* on a physical card — this is a plain text field, never a scan/photo, in our UI. |
+| **LMS QR** | `User.barcode` | The LMS itself, **automatically at registration** (decision 2026-07-10) | Globally unique; the `LMS-<number>` format is reserved for this writer | Shown as a QR in-app (`/attendance`); scanned at any LMS-operated entrance. |
+| **Institute barcode** | `StudentBarcode` | Each physical institute's own pre-existing card system | The database constraint is per institute (`@@unique([instituteId, barcode])`), but the service refuses any value another student already holds, at any institute or as an LMS card (2026-11-21, audit F-07) | A student types in a code an institute *already gave them* on a physical card — this is a plain text field, never a scan/photo, in our UI. |
 
 `User.barcode` is derived from the student's `indexNumber` (`LMS-<indexNumber padded to 6 digits>`,
 e.g. `LMS-000123`) — guaranteed collision-free with no generate-and-retry loop, since `indexNumber`
-is already a unique autoincrement. An Admin can still reassign it later via the existing
+is already a unique autoincrement, and the registration write now checks it against both code tables in
+the same transaction as the account (a collision fails the registration; a retry gets the next index).
+An Admin can still reassign it later via the existing
 `PATCH /api/users/:id/barcode` (e.g. a lost card) — auto-generation only sets the initial value.
 
 ## Architecture decisions (2026-07-10)
@@ -113,7 +115,7 @@ R2 — the PUT never landed; re-upload).
 
 ## `GET /institute-barcodes` / `POST /institute-barcodes` / `DELETE /institute-barcodes/:barcodeId`
 
-Self-scoped CRUD over the caller's own `StudentBarcode` rows.
+Self-scoped CRUD over the caller's own `StudentBarcode` rows. Codes are trimmed printable ASCII, 1–50 characters.
 
 **`POST` request**
 ```json
@@ -142,13 +144,11 @@ Self-scoped CRUD over the caller's own `StudentBarcode` rows.
 |---|---|---|
 | `INSTITUTE_NOT_FOUND` | 404 | Institute doesn't exist or `isActive: false` |
 | `STUDENT_BARCODE_EXISTS` | 409 | Caller already registered a barcode for this institute — remove it first to change it (one barcode per student per institute, `@@unique([userId, instituteId])`) |
-| `BARCODE_TAKEN_AT_INSTITUTE` | 409 | That barcode *value* is already registered by someone else at this institute (`@@unique([instituteId, barcode])` — the same value is fine at a *different* institute) |
+| `CODE_UNAVAILABLE` | 409 | That code is already held by another student (as an LMS card or an institute card at **any** institute, compared case-insensitively) or is in the reserved `LMS-<number>` format. The message is generic and never names the holder. Replaces `BARCODE_TAKEN_AT_INSTITUTE` (2026-11-21) |
 | `STUDENT_BARCODE_NOT_FOUND` | 404 | `DELETE` on a barcode that doesn't exist or isn't the caller's own (ownership-scoped, not just existence) |
 
-All four verified end-to-end on the production stack, including the cross-institute case (same
-barcode value accepted at institute B after being taken at institute A) and the ownership check
-(student B gets 404, not 403, deleting student A's row — existence is deliberately not confirmed
-to a non-owner).
+The ownership check was verified end-to-end on the production stack (student B gets 404, not 403,
+deleting student A's row — existence is deliberately not confirmed to a non-owner).
 
 ---
 

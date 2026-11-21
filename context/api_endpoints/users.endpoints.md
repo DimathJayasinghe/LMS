@@ -197,15 +197,16 @@ Returns the user profile by id.
 Resolves a scanned/typed barcode to a student, for staff-facing flows (entrance payment
 collection today). Roles: `SUPER_ADMIN`, `ADMIN`.
 
-Resolution order: tries the institute-scoped `StudentBarcode` table first (barcode uniqueness
-is enforced **per institute**, not globally); if exactly one institute match is found, returns
-it with that `instituteId`. Otherwise (zero or more-than-one institute matches — ambiguous
-matches are treated as unresolved rather than guessed) falls back to the global `User.barcode`
-field, returning `instituteId: null`.
+Uses the same resolver as the entrance scanner (`POST /attendance/scan`): the code is looked up
+case-insensitively in both the global `User.barcode` and every institute `StudentBarcode`. Exactly one
+distinct student is returned, with `instituteId` set only when exactly one of that student's institute
+cards matched (otherwise `null`). A code held by more than one student is refused with
+`409 AMBIGUOUS_CODE` (never guessed); the front desk finds the student by index number or name instead.
+A deactivated or non-student holder is still returned, as before.
 
 **Query params**
 
-- `code`: string, required, 1–50 chars — the scanned/typed barcode value.
+- `code`: string, required, 1–50 printable ASCII characters after trimming — the scanned/typed barcode value.
 
 **Success (200)**
 
@@ -226,6 +227,7 @@ field, returning `instituteId: null`.
 - 401 auth middleware error
 - 403 forbidden (role guard)
 - 404 `BARCODE_NOT_FOUND` — no `StudentBarcode` or `User.barcode` matches the code.
+- 409 `AMBIGUOUS_CODE` — the code matches more than one student.
 
 ### PATCH `/:id/role`
 
@@ -301,7 +303,7 @@ keys return 400; replaying the same key returns the original stored response.
 
 ### PATCH `/:id/barcode`
 
-Assigns a barcode to a user.
+Assigns a barcode to a user. The code is trimmed printable ASCII, 3–50 characters. The user’s own default `LMS-<index padded to 6 digits>` card can be restored.
 
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
 keys return 400; replaying the same key returns the original stored response.
@@ -331,4 +333,4 @@ keys return 400; replaying the same key returns the original stored response.
 - 403 forbidden (role guard)
 - 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN` (same guard as `/:id/status`)
 - 404 `USER_NOT_FOUND` (service error shape)
-- 409 `BARCODE_IN_USE` (service error shape)
+- 409 `CODE_UNAVAILABLE` — the code is held by another user as an LMS card or an institute card (compared case-insensitively), or is in the reserved `LMS-<number>` format other than the user’s own default card. The message never names the other holder. Re-assigning an existing code is checked against other holders.

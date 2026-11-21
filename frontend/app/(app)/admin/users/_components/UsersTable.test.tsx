@@ -21,7 +21,7 @@ const nimal = {
   email: "nimal@x.lk",
   role: "STUDENT",
   indexNumber: 42,
-  barcode: "LMS-0001",
+  barcode: "A-0001",
   deletedAt: null,
 } as User;
 
@@ -55,10 +55,10 @@ describe("UsersTable — Idempotency-Key on mutations", () => {
   it("sends an Idempotency-Key on barcode save", async () => {
     const user = userEvent.setup();
     render(<UsersTable {...baseProps} />);
-    await user.click(screen.getByRole("button", { name: "LMS-0001" })); // enter edit mode
-    await user.clear(screen.getByPlaceholderText("LMS-0001"));
-    await user.type(screen.getByPlaceholderText("LMS-0001"), "LMS-0002");
+    await user.click(screen.getByRole("button", { name: "A-0001" })); // enter edit mode
+    await user.clear(screen.getByPlaceholderText("A-0001"));
+    await user.type(screen.getByPlaceholderText("A-0001"), "A-0002");
     await user.click(screen.getByRole("button", { name: "Save code" }));
-    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/barcode", { barcode: "LMS-0002" }, IDEM));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/barcode", { barcode: "A-0002" }, IDEM));
   });
 });

@@ -5,7 +5,7 @@ const {
 	classSessionFindUnique,
 	courseFindUnique,
 	instituteFindUnique,
-	studentBarcodeFindUnique,
+	queryRaw,
 	userFindUnique,
 	attendanceUpsert,
 	attendanceFindMany,
@@ -14,7 +14,7 @@ const {
 	classSessionFindUnique: vi.fn(),
 	courseFindUnique: vi.fn(),
 	instituteFindUnique: vi.fn(),
-	studentBarcodeFindUnique: vi.fn(),
+	queryRaw: vi.fn(),
 	userFindUnique: vi.fn(),
 	attendanceUpsert: vi.fn(),
 	attendanceFindMany: vi.fn().mockResolvedValue([]),
@@ -23,10 +23,10 @@ const {
 
 vi.mock('@/config/database', () => ({
 	prisma: {
+		$queryRaw: queryRaw,
 		classSession: { findUnique: classSessionFindUnique },
 		course: { findUnique: courseFindUnique },
 		institute: { findUnique: instituteFindUnique },
-		studentBarcode: { findUnique: studentBarcodeFindUnique },
 		user: { findUnique: userFindUnique },
 		attendance: {
 			upsert: attendanceUpsert,
@@ -57,7 +57,7 @@ beforeEach(() => {
 	classSessionFindUnique.mockReset().mockResolvedValue(session);
 	courseFindUnique.mockReset().mockResolvedValue(course);
 	instituteFindUnique.mockReset().mockResolvedValue({ id: scanInput.instituteId, isActive: true });
-	studentBarcodeFindUnique.mockReset().mockResolvedValue({ user: student });
+	queryRaw.mockReset().mockResolvedValue([{ kind: 'CARD', instituteId: scanInput.instituteId, ...student }]);
 	userFindUnique.mockReset().mockResolvedValue(student);
 	attendanceUpsert.mockReset().mockResolvedValue({ id: 'attendance-1' });
 	attendanceFindMany.mockClear();
@@ -65,20 +65,10 @@ beforeEach(() => {
 });
 
 describe('scanBarcode - institute-aware resolution', () => {
-	it('resolves an institute-issued barcode inside the selected institute', async () => {
+	it('resolves an institute-issued barcode and marks that student', async () => {
 		await scanBarcode(scanInput);
 
-		expect(studentBarcodeFindUnique).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: {
-					instituteId_barcode: {
-						instituteId: scanInput.instituteId,
-						barcode: scanInput.barcode,
-					},
-				},
-			}),
-		);
-		expect(userFindUnique).not.toHaveBeenCalled();
+		expect(queryRaw).toHaveBeenCalledTimes(1);
 		expect(attendanceUpsert).toHaveBeenCalledWith(
 			expect.objectContaining({
 				create: expect.objectContaining({
@@ -91,17 +81,15 @@ describe('scanBarcode - institute-aware resolution', () => {
 		expect(upsertArgs.update).not.toHaveProperty('source');
 	});
 
-	it('falls back to the global LMS barcode when no institute barcode matches', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce(null);
+	it('resolves the global LMS barcode when no institute barcode matches', async () => {
+		queryRaw.mockResolvedValue([{ kind: 'USER', instituteId: null, ...student }]);
 
-		await scanBarcode({ ...scanInput, barcode: 'LMS-001', source: AttendanceSource.QR });
+		await scanBarcode({ ...scanInput, barcode: 'LMS-000001', source: AttendanceSource.QR });
 
-		expect(userFindUnique).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: 'LMS-001' } }),
-		);
+		expect(queryRaw).toHaveBeenCalledTimes(1);
 		expect(attendanceUpsert).toHaveBeenCalledWith(
 			expect.objectContaining({
-				create: expect.objectContaining({ source: AttendanceSource.QR }),
+				create: expect.objectContaining({ userId: student.id, source: AttendanceSource.QR }),
 			}),
 		);
 	});
@@ -113,7 +101,7 @@ describe('scanBarcode - institute-aware resolution', () => {
 			code: 'INSTITUTE_NOT_FOUND',
 			statusCode: 404,
 		});
-		expect(studentBarcodeFindUnique).not.toHaveBeenCalled();
+		expect(queryRaw).not.toHaveBeenCalled();
 	});
 
 	it('rejects an institute that conflicts with the session timetable slot', async () => {
@@ -126,13 +114,11 @@ describe('scanBarcode - institute-aware resolution', () => {
 			code: 'SESSION_INSTITUTE_MISMATCH',
 			statusCode: 409,
 		});
-		expect(studentBarcodeFindUnique).not.toHaveBeenCalled();
+		expect(queryRaw).not.toHaveBeenCalled();
 	});
 
 	it('rejects a deactivated student resolved from an institute barcode', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce({
-			user: { ...student, deletedAt: new Date() },
-		});
+		queryRaw.mockResolvedValue([{ kind: 'CARD', instituteId: scanInput.instituteId, ...student, deletedAt: new Date() }]);
 
 		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
 			code: 'STUDENT_DEACTIVATED',
@@ -142,9 +128,7 @@ describe('scanBarcode - institute-aware resolution', () => {
 	});
 
 	it('rejects a non-student resolved from an institute barcode', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce({
-			user: { ...student, role: Role.TEACHER },
-		});
+		queryRaw.mockResolvedValue([{ kind: 'CARD', instituteId: scanInput.instituteId, ...student, role: Role.TEACHER }]);
 
 		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
 			code: 'INVALID_ROLE_FOR_ATTENDANCE',
@@ -154,14 +138,37 @@ describe('scanBarcode - institute-aware resolution', () => {
 	});
 
 	it('returns BARCODE_NOT_FOUND when neither institute nor LMS barcode matches', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce(null);
-		userFindUnique.mockResolvedValueOnce(null);
+		queryRaw.mockResolvedValue([]);
 
 		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
 			code: 'BARCODE_NOT_FOUND',
 			statusCode: 404,
 		});
 		expect(attendanceUpsert).not.toHaveBeenCalled();
+	});
+
+	it('refuses an ambiguous code and marks nobody (the desk searches by name or index instead)', async () => {
+		queryRaw.mockResolvedValue([
+			{ kind: 'CARD', instituteId: scanInput.instituteId, ...student },
+			{ kind: 'USER', instituteId: null, ...student, id: 'student-2' },
+		]);
+
+		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
+			code: 'AMBIGUOUS_CODE',
+			statusCode: 409,
+		});
+		expect(attendanceUpsert).not.toHaveBeenCalled();
+	});
+
+
+	it('resolves an institute card held at another institute (codes are organization-wide)', async () => {
+		queryRaw.mockResolvedValue([{ kind: 'CARD', instituteId: '99999999-9999-4999-8999-999999999999', ...student }]);
+
+		await scanBarcode(scanInput);
+
+		expect(attendanceUpsert).toHaveBeenCalledWith(
+			expect.objectContaining({ create: expect.objectContaining({ userId: student.id }) }),
+		);
 	});
 });
 

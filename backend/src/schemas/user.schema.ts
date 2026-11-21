@@ -1,5 +1,6 @@
 import { Role } from '@prisma/client';
 import { z } from 'zod';
+import { scanCodeSchema } from './scan-code.schema';
 import { NIC_IMAGE_CONTENT_TYPES, NIC_IMAGE_MAX_SIZE_BYTES } from '@/utils/constants';
 
 // ─── List Users ─────────────────────────────────────────────
@@ -38,7 +39,7 @@ export const updateStatusSchema = z.object({
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 
 export const assignBarcodeSchema = z.object({
-	barcode: z.string().trim().min(3).max(50),
+	barcode: scanCodeSchema.min(3).max(50),
 });
 
 export type AssignBarcodeInput = z.infer<typeof assignBarcodeSchema>;
@@ -69,7 +70,7 @@ export type NicConfirmInput = z.infer<typeof nicConfirmSchema>;
 
 export const createStudentBarcodeSchema = z.object({
 	instituteId: z.string().uuid(),
-	barcode: z.string().trim().min(1).max(50),
+	barcode: scanCodeSchema.min(1).max(50),
 });
 
 export type CreateStudentBarcodeInput = z.infer<typeof createStudentBarcodeSchema>;
@@ -80,7 +81,7 @@ export const studentBarcodeIdParamSchema = z.object({
 
 // ─── Barcode Resolution (Admin/Staff) ───────────────────────
 export const resolveBarcodeQuerySchema = z.object({
-	code: z.string().trim().min(1).max(50),
+	code: scanCodeSchema.min(1).max(50),
 });
 
 export type ResolveBarcodeQuery = z.infer<typeof resolveBarcodeQuerySchema>;

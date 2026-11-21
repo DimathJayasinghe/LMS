@@ -12,7 +12,8 @@
     "format": "prettier --write src/",
     "prisma": "prisma generate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "scan-codes:report": "tsx src/scripts/report-scan-code-collisions.ts"
   },
   "keywords": [],
   "license": "UNLICENSED",

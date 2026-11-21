@@ -6,6 +6,8 @@ import { env } from '../config/env';
 import { AppError } from '../utils/app-error';
 import { BCRYPT_SALT_ROUNDS } from '../utils/constants';
 import { logger } from '../config/logger';
+import { assertScanCodeFree } from './scan-code.service';
+import { formatLmsBarcode } from '@/utils/scan-code';
 import type { RegisterInput, LoginInput } from '../schemas/auth.schema';
 import type { JwtPayload } from '../types/auth.types';
 
@@ -93,14 +95,6 @@ const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
 
-/**
- * The LMS QR (`User.barcode`) is issued to every student automatically —
- * derived from their already-unique `indexNumber`, so it's guaranteed
- * collision-free without a generate-and-retry loop. Admins can still
- * reassign it later via `PATCH /users/:id/barcode` (e.g. a lost card).
- */
-const formatLmsBarcode = (indexNumber: number): string => `LMS-${String(indexNumber).padStart(6, '0')}`;
-
 /** Strips sensitive fields from user objects before returning to client */
 const toSafeUser = (user: {
   id: string;
@@ -160,26 +154,36 @@ export const register = async (
 
   const hashedPassword = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
 
-  const created = await prisma.user.create({
-    data: {
-      email: data.email,
-      name: data.name,
-      password: hashedPassword,
-      phone: data.phone ?? null,
-      nic: data.nic ?? null,
-      address: data.address ?? null,
-      city: data.city ?? null,
-      // role defaults to STUDENT (schema default)
-      // deletedAt defaults to null (active)
-    },
-  });
+  // indexNumber is only known once autoincrement assigns it, so the LMS QR (derived from it)
+  // is a follow-up write. Both happen in one transaction so a card that collides with an
+  // existing code fails the whole registration instead of leaving a student without a card.
+  const user = await prisma
+    .$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: data.email,
+          name: data.name,
+          password: hashedPassword,
+          phone: data.phone ?? null,
+          nic: data.nic ?? null,
+          address: data.address ?? null,
+          city: data.city ?? null,
+          // role defaults to STUDENT (schema default)
+          // deletedAt defaults to null (active)
+        },
+      });
 
-  // indexNumber is only known once autoincrement assigns it, so the LMS QR
-  // (derived from it) is a follow-up write, not part of the create() data.
-  const user = await prisma.user.update({
-    where: { id: created.id },
-    data: { barcode: formatLmsBarcode(created.indexNumber) },
-  });
+      const barcode = formatLmsBarcode(created.indexNumber);
+      await assertScanCodeFree(tx, barcode, { exceptUserId: created.id, allowLmsFormat: true });
+
+      return tx.user.update({ where: { id: created.id }, data: { barcode } });
+    })
+    .catch((error: unknown) => {
+      if (error instanceof AppError && error.code === 'CODE_UNAVAILABLE') {
+        logger.warn({ email: data.email }, 'Registration refused: the generated LMS card is already held by another user.');
+      }
+      throw error;
+    });
 
   const tokens = await issueTokenPair(user.id, user.role);
 
