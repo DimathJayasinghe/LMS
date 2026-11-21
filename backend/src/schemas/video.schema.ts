@@ -22,9 +22,8 @@ export const initiateVideoUploadSchema = z.object({
 export type InitiateVideoUploadInput = z.infer<typeof initiateVideoUploadSchema>;
 
 // ─── Bunny Webhook ─────────────────────────────────────────────
-// Bunny's Video Library webhook payload (Library > Webhooks). No per-request
-// signature is supported by Bunny for this webhook — verified instead via a
-// shared secret query param (see routes + BUNNY_WEBHOOK_SECRET).
+// Bunny's Video Library webhook payload (Library > Webhooks). The signature
+// header is verified using HMAC with the read-only API key.
 export const bunnyWebhookSchema = z.object({
   VideoLibraryId: z.coerce.number(),
   VideoGuid: z.string().min(1),

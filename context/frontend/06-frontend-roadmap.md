@@ -208,7 +208,7 @@ _(Move completed items here with date + PR.)_
   authorization (`generateBunnyTusUpload` — `sha256(libraryId+apiKey+expire+videoId)`, per Bunny's TUS
   docs); the browser uploads directly to Bunny via `tus-js-client` (resumable, progress bar) — the file
   never touches our server (architecture §5.6). `POST /videos/bunny-webhook` (new; Bunny → us, verified by
-  a `BUNNY_WEBHOOK_SECRET` query param since Bunny's library webhook has no per-request signature;
+  an HMAC signature header using the Bunny read-only API key;
   idempotent `updateMany`) is the **only** thing that flips a video to `READY`/`FAILED` — completion is
   confirmed by Bunny, not the client, so the upload survives the teacher going offline the instant the
   transfer finishes. `GET /videos/class/:id` now hides non-`READY` videos from students (staff still see

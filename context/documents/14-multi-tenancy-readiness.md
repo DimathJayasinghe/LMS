@@ -135,7 +135,7 @@ Today every provider credential is a single process-wide environment variable va
 
 | Provider | Today (env, global) | Becomes (per organization) |
 |---|---|---|
-| Bunny Stream | `BUNNY_API_KEY`, `BUNNY_READ_ONLY_API_KEY`, `BUNNY_LIBRARY_ID`, `BUNNY_CDN_HOSTNAME`, `BUNNY_TOKEN_KEY`, `BUNNY_WEBHOOK_SECRET` | One Bunny library per organization (bandwidth and DRM settings are library-level) |
+| Bunny Stream | `BUNNY_API_KEY`, `BUNNY_READ_ONLY_API_KEY`, `BUNNY_LIBRARY_ID`, `BUNNY_CDN_HOSTNAME`, `BUNNY_TOKEN_KEY` | One Bunny library per organization (bandwidth and DRM settings are library-level) |
 | PayHere | `PAYHERE_MERCHANT_ID`, `PAYHERE_MERCHANT_SECRET`, return/cancel/notify URLs | The organization's own merchant, so money settles to the right account |
 | Zoom | `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_SDK_KEY`, `ZOOM_SDK_SECRET`, `ZOOM_WEBHOOK_SECRET` | Each organization's own Zoom account |
 | SMS | `NOTIFY_API_KEY`, `NOTIFY_USER_ID`, `NOTIFY_SENDER_ID` | Sender ID is per organization (it is the brand students see) |

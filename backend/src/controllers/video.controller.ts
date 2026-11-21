@@ -45,8 +45,7 @@ export const initiateUpload = asyncHandler(
 // ─── POST /api/videos/bunny-webhook ────────────────────────────
 // Bunny calls this when a video finishes processing (or fails) — the source
 // of truth for "upload complete", independent of the teacher's connection.
-// No user session: verified by a shared secret query param instead (Bunny's
-// library webhook has no per-request signature to check).
+// No user session: the signature header is verified with the read-only API key.
 export const bunnyWebhook = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     // Verify Bunny's HMAC-SHA256 signature over the RAW body (read-only key),

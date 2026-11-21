@@ -57,9 +57,7 @@ const envSchema = z.object({
   R2_PUBLIC_BUCKET_NAME: z.string().default(''),
 
   // Bunny.net Video Streaming (Bunny Stream)
-  // Optional at boot — validated at runtime when stream URLs are requested.
-  // Server starts without these; a clear AppError is thrown if they are missing
-  // when a student tries to get a stream URL.
+  // Required at boot in production; validated at runtime in other environments.
   BUNNY_API_KEY: z.string().default(''),
   // Read-Only API key — the HMAC secret Bunny signs Stream webhooks with
   // (https://docs.bunny.net/stream/webhooks).
@@ -70,8 +68,7 @@ const envSchema = z.object({
   // The library "Token Authentication Key" (Stream > library > Security), used to
   // sign the embed player token: SHA256(tokenKey + videoId + expires).
   BUNNY_TOKEN_KEY: z.string().default(''),
-  // Legacy shared secret (query param). Superseded by the HMAC signature above;
-  // kept for backward compatibility / optional defense-in-depth.
+  // Unused legacy setting, kept so existing environment files still parse.
   BUNNY_WEBHOOK_SECRET: z.string().default(''),
 
   // Zoom — Server-to-Server OAuth app (Webhooks + REST API: create meetings, fetch ZAK).
@@ -143,9 +140,10 @@ if (env.NODE_ENV === 'production') {
   if (!hasR2Endpoint) missing.push('R2_ENDPOINT or R2_ACCOUNT_ID');
 
   if (!env.BUNNY_API_KEY) missing.push('BUNNY_API_KEY');
+  if (!env.BUNNY_READ_ONLY_API_KEY) missing.push('BUNNY_READ_ONLY_API_KEY');
   if (!env.BUNNY_LIBRARY_ID) missing.push('BUNNY_LIBRARY_ID');
   if (!env.BUNNY_CDN_HOSTNAME) missing.push('BUNNY_CDN_HOSTNAME');
-  if (!env.BUNNY_WEBHOOK_SECRET) missing.push('BUNNY_WEBHOOK_SECRET');
+  if (!env.BUNNY_TOKEN_KEY) missing.push('BUNNY_TOKEN_KEY');
 
   if (!env.ZOOM_WEBHOOK_SECRET) missing.push('ZOOM_WEBHOOK_SECRET');
   if (!env.ZOOM_ACCOUNT_ID) missing.push('ZOOM_ACCOUNT_ID');

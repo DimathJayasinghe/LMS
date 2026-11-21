@@ -8,7 +8,7 @@ import {
   BUNNY_UPLOAD_AUTH_TTL_SECONDS,
 } from '@/utils/constants';
 
-/** Fails fast with a clear error if Bunny is not configured. Server boots without these vars — they are only required when a video is actually created/streamed. */
+/** Fails fast with a clear error if Bunny is not configured outside production. */
 const assertBunnyConfigured = (): void => {
   if (!env.BUNNY_API_KEY || !env.BUNNY_LIBRARY_ID || !env.BUNNY_CDN_HOSTNAME) {
     throw new AppError(

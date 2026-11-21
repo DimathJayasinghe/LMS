@@ -83,6 +83,7 @@ therefore does **not** prove delivery when the log driver is active; it only exi
   video driver reproduces the *contract* (create video, TUS upload, webhook to READY, signed embed URL)
   so the application flow can be exercised, with no copy protection. Never describe local playback as
   DRM-protected, and verify DRM only against a real Bunny library.
+- Production requires `BUNNY_READ_ONLY_API_KEY` and `BUNNY_TOKEN_KEY` at boot; non-production does not require them at boot, but real Bunny webhook verification and playback need the respective keys.
 - **No real SMS delivery, no real Zoom meetings, no real card payments.** Those need the provider's
   sandbox and, for webhooks, a public tunnel (the dev-only `ngrok` service).
 - **Different performance and limits.** RustFS is not R2: no R2 edge caching, different error text, and
