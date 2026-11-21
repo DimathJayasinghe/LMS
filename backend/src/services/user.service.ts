@@ -4,6 +4,7 @@ import { AppError } from '@/utils/app-error';
 import { NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { assertScanCodeFree, resolveStudentByCode } from '@/services/scan-code.service';
+import { formatLmsBarcode } from '@/utils/scan-code';
 import type {
 	ListUsersQuery,
 	UpdateRoleInput,
@@ -192,10 +193,11 @@ export const assignBarcode = async (
 
 		assertCanManagePrivilegedTarget(actorRole, user.role);
 
-		// Re-assigning the code the user already holds changes nothing about who owns it.
-		if (user.barcode?.toLowerCase() !== input.barcode.toLowerCase()) {
-			await assertScanCodeFree(tx, input.barcode, { exceptUserId: id });
-		}
+		const ownDefault = input.barcode.trim().toUpperCase() === formatLmsBarcode(user.indexNumber);
+		await assertScanCodeFree(tx, input.barcode, {
+			exceptUserId: id,
+			...(ownDefault ? { allowLmsFormat: true } : {}),
+		});
 
 		return tx.user.update({
 			where: { id },

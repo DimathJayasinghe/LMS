@@ -48,6 +48,7 @@ import {
 
 const baseUser = (overrides: Partial<{ id: string; role: Role; barcode: string | null }> = {}) => ({
 	id: 'target-id',
+	indexNumber: 5,
 	role: Role.STUDENT,
 	barcode: null,
 	...overrides,
@@ -187,15 +188,25 @@ describe('assignBarcode — privileged-target guard and code uniqueness', () => 
 		expect(assertScanCodeFree).not.toHaveBeenCalled();
 	});
 
-	it('re-assigning the code the user already holds is a no-op for the uniqueness check (case-insensitive)', async () => {
+	it('checks an already-held code and allows the user’s own default card', async () => {
 		findUnique.mockResolvedValueOnce(baseUser({ barcode: 'LMS-000005' }));
-		update.mockResolvedValueOnce(baseUser({ barcode: 'LMS-000005' }));
-
 		await assignBarcode('target-id', { barcode: 'lms-000005' }, Role.ADMIN);
-
-		expect(assertScanCodeFree).not.toHaveBeenCalled();
-		expect(update).toHaveBeenCalledTimes(1);
+		expect(assertScanCodeFree).toHaveBeenCalledWith(txClient, 'lms-000005', { exceptUserId: 'target-id', allowLmsFormat: true });
 	});
+
+	it('checks a restored default card', async () => {
+		findUnique.mockResolvedValueOnce(baseUser({ barcode: 'CUSTOM-1' }));
+		await assignBarcode('target-id', { barcode: 'LMS-000005' }, Role.ADMIN);
+		expect(assertScanCodeFree).toHaveBeenCalledWith(txClient, 'LMS-000005', { exceptUserId: 'target-id', allowLmsFormat: true });
+	});
+
+	it('checks a case variant of another user’s code', async () => {
+		findUnique.mockResolvedValueOnce(baseUser({ barcode: 'OTHER' }));
+		assertScanCodeFree.mockRejectedValue(unavailable());
+		await expect(assignBarcode('target-id', { barcode: 'bc-1' }, Role.ADMIN)).rejects.toMatchObject({ code: 'CODE_UNAVAILABLE' });
+		expect(update).not.toHaveBeenCalled();
+	});
+
 });
 
 describe('createMyInstituteBarcode — code uniqueness', () => {

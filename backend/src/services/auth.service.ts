@@ -7,6 +7,7 @@ import { AppError } from '../utils/app-error';
 import { BCRYPT_SALT_ROUNDS } from '../utils/constants';
 import { logger } from '../config/logger';
 import { assertScanCodeFree } from './scan-code.service';
+import { formatLmsBarcode } from '@/utils/scan-code';
 import type { RegisterInput, LoginInput } from '../schemas/auth.schema';
 import type { JwtPayload } from '../types/auth.types';
 
@@ -100,7 +101,6 @@ const hashToken = (token: string): string => {
  * collision-free without a generate-and-retry loop. Admins can still
  * reassign it later via `PATCH /users/:id/barcode` (e.g. a lost card).
  */
-const formatLmsBarcode = (indexNumber: number): string => `LMS-${String(indexNumber).padStart(6, '0')}`;
 
 /** Strips sensitive fields from user objects before returning to client */
 const toSafeUser = (user: {
