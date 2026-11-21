@@ -20,7 +20,7 @@ if [ "$1" = "npm" ] && [ "$2" = "run" ] && [ "$3" = "start" ]; then
   printf '%s\n' "$migration_output"
 
   if [ -n "$LMS_ADMIN_EMAIL" ] && [ -n "$LMS_ADMIN_PASSWORD" ]; then
-    echo "Seeding super admin account from LMS_ADMIN_EMAIL / LMS_ADMIN_PASSWORD..."
+    echo "Checking whether an owner needs to be created..."
     node dist/scripts/seed-admin.js || echo "Warning: admin seed failed — continuing startup"
   else
     echo "Skipping admin seed: LMS_ADMIN_EMAIL / LMS_ADMIN_PASSWORD not set"

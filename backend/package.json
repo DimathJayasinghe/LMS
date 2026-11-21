@@ -13,6 +13,8 @@
     "prisma": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",
+    "owner:add": "node dist/scripts/owner-add.js",
+    "owner:reset-password": "node dist/scripts/owner-reset-password.js",
     "scan-codes:report": "tsx src/scripts/report-scan-code-collisions.ts"
   },
   "keywords": [],

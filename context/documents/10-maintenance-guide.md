@@ -205,3 +205,16 @@ Mock tests do not establish transaction serialization. Run the disposable-stack 
 Limits are per minute and configured by `RATE_LIMIT_GLOBAL_ANON_MAX` (100), `RATE_LIMIT_GLOBAL_USER_MAX` (200), `RATE_LIMIT_LOGIN_ACCOUNT_MAX` (10), `RATE_LIMIT_LOGIN_IP_MAX` (60), `RATE_LIMIT_REGISTER_IP_MAX` (30), and `RATE_LIMIT_REFRESH_MAX` (20). Refresh is excluded from the global bucket. A connected Redis store shares counters; the in-memory fallback is local to the API process.
 
 In the Compose nginx topology, nginx sets `X-Real-IP` to the connecting address and the frontend forwards it only to `INTERNAL_API_URL`; keep the backend port private. If a trusted proxy precedes nginx, configure nginx real-IP handling for that proxy's verified source ranges first. For a Vercel rewrite, the repository's nginx configuration currently reports the rewrite layer as the client. Configure and verify a trusted-source real-IP policy for the actual deployment before relying on per-address limits; do not trust forwarded headers from arbitrary sources. After deployment, send a request through each active topology and compare the logged address to the expected client address.
+
+## Owner account operations
+
+The startup seed creates the initial owner only when the default organization has no owner, including inactive owners. It does not change existing accounts; if the configured email belongs to another account it skips creation. Startup continues when the seed skips. The seed has no built-in credentials: it needs both `LMS_ADMIN_EMAIL` (a valid address) and `LMS_ADMIN_PASSWORD` (8 to 72 bytes), and the operator commands validate the address the same way.
+
+Run the operator commands in an interactive container terminal. Passwords are entered without echo, or a generated password is shown once with `--generate`. Do not put passwords in command arguments.
+
+```bash
+docker compose exec -it backend node dist/scripts/owner-add.js --email owner@example.com
+docker compose exec -it backend node dist/scripts/owner-reset-password.js --email owner@example.com
+```
+
+Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset revokes refresh sessions and both commands record an audit event. Until the Wave 1 settings registry is available, the owner count is not capped; API step-up confirmation and per-request access-token revocation are also deferred.

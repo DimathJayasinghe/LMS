@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Request, Response } from 'express';
+import { Role } from '@prisma/client';
 
 vi.mock('@/config/database', () => ({ prisma: {} }));
 vi.mock('@/config/redis', () => ({ redis: {} }));
@@ -89,4 +91,17 @@ describe('user routes — idempotency wiring', () => {
     expect(controllerIndex).toBeGreaterThanOrEqual(0);
     expect(idempotencyIndex).toBe(controllerIndex - 1);
   });
+});
+
+const roleGate = (role: Role): string => {
+  const gate = handlesFor(userRoutes, 'patch', '/:id/role')[1] as (req: Request, res: Response, next: () => void) => void;
+  let result = '';
+  const res = { status: () => ({ json: (body: { code: string }) => { result = body.code; } }) } as unknown as Response;
+  gate({ user: { userId: 'actor', role } } as Request, res, () => { result = 'allowed'; });
+  return result;
+};
+
+describe('role change route', () => {
+  it('allows the owner', () => expect(roleGate(Role.SUPER_ADMIN)).toBe('allowed'));
+  it.each([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT])('refuses %s', role => expect(roleGate(role)).toBe('FORBIDDEN_ROLE'));
 });

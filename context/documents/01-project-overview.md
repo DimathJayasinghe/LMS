@@ -8,7 +8,7 @@
 
 **Academic LMS** is a Learning Management System for Sri Lankan tuition institutes (A/L and similar classes). It is **deployed for a single organization first** — one tuition institution that employs **several teachers across multiple subjects** — but the codebase is being made **multi-tenant ready** so that serving further institutes later is an onboarding task, not a rewrite. See [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md).
 
-It lets the institution run digitally: teachers schedule and stream lessons (physical, online, or both), publish recorded videos, set exams (online MCQ, PDF upload, or in-class), have markers grade answers, and let front-desk staff manage attendance and monthly payments — all under one owner account per organization. Students pay on the platform, at the front desk, or by bank transfer with an uploaded slip.
+It lets the institution run digitally: teachers schedule and stream lessons (physical, online, or both), publish recorded videos, set exams (online MCQ, PDF upload, or in-class), have markers grade answers, and let front-desk staff manage attendance and monthly payments — under owner accounts for the organization. Students pay on the platform, at the front desk, or by bank transfer with an uploaded slip.
 
 The system targets **~1,200 registered students**, with read-heavy spikes (up to ~1,200 near-simultaneous readers) at moments like result releases. **It is deliberately built to run on one small VPS** — Redis caching absorbs the spikes, so no auto-scaling or cluster is required. See [02-architecture.md](./02-architecture.md) and [09-cost-and-hosting.md](./09-cost-and-hosting.md).
 
@@ -31,11 +31,11 @@ The system targets **~1,200 registered students**, with read-heavy spikes (up to
 
 ## 3. User Roles
 
-Each organization has one owner, many teachers, front-desk staff, markers, and students. A guardian role is planned (roadmap P1) and a platform-operator role (`PLATFORM_ADMIN`) is reserved for the future SaaS operator; neither exists in code yet. Roles are enforced by middleware; exceptions are expressed as resource and target guards, not per-user overrides (the unused `Permission` model is removed, D-IDENTITY-4).
+Each organization has owner accounts, many teachers, front-desk staff, markers, and students. A guardian role is planned (roadmap P1) and a platform-operator role (`PLATFORM_ADMIN`) is reserved for the future SaaS operator; neither exists in code yet. Roles are enforced by middleware; exceptions are expressed as resource and target guards, not per-user overrides (the unused `Permission` model is removed, D-IDENTITY-4).
 
-### 3.1 Super Admin (owner) — one per organization, up to two
+### 3.1 Super Admin (owner)
 - The organization owner. **Global oversight and management within the organization**: manage all users and roles, all subjects/courses, all finances, and all academic data. This is oversight, not impersonation: persona actions such as sitting an exam or submitting marks as a marker stay restricted, and emergency overrides are explicit, reasoned and audited (see the [gap analysis](../../docs/reports/2026-08-20-full-system-gap-analysis.md) §2).
-- One owner per organization by default; a co-owner (`identity.maxOwners` = 2) is added only by an operator CLI (D-IDENTITY-5).
+- One owner per organization by default; additional owners are added only by an operator CLI. The configurable owner cap is deferred to Wave 1 (D-IDENTITY-5).
 
 ### 3.2 Teacher — many
 - A lecturer employed by the institution. Teaches one or more courses (each course belongs to a subject).
