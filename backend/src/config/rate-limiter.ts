@@ -1,7 +1,9 @@
 import rateLimit from 'express-rate-limit';
+import type { Request, Response } from 'express';
 import { RedisStore } from 'rate-limit-redis';
 import { redis } from './redis';
 import { logger } from './logger';
+import { env } from './env';
 import {
   RATE_LIMIT_GLOBAL_MAX,
   RATE_LIMIT_GLOBAL_WINDOW_MS,
@@ -27,6 +29,7 @@ const createLimiter = (
   windowMs: number,
   max: number,
   keyPrefix: string,
+  options: { skipSuccessfulRequests?: boolean; requestWasSuccessful?: (req: Request, res: Response) => boolean } = {},
 ): ReturnType<typeof rateLimit> => {
   // Check if Redis is connected at creation time
   const isRedisReady = redis.status === 'ready' || redis.status === 'connect';
@@ -53,6 +56,7 @@ const createLimiter = (
     standardHeaders: true,  // Return rate limit info in `RateLimit-*` headers
     legacyHeaders: false,   // Disable deprecated `X-RateLimit-*` headers
     store,
+    ...options,
     message: {
       status: 'error',
       message: 'Too many requests. Please try again later.',
@@ -70,6 +74,7 @@ export const createRateLimiters = (): {
   globalLimiter: ReturnType<typeof rateLimit>;
   authLimiter: ReturnType<typeof rateLimit>;
   streamLimiter: ReturnType<typeof rateLimit>;
+  zoomWebhookLimiter: ReturnType<typeof rateLimit>;
 } => ({
   /**
    * Global limiter: applied to all `/api/*` routes.
@@ -91,6 +96,14 @@ export const createRateLimiters = (): {
     RATE_LIMIT_AUTH_MAX,
     'rl:auth:',
   ),
+
+  // Counts every request except signature-verified ones (the verifier sets `zoomVerified`),
+  // so a burst of real participant events at the start of a class is never throttled while
+  // malformed, unsigned and unverified validation requests all count.
+  zoomWebhookLimiter: createLimiter(60 * 1000, env.ZOOM_WEBHOOK_RATE_LIMIT_MAX, 'rl:zoom-webhook:', {
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (_req, res) => res.locals.zoomVerified === true,
+  }),
 
   /**
    * Stream limiter: applied to the signed video-token endpoint.

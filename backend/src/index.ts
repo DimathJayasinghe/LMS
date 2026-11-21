@@ -64,7 +64,7 @@ const bootstrap = async (): Promise<void> => {
 
   // Create rate limiters AFTER Redis connection attempt
   // so they can detect Redis status and choose the right store
-  const { globalLimiter, authLimiter, streamLimiter } = createRateLimiters();
+  const { globalLimiter, authLimiter, streamLimiter, zoomWebhookLimiter } = createRateLimiters();
 
   // ─── Rate Limiting (global) ─────────────────────────────────
   app.use('/api', globalLimiter);
@@ -84,6 +84,8 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/timetable', timetableRoutes);
   app.use('/api/classes', classRoutes);
   app.use('/api/enrollments', enrollmentRoutes);
+  // Throttle the unauthenticated Zoom webhook (on top of the global limiter).
+  app.use('/api/attendance/zoom-webhook', zoomWebhookLimiter);
   app.use('/api/attendance', attendanceRoutes);
   // Extra throttle on the stream-token endpoint (on top of the global limiter).
   app.use('/api/videos/:id/stream', streamLimiter);
