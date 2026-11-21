@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Role } from '@prisma/client';
 import * as ExamController from '@/controllers/exam.controller';
+import * as HallMarksController from '@/controllers/hall-marks.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
-import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import { checkActorIdempotency, checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
 	assignMarkersSchema,
 	replaceMarkersSchema,
@@ -18,6 +19,7 @@ import {
 	previewMarkerAllocationsSchema,
 	confirmMarkerAllocationsSchema,
 } from '@/schemas/exam.schema';
+import { hallMarksSchema } from '@/schemas/hall-marks.schema';
 
 export const examRoutes = Router();
 
@@ -79,6 +81,19 @@ examRoutes.put(
 		next();
 	},
 	ExamController.replaceMarkers,
+);
+
+// ─── Hall Marks (paper exams sat in the hall) ───────────────
+// Actor-scoped idempotency: the response can carry student names, so it must never replay across actors. Dry runs
+// use it too; the screen sends a fresh key for every request.
+examRoutes.put(
+	'/:id/hall-marks',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.MARKER),
+	validateParams(examIdParamSchema),
+	validateBody(hallMarksSchema),
+	checkActorIdempotency,
+	HallMarksController.enterHallMarks,
 );
 
 // ─── List Exams ─────────────────────────────────────────────

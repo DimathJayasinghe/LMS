@@ -15,5 +15,7 @@ export interface AuditLogInput {
 	targetType?: string;
 	targetId?: string;
 	metadata?: Prisma.InputJsonValue;
+	/** Tenant owner of the row; omitted rows take the column default. */
+	organizationId?: string;
 	context: AuditContext;
 }

@@ -68,6 +68,22 @@ export const listAuditLogs = async (query: ListAuditLogsQuery): Promise<Paginate
 	return { data, count };
 };
 
+const toAuditData = (input: AuditLogInput): Prisma.AuditLogUncheckedCreateInput => {
+	const { context, action, description, targetType, targetId, metadata, organizationId } = input;
+	return {
+		action,
+		description: description ?? null,
+		targetType: targetType ?? null,
+		targetId: targetId ?? null,
+		metadata: metadata ?? undefined,
+		...(organizationId ? { organizationId } : {}),
+		ip: context.ip ?? null,
+		userAgent: context.userAgent ?? null,
+		actorId: context.actorId,
+		actorRole: context.actorRole,
+	};
+};
+
 /**
  * Persist an audit log entry. Fire-and-forget — errors are logged but
  * never propagated to the caller.
@@ -77,22 +93,10 @@ export const listAuditLogs = async (query: ListAuditLogsQuery): Promise<Paginate
  * user's action must still succeed. Pino captures the failure for ops.
  */
 export const log = (input: AuditLogInput): void => {
-	const { context, action, description, targetType, targetId, metadata } = input;
+	const { context, action, targetType, targetId } = input;
 
 	prisma.auditLog
-		.create({
-			data: {
-				action,
-				description: description ?? null,
-				targetType: targetType ?? null,
-				targetId: targetId ?? null,
-				metadata: metadata ?? undefined,
-				ip: context.ip ?? null,
-				userAgent: context.userAgent ?? null,
-				actorId: context.actorId,
-				actorRole: context.actorRole,
-			},
-		})
+		.create({ data: toAuditData(input) })
 		.then(() => {
 			logger.debug(
 				{ action, actorId: context.actorId, targetType, targetId },
@@ -105,4 +109,12 @@ export const log = (input: AuditLogInput): void => {
 				'Failed to persist audit log — non-blocking',
 			);
 	});
+};
+
+/**
+ * Persist an audit entry inside the caller's transaction. Unlike `log`, a failure is thrown, so the audited
+ * change and its audit row commit or roll back together (bulk entry of marks, where the trail is part of the change).
+ */
+export const logInTransaction = async (tx: Prisma.TransactionClient, input: AuditLogInput): Promise<void> => {
+	await tx.auditLog.create({ data: toAuditData(input) });
 };
