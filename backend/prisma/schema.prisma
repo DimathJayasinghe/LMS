@@ -112,6 +112,7 @@ enum NotificationType {
   RESULTS_PUBLISHED
   PAYMENT_CONFIRMED
   PAYMENT_OVERRIDDEN
+  FEE_DUE
 }
 
 // EMAIL deliberately omitted — no email-sending infra exists yet (see Progress

@@ -42,6 +42,7 @@ vi.mock('@/config/database', () => ({
 
 vi.mock('@/services/notification.service', () => ({ dispatch }));
 vi.mock('@/services/access.service', () => ({ getCurrentPaymentMonth }));
+vi.mock('@/services/outstanding.service', () => ({ countOutstanding: vi.fn().mockResolvedValue({ count: 0, expected: '0.00' }) }));
 vi.mock('read-excel-file/node', () => ({ readSheet }));
 
 import { bulkUploadPayments, getPaymentsSummary, getFinancialReport, overridePayment, collectEntrancePayment } from './payment.service';
@@ -341,7 +342,7 @@ describe('collectEntrancePayment', () => {
 
 describe('financial report default month', () => {
 	it('uses the actor organization timezone when no month is supplied', async () => {
-		userFindUnique.mockResolvedValue({ organization: { timezone: 'Pacific/Auckland' } });
+		userFindUnique.mockResolvedValue({ organizationId: 'org', organization: { timezone: 'Pacific/Auckland' } });
 		paymentGroupBy.mockResolvedValue([]);
 		queryRaw.mockResolvedValue([]);
 		const report = await getFinancialReport(undefined, {}, { userId: 'owner', role: Role.SUPER_ADMIN });

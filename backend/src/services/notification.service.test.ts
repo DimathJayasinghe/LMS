@@ -107,6 +107,23 @@ describe('dispatch', () => {
 		expect(sendSms).not.toHaveBeenCalled();
 	});
 
+	it('creates the in-app row even when the IN_APP setting is off if the caller forces it, and leaves SMS to its setting', async () => {
+		isChannelEnabled.mockResolvedValue(false);
+
+		await dispatch({ type: NotificationType.FEE_DUE, userId: 'user-1', params: { courseName: 'Physics', paymentMonth: '2026-11' }, forceInApp: true });
+
+		expect(notificationCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ type: NotificationType.FEE_DUE, userId: 'user-1' }) }));
+		expect(sendSms).not.toHaveBeenCalled();
+	});
+
+	it('does not read the IN_APP setting at all when the in-app row is forced', async () => {
+		isChannelEnabled.mockResolvedValue(true);
+
+		await dispatch({ type: NotificationType.FEE_DUE, userId: 'user-1', params: {}, forceInApp: true });
+
+		expect(isChannelEnabled).not.toHaveBeenCalledWith(NotificationType.FEE_DUE, 'IN_APP');
+	});
+
 	it('does nothing on either channel when both are disabled, and does not throw', async () => {
 		isChannelEnabled.mockResolvedValue(false);
 

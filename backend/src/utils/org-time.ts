@@ -24,6 +24,16 @@ const midnightInTz = (year: number, month: number, day: number, tz: string): Dat
   return new Date(guess);
 };
 
+/** The billing month `delta` months away from `month` (`YYYY-MM`). */
+export const shiftMonth = (month: string, delta: number): string => {
+  const [year, monthNumber] = month.split('-').map(Number) as [number, number];
+  return new Date(Date.UTC(year, monthNumber - 1 + delta, 1)).toISOString().slice(0, 7);
+};
+
+/** The `count` billing months ending at (and including) `month`, oldest first. */
+export const monthsEndingAt = (month: string, count: number): string[] =>
+  Array.from({ length: count }, (_, i) => shiftMonth(month, i - count + 1));
+
 /** Start inclusive, end exclusive, in UTC. */
 export const dayRangeInTz = (day: string, tz: string): { start: Date; end: Date } => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new RangeError('Invalid calendar day');
@@ -33,3 +43,6 @@ export const dayRangeInTz = (day: string, tz: string): { start: Date; end: Date 
   const next = new Date(Date.UTC(year, month - 1, date + 1));
   return { start: midnightInTz(year, month, date, tz), end: midnightInTz(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), tz) };
 };
+
+/** The first instant of a billing month in the organization's zone, in UTC. */
+export const monthStartInTz = (month: string, tz: string): Date => dayRangeInTz(`${month}-01`, tz).start;

@@ -22,6 +22,9 @@ import {
 	isPayhereSignatureValid,
 } from '@/utils/payhere';
 import { getCurrentPaymentMonth } from '@/services/access.service';
+import { countOutstanding } from '@/services/outstanding.service';
+import { organizationClockForUser } from '@/services/organization-clock.service';
+import { monthsEndingAt } from '@/utils/org-time';
 import {
 	bulkPaymentRowSchema,
 	type BulkPaymentRow,
@@ -494,20 +497,9 @@ export interface FinancialReport {
 	byCourse: { courseId: string; name: string; year: number | null; collected: string; paidCount: number }[];
 	byTeacher: { teacherId: string; name: string; collected: string; paidCount: number }[];
 	byMethod: { method: PaymentMethod; collected: string; paidCount: number }[];
-	/** Active enrollments with no SUCCESS payment this month. */
+	/** Active enrollments of active courses, students not deactivated, with no SUCCESS payment this month. */
 	outstanding: { count: number; expected: string };
 }
-
-/** The N `YYYY-MM` labels ending at (and including) `month`, oldest first. */
-const monthsEndingAt = (month: string, n: number): string[] => {
-	const [y, m] = month.split('-').map(Number) as [number, number];
-	const labels: string[] = [];
-	for (let i = n - 1; i >= 0; i -= 1) {
-		const d = new Date(Date.UTC(y, m - 1 - i, 1));
-		labels.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
-	}
-	return labels;
-};
 
 const money = (v: unknown): string => new Prisma.Decimal((v as Prisma.Decimal | number | string) ?? 0).toFixed(2);
 
@@ -524,11 +516,8 @@ export const getFinancialReport = async (
 	if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.TEACHER) {
 		throw new AppError('FORBIDDEN', 403, 'You do not have permission to view financial reports.');
 	}
-	if (!month) {
-		const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { organization: { select: { timezone: true } } } });
-		if (!user?.organization) throw new AppError('ORGANIZATION_NOT_FOUND', 404, 'Organization not found.');
-		month = getCurrentPaymentMonth(new Date(), user.organization.timezone);
-	}
+	const { organizationId, timezone } = await organizationClockForUser(actor.userId);
+	month ??= getCurrentPaymentMonth(new Date(), timezone);
 	const trendMonths = monthsEndingAt(month, 12);
 	const teacherId = actor.role === Role.TEACHER ? actor.userId : query.teacherId;
 	const courseId = query.courseId;
@@ -545,7 +534,7 @@ export const getFinancialReport = async (
 		${courseId ? Prisma.sql`AND c.id = ${courseId}` : Prisma.empty}
 	`;
 
-	const [trendRows, byCourseRows, byTeacherRows, methodRows, outstandingRows] = await Promise.all([
+	const [trendRows, byCourseRows, byTeacherRows, methodRows, outstanding] = await Promise.all([
 		prisma.payment.groupBy({
 			by: ['paymentMonth'],
 			where: { status: PaymentStatus.SUCCESS, paymentMonth: { in: trendMonths }, ...paymentScope },
@@ -579,17 +568,7 @@ export const getFinancialReport = async (
 			_sum: { amount: true, refundedAmount: true },
 			_count: { _all: true },
 		}),
-		prisma.$queryRaw<Array<{ cnt: bigint; expected: unknown }>>`
-			SELECT COUNT(*) AS cnt, COALESCE(SUM(c."monthlyFee"), 0) AS expected
-			FROM "Enrollment" e
-			JOIN "Course" c ON c.id = e."courseId"
-			WHERE e."isActive" = true
-			${sqlScope}
-			AND NOT EXISTS (
-				SELECT 1 FROM "Payment" p
-				WHERE p."enrollmentId" = e.id AND p."paymentMonth" = ${month} AND p.status = 'SUCCESS'
-			)
-		`,
+		countOutstanding({ organizationId, timezone, month, courseWhere }),
 	]);
 
 	const trendMap = new Map(trendRows.map((r) => [r.paymentMonth, r]));
@@ -619,9 +598,6 @@ export const getFinancialReport = async (
 		collected: new Prisma.Decimal(r._sum.amount ?? 0).minus(r._sum.refundedAmount ?? 0).toFixed(2),
 		paidCount: r._count._all,
 	}));
-
-	const out = outstandingRows[0];
-	const outstanding = { count: Number(out?.cnt ?? 0), expected: money(out?.expected) };
 
 	return { month, trend, byCourse, byTeacher, byMethod, outstanding };
 };

@@ -251,6 +251,8 @@ export const AUDIT_ACTION = {
 	USER_ACTIVATED: 'USER_ACTIVATED',
 	USER_DEACTIVATED: 'USER_DEACTIVATED',
 	STAFF_ACCOUNT_CREATED: 'STAFF_ACCOUNT_CREATED',
+	FEE_REMINDER_SENT: 'FEE_REMINDER_SENT',
+	OUTSTANDING_EXPORTED: 'OUTSTANDING_EXPORTED',
 	BARCODE_ASSIGNED: 'BARCODE_ASSIGNED',
 
 	// Account setup (NIC photos + institute barcodes)
@@ -362,9 +364,25 @@ export const NOTIFICATION_TEMPLATES = {
 		inApp: 'Your payment for {courseName} ({paymentMonth}) was updated. Status: {status}.',
 		sms: 'Payment for {courseName} {paymentMonth} has been updated. Status: {status}.',
 	},
+	FEE_DUE: {
+		title: 'Fee reminder',
+		inApp: 'Your fee for {courseName} ({paymentMonth}) is due. Please pay at the front desk or online.',
+		sms: 'Fee reminder: {courseName} {paymentMonth} is due. Please pay at the front desk or online.',
+	},
 } as const;
 
 export type NotificationTemplateKey = keyof typeof NOTIFICATION_TEMPLATES;
+
+/**
+ * Whether the SMS channel of a notification type is seeded enabled. The compiler forces an entry for every new type:
+ * the three launch types stay on; later types start off until the owner enables them after a trial week (D-OPS-2).
+ */
+export const NOTIFICATION_SMS_DEFAULTS: Record<NotificationTemplateKey, boolean> = {
+	RESULTS_PUBLISHED: true,
+	PAYMENT_CONFIRMED: true,
+	PAYMENT_OVERRIDDEN: true,
+	FEE_DUE: false,
+};
 
 // ─── Tenancy ─────────────────────────────────────────────────
 
