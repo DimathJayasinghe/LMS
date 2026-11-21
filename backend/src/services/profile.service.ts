@@ -140,7 +140,8 @@ export const changePassword = async (userId: string, input: ChangePasswordInput)
 	const ok = await bcrypt.compare(input.currentPassword, user.password);
 	if (!ok) throw new AppError('INVALID_CREDENTIALS', 401, 'Current password is incorrect.');
 
-	assertCooldown(user.passwordChangedAt, 'PASSWORD_CHANGE_TOO_SOON');
+	// A change forced by a staff reset is exempt from the weekly cooldown.
+	if (!user.mustChangePassword) assertCooldown(user.passwordChangedAt, 'PASSWORD_CHANGE_TOO_SOON');
 
 	const same = await bcrypt.compare(input.newPassword, user.password);
 	if (same) {
@@ -148,13 +149,14 @@ export const changePassword = async (userId: string, input: ChangePasswordInput)
 	}
 
 	const hashed = await bcrypt.hash(input.newPassword, BCRYPT_SALT_ROUNDS);
-	await prisma.user.update({
+	// Bumping the version ends every other session at once; the caller gets a fresh pair at the new version.
+	const { tokenVersion } = await prisma.user.update({
 		where: { id: userId },
-		data: { password: hashed, passwordChangedAt: new Date() },
+		data: { password: hashed, passwordChangedAt: new Date(), mustChangePassword: false, tokenVersion: { increment: 1 } },
+		select: { tokenVersion: true },
 	});
 
-	// Invalidate every session, then hand the current caller a fresh pair.
 	await revokeAllRefreshTokens(userId);
-	const tokens = await issueTokenPair(userId, user.role);
+	const tokens = await issueTokenPair(userId, user.role, tokenVersion);
 	return { tokens };
 };

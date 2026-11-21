@@ -13,6 +13,11 @@ export const createRequestLogger = (baseLogger: Options['logger']) => pinoHttp({
     'req.headers.authorization',
     'req.headers.cookie',
     'res.headers["set-cookie"]',
+    // Bodies are not logged today; these keep a password out of the log if a serializer ever adds them.
+    'req.body.currentPassword',
+    'req.body.newPassword',
+    'req.body.temporaryPassword',
+    'res.body.data.temporaryPassword',
   ],
 });
 

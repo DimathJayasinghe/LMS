@@ -114,6 +114,9 @@ function LoginForm() {
                 />
                 <FieldError>{errors.password?.message}</FieldError>
               </Field>
+              <p className="text-sm text-muted-foreground">
+                Forgot your password? Ask the front desk to reset it.
+              </p>
             </FieldGroup>
 
             <button

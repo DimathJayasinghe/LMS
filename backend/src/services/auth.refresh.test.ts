@@ -38,10 +38,17 @@ import { refreshTokens } from './auth.service';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const sha = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
-const signRefresh = (opts: { secret?: string; expiresIn?: number } = {}) =>
-	jwt.sign({ userId: 'user-1', role: 'STUDENT', jti: crypto.randomUUID() }, opts.secret ?? mockEnv.JWT_REFRESH_SECRET, {
-		expiresIn: opts.expiresIn ?? 3600,
-	});
+const signRefresh = (opts: { secret?: string; expiresIn?: number; tokenVersion?: number | null } = {}) =>
+	jwt.sign(
+		{
+			userId: 'user-1',
+			role: 'STUDENT',
+			jti: crypto.randomUUID(),
+			...(opts.tokenVersion === null ? {} : { tokenVersion: opts.tokenVersion ?? 0 }),
+		},
+		opts.secret ?? mockEnv.JWT_REFRESH_SECRET,
+		{ expiresIn: opts.expiresIn ?? 3600 },
+	);
 
 const activeUser = {
 	id: 'user-1',
@@ -56,6 +63,8 @@ const activeUser = {
 	city: null,
 	deletedAt: null,
 	createdAt: new Date('2026-01-01'),
+	tokenVersion: 0,
+	mustChangePassword: false,
 };
 
 const row = (rotatedAt: Date | null) => ({ id: 'row-1', userId: 'user-1', rotatedAt });
@@ -121,7 +130,6 @@ describe('refreshTokens: first use', () => {
 
 		await expect(refreshTokens(signRefresh())).rejects.toMatchObject({ code: 'INVALID_REFRESH_TOKEN', statusCode: 401 });
 		expect(tokenCreate).not.toHaveBeenCalled();
-		expect(userFindUnique).not.toHaveBeenCalled();
 	});
 
 	it('a count-0 loser whose re-read shows a rotation outside the grace window is reuse', async () => {
@@ -186,6 +194,7 @@ describe('refreshTokens: check order and user state', () => {
 			code: 'INVALID_REFRESH_TOKEN',
 		});
 		expect(tokenFindUnique).not.toHaveBeenCalled();
+		expect(userFindUnique).not.toHaveBeenCalled();
 	});
 
 	it('an expired JWT is refused before any database read', async () => {
@@ -194,10 +203,11 @@ describe('refreshTokens: check order and user state', () => {
 		expect(tokenFindUnique).not.toHaveBeenCalled();
 	});
 
-	it('the token lookup happens before the user lookup', async () => {
-		tokenFindUnique.mockResolvedValue(null);
+	it('reads the account state before the token row, so a stale or inactive session never rotates anything', async () => {
+		userFindUnique.mockResolvedValue({ ...activeUser, tokenVersion: 1 });
 		await refreshTokens(signRefresh()).catch(() => undefined);
-		expect(userFindUnique).not.toHaveBeenCalled();
+		expect(tokenFindUnique).not.toHaveBeenCalled();
+		expect(tokenUpdateMany).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -230,5 +240,47 @@ describe('refreshTokens: opportunistic cleanup', () => {
 			where: { userId: 'user-1', rotatedAt: { lt: secondsAgo(10) } },
 		});
 		expect(revokedAll()).toBe(false);
+	});
+});
+
+describe('refreshTokens: revoked sessions', () => {
+	const staleUser = { ...activeUser, tokenVersion: 1 };
+
+	it('a token from before a revocation answers a plain 401 and does not revoke the newer sessions', async () => {
+		userFindUnique.mockResolvedValue(staleUser);
+		tokenFindUnique.mockResolvedValue(null);
+
+		await expect(refreshTokens(signRefresh({ tokenVersion: 0 }))).rejects.toMatchObject({ code: 'INVALID_REFRESH_TOKEN', statusCode: 401 });
+		expect(revokedAll()).toBe(false);
+		expect(tokenCreate).not.toHaveBeenCalled();
+	});
+
+	it('refuses a stale token even when its row survived a race with the revocation', async () => {
+		userFindUnique.mockResolvedValue(staleUser);
+		tokenFindUnique.mockResolvedValue(row(null));
+
+		await expect(refreshTokens(signRefresh({ tokenVersion: 0 }))).rejects.toMatchObject({ code: 'INVALID_REFRESH_TOKEN' });
+		expect(tokenUpdateMany).not.toHaveBeenCalled();
+		expect(tokenCreate).not.toHaveBeenCalled();
+	});
+
+	it('reads a token with no version claim as version 0, so existing sessions survive the deploy', async () => {
+		tokenFindUnique.mockResolvedValue(row(null));
+		const result = await refreshTokens(signRefresh({ tokenVersion: null }));
+		expect(result.tokens.refreshToken).toBeTruthy();
+	});
+
+	it('a token with no version claim is stale once the account has been revoked', async () => {
+		userFindUnique.mockResolvedValue(staleUser);
+		await expect(refreshTokens(signRefresh({ tokenVersion: null }))).rejects.toMatchObject({ code: 'INVALID_REFRESH_TOKEN' });
+	});
+
+	it('mints the new pair at the version read with the account, and returns the forced-change flag', async () => {
+		userFindUnique.mockResolvedValue({ ...activeUser, tokenVersion: 4, mustChangePassword: true });
+		tokenFindUnique.mockResolvedValue(row(null));
+		const result = await refreshTokens(signRefresh({ tokenVersion: 4 }));
+		expect(jwt.decode(result.tokens.accessToken)).toMatchObject({ tokenVersion: 4 });
+		expect(jwt.decode(result.tokens.refreshToken)).toMatchObject({ tokenVersion: 4 });
+		expect(result.user).toMatchObject({ mustChangePassword: true });
 	});
 });

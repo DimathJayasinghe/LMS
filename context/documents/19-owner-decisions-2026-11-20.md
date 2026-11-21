@@ -692,6 +692,8 @@
 
 **Wave 0 implementation:** The owner cap and API step-up confirmation are deferred to Wave 1 with the settings registry; operator CLI additions are uncapped until then. Live access-token revocation remains F-15; role changes and deactivation revoke refresh tokens.
 
+**Wave 1 implementation (#108, unreleased):** the owner cap is enforced by `owner-add` (`identity.maxOwners`), per-request revocation (F-15) is in place through a per-user session version, and step-up is live for staff password reset (F-03). Step-up for role change and deactivation is still to do.
+
 **Rationale:** Owner lockout is the real risk of a single account with no recovery path; a CLI-only mint and recovery keeps a stolen front-desk or teacher session (or a compromised owner session) from creating a persistent all-powerful account. Password re-entry costs seconds and defeats the unattended-laptop case. The lock closes the race where two owners demote each other.
 
 **Settings and defaults:** identity.maxOwners = 2; identity.stepUp.required = true; identity.stepUp.actions = [ROLE_CHANGE, STAFF_DEACTIVATE, STAFF_CREATE, STAFF_PASSWORD_RESET, ERASURE]; identity.roleChange.reasonRequired = true. Depends on F-15 revocation (D-IDENTITY-6).

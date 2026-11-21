@@ -60,6 +60,8 @@ export interface User {
   /** Cooldown anchors for self email/password changes (see profile.endpoints.md). */
   emailChangedAt?: string | null;
   passwordChangedAt?: string | null;
+  /** Set by a staff-assisted reset: only the change-password screen works until the user chooses a new password. */
+  mustChangePassword?: boolean;
   deletedAt?: string | null;
   createdAt: string;
 }
