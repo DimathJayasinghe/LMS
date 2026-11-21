@@ -167,7 +167,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S4 | Teacher sees own roster and own income only | Partial | Income scoped to self (good, but history rewrites, F-79); roster missing (F-83) |
 | S5 | Front-desk walk-in: register, enroll, cash, card, scan, chase unpaid | Partial | Cash and scan work; no enroll UI, no unpaid list, ambiguous scan resolution (F-11, F-10, F-07) |
 | S6 | Missed class then recording, with a grace period | Partial | Recording works; month-cliff, no grace (F-05) |
-| S7 | Zoom live, recording, automatic attendance | Partial | Live token works; automatic attendance very likely cannot match SDK guests (F-14; by code, Zoom-side behaviour not observed); webhook hardening needed (F-54) |
+| S7 | Zoom live, recording, automatic attendance | Partial | Live token works; automatic attendance very likely cannot match SDK guests (F-14; by code, Zoom-side behaviour not observed); endpoint-validation handling hardened and route rate-limited (F-54, #PR, staging verification pending) |
 | S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher cannot mark; hall marks and ranking absent (F-67, F-13, F-73) |
 | S9 | Parent SMS | Gap | No guardian contact; three events, all to the student (F-25, F-76) |
 | S10 | Low-end phone, bank slip | Planned | Bank slip is in the spec; no upload retry for exam PDFs, shared rate limiter (F-22, F-02) |
@@ -184,7 +184,7 @@ letters are S (hours), M (days), L (a week or more).
 - **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
-  to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually
+  to the course or the student; F-54 Zoom endpoint-validation handling hardened and route rate-limited (#PR, staging verification pending); F-55 production boot check for the keys actually
   used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution; the owner-safety slice
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
 - **Wave 1 — give each role a working day (foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard

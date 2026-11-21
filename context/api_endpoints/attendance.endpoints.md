@@ -183,11 +183,11 @@ Zoom webhook endpoint for `meeting.participant_joined`. Uses upsert to handle re
 	"message": "Webhook processed."
 }
 ```
-*Note: Always returns 200 OK to Zoom to prevent webhook retries, even if the student or meeting isn't found.*
+*Note: A verified participant event returns 200 OK even if the student or meeting is not found.*
 
 **Zoom URL validation (endpoint.url_validation)**
 
-Zoom expects a raw response payload with `plainToken` and `encryptedToken` (no standard wrapper).
+Zoom expects a raw response payload with `plainToken` and `encryptedToken` (no standard wrapper). The token must contain 8–64 ASCII letters, digits, underscores or hyphens. Validation requests with either signature header must pass the same signature and timestamp checks as other events. Other events require both headers and a timestamp within five minutes. The route is limited to 60 requests per minute per IP by default; `ZOOM_WEBHOOK_RATE_LIMIT_MAX` changes that limit. Re-run endpoint validation in Zoom staging after deployment and verify a real participant event before production deployment.
 
 ### GET `/session/:sessionId/reconciliation`
 

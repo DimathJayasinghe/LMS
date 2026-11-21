@@ -2,6 +2,7 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import { redis } from './redis';
 import { logger } from './logger';
+import { env } from './env';
 import {
   RATE_LIMIT_GLOBAL_MAX,
   RATE_LIMIT_GLOBAL_WINDOW_MS,
@@ -70,6 +71,7 @@ export const createRateLimiters = (): {
   globalLimiter: ReturnType<typeof rateLimit>;
   authLimiter: ReturnType<typeof rateLimit>;
   streamLimiter: ReturnType<typeof rateLimit>;
+  zoomWebhookLimiter: ReturnType<typeof rateLimit>;
 } => ({
   /**
    * Global limiter: applied to all `/api/*` routes.
@@ -91,6 +93,8 @@ export const createRateLimiters = (): {
     RATE_LIMIT_AUTH_MAX,
     'rl:auth:',
   ),
+
+  zoomWebhookLimiter: createLimiter(60 * 1000, env.ZOOM_WEBHOOK_RATE_LIMIT_MAX, 'rl:zoom-webhook:'),
 
   /**
    * Stream limiter: applied to the signed video-token endpoint.

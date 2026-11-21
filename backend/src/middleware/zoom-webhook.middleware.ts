@@ -34,14 +34,32 @@ export const verifyZoomWebhook = (
 
   const body = req.body as Record<string, unknown> | undefined;
 
-  // Allow the URL validation event to pass through; it does not always include signature headers.
-  if (body?.event === 'endpoint.url_validation') {
-    next();
+  const isValidation = body?.event === 'endpoint.url_validation';
+  const payload = body?.payload as Record<string, unknown> | undefined;
+  const plainToken = payload?.plainToken;
+  if (isValidation && (typeof plainToken !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(plainToken))) {
+    res.status(400).json({
+      status: 'error',
+      message: 'Invalid Zoom validation payload.',
+      code: 'ZOOM_VALIDATION_INVALID',
+    });
     return;
   }
 
   const timestamp = getZoomHeader(req, 'x-zm-request-timestamp');
   const signature = getZoomHeader(req, 'x-zm-signature');
+
+  const respondToValidation = (): void => {
+    const encryptedToken = createHmac('sha256', env.ZOOM_WEBHOOK_SECRET)
+      .update(plainToken as string)
+      .digest('hex');
+    res.status(200).json({ plainToken, encryptedToken });
+  };
+
+  if (isValidation && timestamp === undefined && signature === undefined) {
+    respondToValidation();
+    return;
+  }
 
   if (!timestamp || !signature) {
     res.status(401).json({
@@ -88,6 +106,11 @@ export const verifyZoomWebhook = (
       message: 'Zoom signature verification failed.',
       code: 'ZOOM_SIGNATURE_INVALID',
     });
+    return;
+  }
+
+  if (isValidation) {
+    respondToValidation();
     return;
   }
 
