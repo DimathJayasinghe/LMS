@@ -74,7 +74,7 @@ describe('resolveStudentByCode', () => {
 	it.each(['A_1', '50%', 'END\\'])('binds %s unchanged in both exact comparisons in one query', async (code) => {
 		await expect(resolveStudentByCode(code)).rejects.toMatchObject({ code: 'BARCODE_NOT_FOUND' });
 		expect(queryRaw).toHaveBeenCalledTimes(1);
-		const [strings, ...values] = queryRaw.mock.calls[0];
+		const [strings, ...values] = queryRaw.mock.calls[0]!;
 		const sql = strings.join('?');
 		expect(sql.match(/upper\((?:\w+\.)?"barcode"\)\s*=\s*upper\(\?\)/gi)).toHaveLength(2);
 		expect(sql).toMatch(/UNION ALL/i);
