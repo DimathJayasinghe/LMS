@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 import { AppError } from '@/utils/app-error';
+import { updateRoleSchema } from '@/schemas/user.schema';
 
 const {
 	findUnique,
@@ -9,6 +10,9 @@ const {
 	studentBarcodeFindUnique,
 	studentBarcodeCreate,
 	transaction,
+	count,
+	deleteMany,
+	withAdvisoryLock,
 	assertScanCodeFree,
 	resolveStudentByCode,
 } = vi.hoisted(() => ({
@@ -18,12 +22,16 @@ const {
 	studentBarcodeFindUnique: vi.fn(),
 	studentBarcodeCreate: vi.fn(),
 	transaction: vi.fn(),
+	count: vi.fn(),
+	deleteMany: vi.fn(),
+	withAdvisoryLock: vi.fn(),
 	assertScanCodeFree: vi.fn(),
 	resolveStudentByCode: vi.fn(),
 }));
 
 const txClient = {
-	user: { findUnique, update },
+	user: { findUnique, update, count },
+	refreshToken: { deleteMany },
 	institute: { findUnique: instituteFindUnique },
 	studentBarcode: { findUnique: studentBarcodeFindUnique, create: studentBarcodeCreate },
 };
@@ -37,10 +45,13 @@ vi.mock('@/config/database', () => ({
 	},
 }));
 
+vi.mock('@/utils/advisory-lock', () => ({ withAdvisoryLock }));
+
 vi.mock('@/services/scan-code.service', () => ({ assertScanCodeFree, resolveStudentByCode }));
 
 import {
 	updateStatus,
+	updateRole,
 	assignBarcode,
 	createMyInstituteBarcode,
 	resolveStudentByBarcode,
@@ -50,6 +61,8 @@ const baseUser = (overrides: Partial<{ id: string; role: Role; barcode: string |
 	id: 'target-id',
 	indexNumber: 5,
 	role: Role.STUDENT,
+	organizationId: 'org-id',
+	deletedAt: null,
 	barcode: null,
 	...overrides,
 });
@@ -58,6 +71,9 @@ const unavailable = () => new AppError('CODE_UNAVAILABLE', 409, 'This code is un
 
 beforeEach(() => {
 	findUnique.mockReset();
+	count.mockReset().mockResolvedValue(2);
+	deleteMany.mockReset().mockResolvedValue({ count: 1 });
+	withAdvisoryLock.mockReset().mockResolvedValue(undefined);
 	update.mockReset();
 	instituteFindUnique.mockReset();
 	studentBarcodeFindUnique.mockReset();
@@ -69,28 +85,28 @@ beforeEach(() => {
 
 describe('updateStatus — privileged-target guard', () => {
 	it('blocks an ADMIN actor from deactivating a SUPER_ADMIN target', async () => {
-		findUnique.mockResolvedValueOnce(baseUser({ role: Role.SUPER_ADMIN }));
+		findUnique.mockResolvedValue(baseUser({ role: Role.SUPER_ADMIN }));
 
 		await expect(
-			updateStatus('target-id', { isActive: false }, Role.ADMIN),
+			updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.ADMIN }),
 		).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
 		expect(update).not.toHaveBeenCalled();
 	});
 
 	it('blocks an ADMIN actor from deactivating another ADMIN target (peer)', async () => {
-		findUnique.mockResolvedValueOnce(baseUser({ role: Role.ADMIN }));
+		findUnique.mockResolvedValue(baseUser({ role: Role.ADMIN }));
 
 		await expect(
-			updateStatus('target-id', { isActive: false }, Role.ADMIN),
+			updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.ADMIN }),
 		).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
 		expect(update).not.toHaveBeenCalled();
 	});
 
 	it('allows an ADMIN actor to deactivate a STUDENT target', async () => {
-		findUnique.mockResolvedValueOnce(baseUser({ role: Role.STUDENT }));
+		findUnique.mockResolvedValue(baseUser({ role: Role.STUDENT }));
 		update.mockResolvedValueOnce(baseUser({ role: Role.STUDENT }));
 
-		await updateStatus('target-id', { isActive: false }, Role.ADMIN);
+		await updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.ADMIN });
 		expect(update).toHaveBeenCalledWith(
 			expect.objectContaining({ data: { deletedAt: expect.any(Date) } }),
 		);
@@ -98,20 +114,20 @@ describe('updateStatus — privileged-target guard', () => {
 
 	it('allows an ADMIN actor to deactivate a TEACHER or MARKER target', async () => {
 		for (const role of [Role.TEACHER, Role.MARKER]) {
-			findUnique.mockResolvedValueOnce(baseUser({ role }));
+			findUnique.mockResolvedValue(baseUser({ role }));
 			update.mockResolvedValueOnce(baseUser({ role }));
 
-			await updateStatus('target-id', { isActive: false }, Role.ADMIN);
+			await updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.ADMIN });
 		}
 		expect(update).toHaveBeenCalledTimes(2);
 	});
 
 	it('allows a SUPER_ADMIN actor to deactivate a SUPER_ADMIN or ADMIN target', async () => {
 		for (const role of [Role.SUPER_ADMIN, Role.ADMIN]) {
-			findUnique.mockResolvedValueOnce(baseUser({ role }));
+			findUnique.mockResolvedValue(baseUser({ role }));
 			update.mockResolvedValueOnce(baseUser({ role }));
 
-			await updateStatus('target-id', { isActive: false }, Role.SUPER_ADMIN);
+			await updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
 		}
 		expect(update).toHaveBeenCalledTimes(2);
 	});
@@ -120,7 +136,7 @@ describe('updateStatus — privileged-target guard', () => {
 		findUnique.mockResolvedValueOnce(null);
 
 		await expect(
-			updateStatus('missing-id', { isActive: false }, Role.ADMIN),
+			updateStatus('missing-id', { isActive: false }, { userId: 'actor-id', role: Role.ADMIN }),
 		).rejects.toMatchObject({ code: 'USER_NOT_FOUND', statusCode: 404 });
 		expect(update).not.toHaveBeenCalled();
 	});
@@ -311,5 +327,113 @@ describe('resolveStudentByBarcode', () => {
 		resolveStudentByCode.mockRejectedValue(new AppError(code, statusCode, 'x'));
 
 		await expect(resolveStudentByBarcode('DUP')).rejects.toMatchObject({ code, statusCode });
+	});
+});
+
+
+describe('owner account safeguards', () => {
+	it.each([Role.SUPER_ADMIN, Role.ADMIN])('forbids self status changes for %s', async (role) => {
+		findUnique.mockResolvedValue(baseUser({ id: 'actor-id', role }));
+		await expect(updateStatus('actor-id', { isActive: false }, { userId: 'actor-id', role })).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+	});
+	it('refuses demotion of the last active owner', async () => {
+		findUnique.mockResolvedValue(baseUser({ role: Role.SUPER_ADMIN }));
+		count.mockResolvedValue(1);
+		await expect(updateRole('target-id', { role: Role.TEACHER }, { userId: 'actor-id', role: Role.SUPER_ADMIN })).rejects.toMatchObject({ code: 'LAST_OWNER', statusCode: 409 });
+	});
+	it('revokes sessions after role changes', async () => {
+		findUnique.mockResolvedValue(baseUser());
+		update.mockResolvedValue(baseUser());
+		await updateRole('target-id', { role: Role.TEACHER }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
+		expect(deleteMany).toHaveBeenCalledWith({ where: { userId: 'target-id' } });
+	});
+});
+
+
+describe('role and status matrix', () => {
+	const actors = [Role.SUPER_ADMIN, Role.ADMIN];
+	const targets = [Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT];
+	const operations = ['deactivate', 'reactivate', Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT] as const;
+	it.each(actors.flatMap(actor => targets.flatMap(target => operations.map(operation => ({ actor, target, operation })))))('$actor manages $target: $operation', async ({ actor, target, operation }) => {
+		findUnique.mockResolvedValue(baseUser({ role: target }));
+		update.mockResolvedValue(baseUser({ role: target }));
+		const action = operation === 'deactivate' || operation === 'reactivate'
+			? updateStatus('target-id', { isActive: operation === 'reactivate' }, { userId: 'actor-id', role: actor })
+			: updateRole('target-id', { role: operation }, { userId: 'actor-id', role: actor });
+		if (actor === Role.ADMIN && (target === Role.ADMIN || target === Role.SUPER_ADMIN)) {
+			await expect(action).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+		} else {
+			await expect(action).resolves.toBeDefined();
+			expect(withAdvisoryLock).toHaveBeenCalled();
+			if (operation !== 'reactivate') expect(deleteMany).toHaveBeenCalled();
+		}
+	});
+	it('rejects the owner role in the request schema', () => {
+		expect(updateRoleSchema.safeParse({ role: Role.SUPER_ADMIN }).success).toBe(false);
+	});
+	it('rejects owner assignment in the service as well', async () => {
+		findUnique.mockResolvedValue(baseUser());
+		await expect(updateRole('target-id', { role: Role.SUPER_ADMIN } as never, { userId: 'actor-id', role: Role.SUPER_ADMIN })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+	});
+	it('privileged-target denial takes precedence over self denial', async () => {
+		findUnique.mockResolvedValue(baseUser({ id: 'actor-id', role: Role.ADMIN }));
+		await expect(updateRole('actor-id', { role: Role.TEACHER }, { userId: 'actor-id', role: Role.ADMIN })).rejects.toMatchObject({ message: 'Only a super admin can modify an admin or super admin account.' });
+	});
+	it('rejects deactivation of the last owner', async () => {
+		findUnique.mockResolvedValue(baseUser({ role: Role.SUPER_ADMIN }));
+		count.mockResolvedValue(1);
+		await expect(updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.SUPER_ADMIN })).rejects.toMatchObject({ code: 'LAST_OWNER' });
+	});
+});
+
+describe('concurrent owner changes', () => {
+	it('serializes changes so one active owner remains', async () => {
+		const users = new Map([
+			['a', baseUser({ id: 'a', role: Role.SUPER_ADMIN })],
+			['b', baseUser({ id: 'b', role: Role.SUPER_ADMIN })],
+		]);
+		let tail = Promise.resolve();
+		transaction.mockImplementation(async (callback: (tx: typeof txClient) => Promise<unknown>) => {
+			let release = () => {};
+			const localTx = {
+				...txClient,
+				user: {
+					findUnique: async ({ where }: { where: { id: string } }) => users.get(where.id),
+					count: async () => [...users.values()].filter(user => user.role === Role.SUPER_ADMIN).length,
+					update: async ({ where, data }: { where: { id: string }; data: { role: Role } }) => {
+						const user = users.get(where.id)!;
+						user.role = data.role;
+						return user;
+					},
+				},
+			};
+			withAdvisoryLock.mockImplementationOnce(async () => {
+				const previous = tail;
+				tail = new Promise<void>(resolve => { release = resolve; });
+				await previous;
+			});
+			try { return await callback(localTx as unknown as typeof txClient); } finally { release(); }
+		});
+		const results = await Promise.allSettled([
+			updateRole('b', { role: Role.TEACHER }, { userId: 'a', role: Role.SUPER_ADMIN }),
+			updateRole('a', { role: Role.TEACHER }, { userId: 'b', role: Role.SUPER_ADMIN }),
+		]);
+		expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+		expect(results.find(result => result.status === 'rejected')).toMatchObject({ reason: { code: 'LAST_OWNER' } });
+	});
+});
+
+describe('role and self-operation boundaries', () => {
+	it.each([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT])('allows an owner to assign %s to another account', async (role) => {
+		findUnique.mockResolvedValue(baseUser());
+		update.mockResolvedValue(baseUser({ role }));
+		await expect(updateRole('target-id', { role }, { userId: 'actor-id', role: Role.SUPER_ADMIN })).resolves.toMatchObject({ role });
+	});
+	it.each(['role', 'deactivate', 'reactivate'] as const)('rejects self %s for an owner', async (operation) => {
+		findUnique.mockResolvedValue(baseUser({ id: 'actor-id', role: Role.SUPER_ADMIN }));
+		const action = operation === 'role'
+			? updateRole('actor-id', { role: Role.TEACHER }, { userId: 'actor-id', role: Role.SUPER_ADMIN })
+			: updateStatus('actor-id', { isActive: operation === 'reactivate' }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
+		await expect(action).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
 	});
 });

@@ -1,5 +1,6 @@
+import { unstable_rethrow } from "next/navigation";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { CalendarDays, QrCode } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { ComingSoon } from "@/components/custom/ComingSoon";
@@ -7,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { AttendanceQr } from "./_components/AttendanceQr";
 import { AttendanceReport } from "./_components/AttendanceReport";
 import { StaffScanner } from "./_components/StaffScanner";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { attendanceSourceLabel } from "@/lib/attendance";
-import type { ApiList, ApiSuccess, AttendanceRecord, Course, Institute, User } from "@/lib/types";
+import type { ApiList, AttendanceRecord, Course, Institute } from "@/lib/types";
 
 export const metadata = { title: "Attendance · LMS" };
 
@@ -22,24 +23,19 @@ const dateFmt = new Intl.DateTimeFormat("en-LK", {
 export default async function AttendancePage() {
   const cookie = (await cookies()).toString();
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
 
   // Front-desk gets the entrance scanner; SUPER_ADMIN also gets recovery reports.
   if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
     const [classes, institutes] = await Promise.all([
-      api
-        .get<ApiList<Course>>("/classes", { cookie })
+      guard401(api
+        .get<ApiList<Course>>("/classes", { cookie }))
         .then((r) => r.data)
-        .catch(() => [] as Course[]),
-      api
-        .get<ApiList<Institute>>("/institutes", { cookie })
+        .catch((error) => { unstable_rethrow(error); return [] as Course[]; }),
+      guard401(api
+        .get<ApiList<Institute>>("/institutes", { cookie }))
         .then((r) => r.data.filter((institute) => institute.isActive))
-        .catch(() => [] as Institute[]),
+        .catch((error) => { unstable_rethrow(error); return [] as Institute[]; }),
     ]);
     if (user.role === "ADMIN") return (
       <div className="mx-auto max-w-5xl">
@@ -68,10 +64,10 @@ export default async function AttendancePage() {
   }
 
   if (user.role === "TEACHER") {
-    const classes = await api
-      .get<ApiList<Course>>("/classes", { cookie })
+    const classes = await guard401(api
+      .get<ApiList<Course>>("/classes", { cookie }))
       .then((result) => result.data.filter((course) => course.teacherId === user.id))
-      .catch(() => [] as Course[]);
+      .catch((error) => { unstable_rethrow(error); return [] as Course[]; });
 
     return (
       <div className="mx-auto max-w-5xl">
@@ -96,11 +92,12 @@ export default async function AttendancePage() {
   let history: AttendanceRecord[] = [];
   try {
     history = (
-      await api.get<ApiList<AttendanceRecord>>(`/attendance/student/${user.id}?limit=50`, {
+      await guard401(api.get<ApiList<AttendanceRecord>>(`/attendance/student/${user.id}?limit=50`, {
         cookie,
-      })
+      }))
     ).data;
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     /* non-fatal — show the code even if history can't load */
   }
 

@@ -1,13 +1,14 @@
+import { unstable_rethrow } from "next/navigation";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Button } from "@/components/ui/button";
 import ExamCard, { type ExamCardState } from "./_components/ExamCard";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { cn } from "@/lib/utils";
-import type { ApiList, ApiSuccess, Course, Exam, MySubmission, User } from "@/lib/types";
+import type { ApiList, Course, Exam, MySubmission } from "@/lib/types";
 
 export const metadata = { title: "Exams · LMS" };
 
@@ -32,21 +33,14 @@ export default async function ExamsPage({
     : "all";
   const query = active === "all" ? "" : `?status=${active}`;
 
-  let user: User;
-  let exams: Exam[];
-  let courses: Course[];
-  try {
-    const [me, examList, courseList] = await Promise.all([
-      api.get<ApiSuccess<User>>("/auth/me", { cookie }),
-      api.get<ApiList<Exam>>(`/exams${query}`, { cookie }),
-      api.get<ApiList<Course>>("/classes", { cookie }),
-    ]);
-    user = me.data;
-    exams = examList.data;
-    courses = courseList.data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const [me, examList, courseList] = await Promise.all([
+    requireUser(cookie),
+    guard401(api.get<ApiList<Exam>>(`/exams${query}`, { cookie })),
+    guard401(api.get<ApiList<Course>>("/classes", { cookie })),
+  ]);
+  const user = me;
+  const exams = examList.data;
+  const courses = courseList.data;
 
   // Exams carry only `courseId`; resolve names from the course list.
   const courseName = new Map(courses.map((c) => [c.id, c.name]));
@@ -56,11 +50,12 @@ export default async function ExamsPage({
   const stateByExam = new Map<string, ExamCardState>();
   if (user.role === "STUDENT") {
     try {
-      const mine = await api.get<ApiList<MySubmission>>("/submissions/mine", { cookie });
+      const mine = await guard401(api.get<ApiList<MySubmission>>("/submissions/mine", { cookie }));
       for (const s of mine.data) {
         stateByExam.set(s.examId, s.published ? "result" : "submitted");
       }
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       // Leave hints off if submissions can't be loaded.
     }
   }

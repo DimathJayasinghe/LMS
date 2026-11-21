@@ -231,7 +231,7 @@ A deactivated or non-student holder is still returned, as before.
 
 ### PATCH `/:id/role`
 
-Updates the user's role. ADMIN only.
+Updates the user's role. Only SUPER_ADMIN may call this endpoint. The API cannot assign SUPER_ADMIN. A caller cannot change their own role, and the last active owner cannot be demoted. A role change revokes refresh sessions; existing access tokens expire normally until per-request revocation is implemented.
 
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
 keys return 400; replaying the same key returns the original stored response.
@@ -256,9 +256,11 @@ keys return 400; replaying the same key returns the original stored response.
 
 **Errors**
 
-- 400 validation error
+- 400 validation error, including attempted owner assignment
 - 401 auth middleware error
 - 403 forbidden (role guard)
+- 403 `FORBIDDEN` for self changes
+- 409 `LAST_OWNER` when the last active owner would be demoted
 - 404 `USER_NOT_FOUND` (service error shape)
 
 ### PATCH `/:id/status`
@@ -268,12 +270,7 @@ Activates or deactivates a user.
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
 keys return 400; replaying the same key returns the original stored response.
 
-> **Privileged-target guard (fixed 2026-07-10):** an `ADMIN` (front-desk) actor can no longer
-> change the status of an `ADMIN` or `SUPER_ADMIN` target — only `SUPER_ADMIN` can. Previously
-> the route was gated only by `requireRole(SUPER_ADMIN, ADMIN)` with no check on the *target's*
-> role, so front-desk could deactivate a super-admin account (this happened for real — see
-> `AuditLog`). The check lives in `UserService.updateStatus` via `assertCanManagePrivilegedTarget`,
-> shared with `PATCH /:id/barcode` below (same actor/target pattern, same fix).
+> An ADMIN cannot change an ADMIN or SUPER_ADMIN target. Nobody can change their own status; the last active SUPER_ADMIN cannot be deactivated. Deactivation revokes refresh sessions; existing access tokens expire normally until per-request revocation is implemented.
 
 **Request body**
 
@@ -298,7 +295,8 @@ keys return 400; replaying the same key returns the original stored response.
 - 400 validation error
 - 401 auth middleware error
 - 403 forbidden (role guard)
-- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`
+- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`, or the target is the actor
+- 409 `LAST_OWNER` when the last active owner would be deactivated
 - 404 `USER_NOT_FOUND` (service error shape)
 
 ### PATCH `/:id/barcode`

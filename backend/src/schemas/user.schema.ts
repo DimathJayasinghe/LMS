@@ -27,7 +27,7 @@ export const userIdParamSchema = z.object({
 
 // ─── Mutations ─────────────────────────────────────────────
 export const updateRoleSchema = z.object({
-	role: z.nativeEnum(Role),
+	role: z.enum([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT]),
 });
 
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;

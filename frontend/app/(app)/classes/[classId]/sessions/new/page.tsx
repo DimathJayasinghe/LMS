@@ -1,11 +1,10 @@
+import { requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { SessionForm } from "./_components/SessionForm";
-import { api } from "@/lib/api";
-import type { ApiSuccess, User } from "@/lib/types";
 
 export const metadata = { title: "New session · LMS" };
 
@@ -17,12 +16,7 @@ export default async function NewSessionPage({
   const cookie = (await cookies()).toString();
   const { classId } = await params;
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
   if (user.role !== "TEACHER" && user.role !== "SUPER_ADMIN") redirect(`/classes/${classId}`);
 
   return (

@@ -132,7 +132,7 @@ Most security here costs nothing but discipline:
 
 - HTTPS everywhere (Let's Encrypt + Vercel).
 - Secrets only in `backend/.env` on the box (Docker `env_file`), never in git.
-- Helmet + strict CORS + Redis-backed rate limiting (auth 10/min/IP).
+- Helmet + strict CORS + Redis-backed rate limiting (per-user and per-address buckets; see doc 10).
 - JWT in HTTP-only cookies; refresh tokens hashed + rotated with reuse detection.
 - Content gated per enrollment + paid month; Bunny token-authenticated embed (+ MediaCage DRM where enabled) + watermark; server-signed Zoom join.
 - Cloudflare proxy in front of the VPS = free WAF + DDoS absorption.

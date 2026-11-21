@@ -1,7 +1,8 @@
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
+import { withAdvisoryLock } from '@/utils/advisory-lock';
 import { AppError } from '@/utils/app-error';
-import { NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
+import { DEFAULT_ORGANIZATION_ID, NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { assertScanCodeFree, resolveStudentByCode } from '@/services/scan-code.service';
 import { formatLmsBarcode } from '@/utils/scan-code';
@@ -143,41 +144,32 @@ const assertCanManagePrivilegedTarget = (actorRole: Role, targetRole: Role): voi
 	}
 };
 
-export const updateRole = async (id: string, input: UpdateRoleInput): Promise<SafeUser> => {
-	const user = await prisma.user.findUnique({ where: { id } });
+type Actor = { userId: string; role: Role };
 
-	if (!user) {
-		throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
-	}
-
-	return prisma.user.update({
-		where: { id },
-		data: { role: input.role },
-		select: userSelect,
+const changeUser = async (id: string, actor: Actor, change: { role: Role } | { isActive: boolean }): Promise<SafeUser> => {
+	return prisma.$transaction(async (tx) => {
+		const initial = await tx.user.findUnique({ where: { id } });
+		if (!initial) throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
+		const organizationId = initial.organizationId ?? DEFAULT_ORGANIZATION_ID;
+		await withAdvisoryLock(tx, 'owner', organizationId, 'owner');
+		const user = await tx.user.findUnique({ where: { id } });
+		if (!user) throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
+		assertCanManagePrivilegedTarget(actor.role, user.role);
+		if (actor.userId === id) throw new AppError('FORBIDDEN', 403, 'Cannot change your own role or status.');
+		if ('role' in change && change.role === Role.SUPER_ADMIN) throw new AppError('FORBIDDEN', 403, 'Owner accounts are managed by an operator.');
+		const removesOwner = user.role === Role.SUPER_ADMIN && user.deletedAt === null && ('role' in change ? change.role !== Role.SUPER_ADMIN : !change.isActive);
+		if (removesOwner && await tx.user.count({ where: { organizationId: user.organizationId, role: Role.SUPER_ADMIN, deletedAt: null } }) <= 1) {
+			throw new AppError('LAST_OWNER', 409, 'The last active owner cannot be changed.');
+		}
+		const updated = await tx.user.update({ where: { id }, data: 'role' in change ? { role: change.role } : { deletedAt: change.isActive ? null : new Date() }, select: userSelect });
+		if ('role' in change || !change.isActive) await tx.refreshToken.deleteMany({ where: { userId: id } });
+		return updated;
 	});
 };
 
-export const updateStatus = async (
-	id: string,
-	input: UpdateStatusInput,
-	actorRole: Role,
-): Promise<SafeUser> => {
-	const user = await prisma.user.findUnique({ where: { id } });
+export const updateRole = async (id: string, input: UpdateRoleInput, actor: Actor): Promise<SafeUser> => changeUser(id, actor, input);
 
-	if (!user) {
-		throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
-	}
-
-	assertCanManagePrivilegedTarget(actorRole, user.role);
-
-	const deletedAt = input.isActive ? null : new Date();
-
-	return prisma.user.update({
-		where: { id },
-		data: { deletedAt },
-		select: userSelect,
-	});
-};
+export const updateStatus = async (id: string, input: UpdateStatusInput, actor: Actor): Promise<SafeUser> => changeUser(id, actor, input);
 
 export const assignBarcode = async (
 	id: string,

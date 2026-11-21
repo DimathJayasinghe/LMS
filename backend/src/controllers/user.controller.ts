@@ -52,7 +52,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response): Prom
 
 	// Fetch before state for audit metadata
 	const before = await UserService.getUserById(id);
-	const user = await UserService.updateRole(id, input);
+	const user = await UserService.updateRole(id, input, req.user!);
 
 	void AuditService.log({
 		action: AUDIT_ACTION.ROLE_CHANGED,
@@ -73,7 +73,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response): Prom
 export const updateStatus = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = userIdParamSchema.parse(req.params);
 	const input = req.body as UpdateStatusInput;
-	const user = await UserService.updateStatus(id, input, req.user!.role);
+	const user = await UserService.updateStatus(id, input, req.user!);
 
 	void AuditService.log({
 		action: input.isActive ? AUDIT_ACTION.USER_ACTIVATED : AUDIT_ACTION.USER_DEACTIVATED,

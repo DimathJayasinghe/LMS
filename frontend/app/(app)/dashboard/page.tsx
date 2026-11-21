@@ -1,11 +1,9 @@
+import { requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { api } from "@/lib/api";
 import { navForRole } from "@/lib/nav";
-import type { ApiSuccess, User } from "@/lib/types";
 import { formatRole } from "@/lib/utils";
 
 // One-line descriptions for the dashboard quick links, keyed by route.
@@ -24,12 +22,7 @@ const DESCRIPTIONS: Record<string, string> = {
 export default async function DashboardPage() {
   const cookie = (await cookies()).toString();
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
 
   const links = navForRole(user.role)
     .flatMap((section) => section.items)

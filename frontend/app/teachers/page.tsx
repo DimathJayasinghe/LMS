@@ -2,7 +2,7 @@ import { User } from "lucide-react";
 import Nav from "@/components/custom/Nav";
 import Footer from "@/components/custom/Footer";
 import ScrollReveal from "@/app/home/_components/ScrollReveal";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import type { ApiList, PublicCourse } from "@/lib/types";
 
 export const metadata = { title: "Teachers · LMS" };

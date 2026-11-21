@@ -62,7 +62,7 @@ Enforcement has three layers, and the gaps are always between them:
 
 | Role | Scope as implemented | Where it leaks or is thin |
 |---|---|---|
-| `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28) |
+| `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28). Both fixed in #102 (unreleased); owner cap and step-up wait for Wave 1 |
 | `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Cannot mark own exam (F-67). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
 | `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
 | `MARKER` | Assigned exams or audiences only for list, get and grade | Sees full student identity on every script (F-74). Refused on recording and attendance reads (F-04, F-09 fixed in Wave 0) |

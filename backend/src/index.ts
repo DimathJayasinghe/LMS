@@ -64,7 +64,8 @@ const bootstrap = async (): Promise<void> => {
 
   // Create rate limiters AFTER Redis connection attempt
   // so they can detect Redis status and choose the right store
-  const { globalLimiter, authLimiter, streamLimiter, zoomWebhookLimiter } = createRateLimiters();
+  const limiters = createRateLimiters();
+  const { globalLimiter, streamLimiter, zoomWebhookLimiter } = limiters;
 
   // ─── Rate Limiting (global) ─────────────────────────────────
   app.use('/api', globalLimiter);
@@ -75,7 +76,7 @@ const bootstrap = async (): Promise<void> => {
   });
 
   // ─── API Routes ──────────────────────────────────────────────
-  app.use('/api/auth', createAuthRouter(authLimiter));
+  app.use('/api/auth', createAuthRouter(limiters));
 
   // ─── User Management ─────────────────────────────────────────
   app.use('/api/users', userRoutes);
