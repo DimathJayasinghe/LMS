@@ -115,6 +115,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | POST | `/:id/markers/preview` | SUPER_ADMIN, TEACHER (own) | Resolve direct/group sources to exact scoped grants; returns minimal marker identities, ungraded counts, diff and digest. |
 | PUT | `/:id/markers` | SUPER_ADMIN, TEACHER (own) | Confirm a scoped preview using digest/revisions/reason and `Idempotency-Key`; legacy `{markerIds}` remains only for null-paper-revision exams. |
 | GET | `/:id/markers/history` | SUPER_ADMIN, TEACHER (own) | Immutable scoped-allocation revision history. |
+| PUT | `/:id/hall-marks` | SUPER_ADMIN, TEACHER (own), MARKER (assigned) | Check or save marks for a paper exam sat in the hall, by index number. `Idempotency-Key` required. |
 
 ## Reusable Marker Groups
 
@@ -426,6 +427,85 @@ checked again before every replay; scoped confirmation bypasses the generic resp
 `digest`, `sourceState`, `beforeState`, `afterState`, `createdAt`, and actor `{id, name}`, plus `count`.
 The full internal version evidence is retained in the database. History rejects legacy exams with
 `409 SCOPED_MARKER_ALLOCATIONS_REQUIRED`.
+
+### PUT `/:id/hall-marks`
+
+Enter marks for students who sat the paper in the hall, by index number. Eligible exams: an `INCLASS` exam
+(any student with an active enrollment in the course), or a scoped exam (`paperRevisionId` set) for students whose
+audience is `PHYSICAL`. Any other exam returns `400 EXAM_NOT_HALL_ELIGIBLE`. Authority matches entering marks one at a
+time: the owning teacher, the owner, or a marker assigned to the exam (for a scoped exam, per row, through the
+marker's audience grants). Front-desk `ADMIN` and `STUDENT` cannot call it. Not allowed once results are published.
+
+`Idempotency-Key` (UUID) is required, dry runs included. Replays are scoped to the caller, so send a fresh key for
+every request: a 4xx reply is replayed for the same key.
+
+**Request body**
+
+```json
+{
+  "rows": [{ "indexNumber": 101, "marks": 78 }, { "indexNumber": 102, "marks": 64 }],
+  "dryRun": true
+}
+```
+
+`dryRun` is required. At most `exams.hallMarks.maxRowsPerBatch` rows (owner setting, default 500; the schema ceiling
+is 10000). `marks` must be a whole number from 0 to the exam total: marks are stored as integers, so a decimal is
+refused as `OUT_OF_RANGE` whatever `exams.hallMarks.allowDecimal` says (that setting has no effect until marks storage
+supports decimals). Students are looked up through the exam's course roster only, never a global search.
+
+**Dry run** (`dryRun: true`) judges every row and writes nothing: no submission, no audit row.
+
+**Per-row `status`**
+
+| Status | Meaning |
+| --- | --- |
+| `WILL_CHANGE` | New or different marks; `before` (null when new) and `after` are returned. |
+| `OK` | The student already has exactly these marks; nothing is written. |
+| `UNKNOWN_INDEX` | No active student with this index number is enrolled in the exam's course. |
+| `NOT_ELIGIBLE` | Scoped exam and the student's audience is not `PHYSICAL` (or the student has none). |
+| `NOT_ASSIGNED` | Marker without a grant for the student's audience (scoped exams). |
+| `DUPLICATE_IN_BATCH` | The index number already appeared earlier in the list; the first occurrence is kept. |
+| `OUT_OF_RANGE` | Not a whole number, below 0, or above the exam total. |
+| `ONLINE_SUBMISSION_EXISTS` | The student has an online submission (any state); grade it with `PATCH /submissions/:id/marks`. |
+| `MARKS_SET_BY_TEACHER` | A marker cannot change marks a teacher or the owner set. Repeating the same value is `OK`. |
+
+Students who were absent are simply left out of the list: no row is created and no zero is invented.
+
+**Success (200)**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "dryRun": true,
+    "applied": false,
+    "counts": { "total": 2, "changed": 2, "unchanged": 0, "rejected": 0 },
+    "rows": [
+      { "line": 1, "indexNumber": 101, "marks": 78, "status": "WILL_CHANGE", "before": null, "after": 78, "name": "Nimal" }
+    ]
+  },
+  "message": "Checked. Nothing was saved yet."
+}
+```
+
+`name` is returned to `TEACHER` and `SUPER_ADMIN` only; a marker sees index numbers and statuses. The response is
+`Cache-Control: no-store`.
+
+**Real run** (`dryRun: false`) re-judges every row inside one serializable transaction under a per-exam advisory
+lock, with the exam row held so a publish waits. If every row is `OK` or `WILL_CHANGE` it writes all changed rows as
+`COMPLETED` submissions with `source = HALL`, no answers, `marks`, `gradedAt` and `gradedById`, plus one
+`HALL_MARKS_ENTERED` audit row in the same transaction (counts and `{ indexNumber, before, after }` for changed rows,
+no names). If any row has another status, nothing is written and the reply is `409 HALL_MARKS_REJECTED` with the same
+`data` shape and `applied: false`. Running the same list again changes nothing and writes no audit row.
+
+**Errors**
+
+- 400 validation error (including a missing `dryRun`) or missing `Idempotency-Key`
+- 400 `EXAM_NOT_HALL_ELIGIBLE`, 400 `TOO_MANY_ROWS`
+- 401 auth middleware error
+- 403 `FORBIDDEN_ROLE` (route guard), `FORBIDDEN_COURSE` (teacher of another course), `MARKER_NOT_ASSIGNED`
+- 404 `EXAM_NOT_FOUND` (also when the exam was deleted during the request)
+- 409 `RESULTS_ALREADY_PUBLISHED`, `HALL_MARKS_REJECTED`, `HALL_MARKS_CONFLICT` (another change ran at the same time; retry)
 
 ### POST `/:id/assign-markers`
 

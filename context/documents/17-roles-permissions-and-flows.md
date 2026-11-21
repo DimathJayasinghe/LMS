@@ -88,7 +88,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Scan or mark attendance | ✔ | read own course | ✔ | – | own QR; video flag (F-24) |
 | Create exam, assign markers | ✔ | ✔ own | – | – | – |
 | Enter marks | ✔ (#105) | ✔ own course (F-67, #105) | – | ✔ assigned | – |
-| Enter hall (`INCLASS`) marks | – | – | – | – | no path for anyone (F-13) |
+| Enter hall (`INCLASS`) marks | ✔ (#109) | ✔ own course (#109) | – | ✔ assigned (#109) | – |
 | Publish results, post-publish correction | ✔ | ✔ own | – | – | read own |
 | Roster of enrolled students | ✔ | **– (F-83)** | ✔ | – | – |
 | Create staff account | **no flow (F-21)** | – | – | – | – |
@@ -102,7 +102,7 @@ This table is the current state. The proposed extra authority for the teacher an
 attendance → upload recording → set monthly test → marker marks → publish → see income.
 *Breaks:* rescheduling or disabling a slot leaves ghost or duplicate sessions (F-48, F-49); students are not
 notified of session changes (F-51); no holiday or Poya calendar (F-50); no roster or "who has not paid"
-(F-83; only the exam-configuration eligible-students list exists); cannot mark own exam (F-67); hall marks cannot be entered (F-13); income history follows the *current*
+(F-83; only the exam-configuration eligible-students list exists); cannot mark own exam (F-67, fixed in #105); income history follows the *current*
 teacher after reassignment (F-79); the owner cannot cleanly offboard a teacher who owns a course (F-82).
 
 **Student: join and learn.** Register → account setup → enroll → pay → watch or join live → attend → sit exam
@@ -169,7 +169,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S5 | Front-desk walk-in: register, enroll, cash, card, scan, chase unpaid | Partial | Cash and scan work; no enroll UI, no unpaid list, no search fallback beside the scanner for an ambiguous code (F-11, F-10; F-07 resolver fixed in Wave 0) |
 | S6 | Missed class then recording, with a grace period | Partial | Recording works; month-cliff, no grace (F-05) |
 | S7 | Zoom live, recording, automatic attendance | Partial | Live token works; automatic attendance very likely cannot match SDK guests (F-14; by code, Zoom-side behaviour not observed); endpoint-validation handling hardened and route rate-limited (F-54, #101, staging verification pending) |
-| S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher cannot mark; hall marks and ranking absent (F-67, F-13, F-73) |
+| S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher and owner can mark and enter hall marks since #105 and #109; ranking absent (F-73) |
 | S9 | Parent SMS | Gap | No guardian contact; three events, all to the student (F-25, F-76) |
 | S10 | Low-end phone, bank slip | Planned | Bank slip is in the spec; no upload retry for exam PDFs, shared rate limiter (F-22, F-02) |
 | S11 | Staff turnover and deactivation | Partial | Sessions end on the next request since #108 (F-15, unreleased); no handover check (F-32, F-82) |
@@ -189,8 +189,8 @@ letters are S (hours), M (days), L (a week or more).
   used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution; the owner-safety slice
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
 - **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
-  and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
-  entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset (done, #108) and F-21 staff creation; F-104 timetable-generated classes
+  and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking (done, #105) and F-13 hall-mark
+  entry (done, #109); F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset (done, #108) and F-21 staff creation; F-104 timetable-generated classes
   that can go live (a live-checked S fix; done in #107, unreleased); F-127 read-only owner console.
 - **Wave 2 — make access coherent (decisions made, doc 19; sub-order 2a enrollment migration with HYBRID, 2b money core and single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority):** the single content gate with mode and
   payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105 residual: session branch), money and enrollment lifecycle (F-59 to F-65, F-91, F-93, F-94),

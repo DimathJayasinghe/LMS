@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExamStatusBadge } from "@/components/features/ExamStatusBadge";
 import { ExamNotice } from "../../exams/[examId]/_components/ExamNotice";
 import { GradeSubmissionRow } from "./_components/GradeSubmissionRow";
+import { HallMarksEntry } from "./_components/HallMarksEntry";
 import { MarkerAssignmentPanel } from "./_components/MarkerAssignmentPanel";
 import { PublishResultsButton } from "./_components/PublishResultsButton";
 import { api } from "@/lib/api-server";
@@ -69,6 +70,11 @@ export default async function GradeExamPage({
 
   const status = getExamStatus(exam);
   const canPublish = user.role === "SUPER_ADMIN" || user.role === "TEACHER";
+  // Paper sat in the hall: an in-class exam, or a scoped exam (its physical audiences). Not after publication.
+  const canEnterHallMarks =
+    !exam.isPublished &&
+    (exam.type === "INCLASS" || Boolean(exam.paperRevisionId)) &&
+    (canPublish || user.role === "MARKER");
   const graded = submissions?.filter((s) => s.marks !== null).length ?? 0;
   const total = submissions?.length ?? 0;
   const [availableMarkers, assignedMarkers] = canPublish
@@ -118,6 +124,7 @@ export default async function GradeExamPage({
               assignments={assignedMarkers}
             />
           )}
+          {canEnterHallMarks && <HallMarksEntry examId={examId} totalMarks={exam.totalMarks} />}
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-5 py-3">
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{graded}</span> of{" "}

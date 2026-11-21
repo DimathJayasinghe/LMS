@@ -122,7 +122,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-EXM-04 | Anti-cheat (shuffle, tab-switch detection) | Planned | Roadmap P2 "Academic integrity" |
 | R-EXM-05 | Reusable question bank by unit/difficulty/past paper | Planned | Roadmap P1 |
 | R-EXM-06 | Marking workflow, marker groups | Done | Assigned markers, owning teachers and owners enter marks; scoped allocations with preview/confirm/history (E2, #85) done; physical-result entry next |
-| R-EXM-07 | Physical-paper marks entered by staff | Planned | Tracker 2026-09-06: Phase E must add the staff API. Audit F-13: `INCLASS` exams are offered in the UI today with no entry path, so this is a live dead end, not only a future feature |
+| R-EXM-07 | Physical-paper marks entered by staff | Done (#109, unreleased: `PUT /exams/:id/hall-marks`, dry run then save, all rows or none; marks are whole numbers, decimals need a column change) | Tracker 2026-09-06: Phase E must add the staff API. Audit F-13: `INCLASS` exams are offered in the UI today with no entry path, so this is a live dead end, not only a future feature |
 | R-EXM-08 | Rankings and percentiles | Planned | Roadmap P1 "Gradebook" |
 | R-EXM-09 | Student progress charts and weak-topic analysis | Planned | Roadmap P2 "Learning analytics" |
 | R-EXM-10 | Shared or separate exam instances per audience | Partial | Exam papers, revisions, audiences and participants are merged on `dev`; the design and delivery plan are in `docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md` and the matching plan; scoped allocations are merged, physical-result entry and the guided workflow remain |

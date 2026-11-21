@@ -111,7 +111,13 @@ export default async function ExamDetailPage({
       />
     );
   } else if (exam.type === "INCLASS" && !mySub) {
-    content = (
+    content = exam.isPublished ? (
+      <ExamNotice
+        icon={FileText}
+        title="Absent"
+        message="Results are published and no mark was entered for you, so you are recorded as absent. Contact your teacher if this is a mistake."
+      />
+    ) : (
       <ExamNotice
         icon={FileText}
         title="In-class exam"

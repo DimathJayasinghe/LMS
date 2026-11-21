@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 
-const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindFirst, userFindUnique, settingsFindUnique } = vi.hoisted(() => ({
+const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindFirst, userFindUnique, settingsFindUnique, grantFindMany } = vi.hoisted(() => ({
+	grantFindMany: vi.fn(),
 	enrollmentFindFirst: vi.fn(),
 	paymentFindFirst: vi.fn(),
 	markerAssignmentFindUnique: vi.fn(),
@@ -20,17 +21,19 @@ vi.mock('@/config/database', () => ({
 		payment: { findFirst: paymentFindFirst },
 	markerAssignment: { findUnique: markerAssignmentFindUnique, findFirst: markerAssignmentFindFirst },
 	exam: { findUnique: examFindUnique },
+	markerAssignmentAudience: { findMany: grantFindMany },
 	examParticipant: { findFirst: participantFindFirst },
 	},
 }));
 
-import { assertMarkerAssignedToExam, assertMarkerAssignedToExamAudience, assertStudentContentAccess, assertStudentExamStartAccess } from './access.service';
+import { assertMarkerAssignedToExam, assertMarkerAssignedToExamAudience, getMarkerGrantedAudienceIds, assertStudentContentAccess, assertStudentExamStartAccess } from './access.service';
 
 beforeEach(() => {
 	enrollmentFindFirst.mockReset();
 	paymentFindFirst.mockReset();
 	markerAssignmentFindUnique.mockReset();
 	markerAssignmentFindFirst.mockReset();
+	grantFindMany.mockReset();
 	examFindUnique.mockReset();
 	participantFindFirst.mockReset();
 	userFindUnique.mockReset().mockResolvedValue({ organizationId: 'org', organization: { timezone: 'Asia/Colombo' } });
@@ -169,5 +172,26 @@ describe('assertMarkerAssignedToExam', () => {
 			},
 			select: { id: true },
 		});
+	});
+});
+
+describe('getMarkerGrantedAudienceIds', () => {
+	it('returns the audiences the marker holds an exact grant for on this exam', async () => {
+		grantFindMany.mockResolvedValue([{ audienceId: 'a1' }, { audienceId: 'a2' }]);
+		expect(await getMarkerGrantedAudienceIds('marker-1', 'exam-1')).toEqual(new Set(['a1', 'a2']));
+	});
+
+	it('scopes the query to this marker, this exam, and an active marker account', async () => {
+		grantFindMany.mockResolvedValue([]);
+		await getMarkerGrantedAudienceIds('marker-1', 'exam-1');
+		expect(grantFindMany).toHaveBeenCalledWith({
+			where: { examId: 'exam-1', assignment: { markerId: 'marker-1', marker: { role: Role.MARKER, deletedAt: null } } },
+			select: { audienceId: true },
+		});
+	});
+
+	it('returns an empty set for a marker with no grants, never a whole-exam pass', async () => {
+		grantFindMany.mockResolvedValue([]);
+		expect((await getMarkerGrantedAudienceIds('marker-1', 'exam-1')).size).toBe(0);
 	});
 });

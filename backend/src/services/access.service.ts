@@ -152,6 +152,18 @@ export const assertMarkerAssignedToExam = async (
   }
 };
 
+/**
+ * Every audience of a scoped exam this marker holds an exact grant for. Row-by-row callers (bulk entry) read the set
+ * once instead of asserting per row; a legacy exam has no grants, so its whole-exam assignment is checked separately.
+ */
+export const getMarkerGrantedAudienceIds = async (markerId: string, examId: string): Promise<Set<string>> => {
+  const grants = await prisma.markerAssignmentAudience.findMany({
+    where: { examId, assignment: { markerId, marker: { role: Role.MARKER, deletedAt: null } } },
+    select: { audienceId: true },
+  });
+  return new Set(grants.map((grant) => grant.audienceId));
+};
+
 /** Answer-bearing callers must supply an exact audience, never optional scope. */
 export const assertMarkerAssignedToExamAudience = async (
   markerId: string,

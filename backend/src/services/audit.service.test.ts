@@ -1,19 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { findMany, count } = vi.hoisted(() => ({
+const { findMany, count, create } = vi.hoisted(() => ({
+	create: vi.fn().mockResolvedValue({}),
 	findMany: vi.fn().mockResolvedValue([]),
 	count: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('@/config/database', () => ({
-	prisma: { auditLog: { findMany, count } },
+	prisma: { auditLog: { findMany, count, create } },
 }));
 
 vi.mock('@/config/logger', () => ({
 	logger: { debug: vi.fn(), error: vi.fn() },
 }));
 
-import { listAuditLogs } from './audit.service';
+import { listAuditLogs, log, logInTransaction } from './audit.service';
 
 const baseQuery = { page: 1, limit: 20 } as const;
 
@@ -85,5 +86,49 @@ describe('listAuditLogs — filter construction', () => {
 		expect(findMany).toHaveBeenCalledWith(
 			expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
 		);
+	});
+});
+
+describe('logInTransaction', () => {
+	const input = {
+		action: 'HALL_MARKS_ENTERED',
+		targetType: 'Exam',
+		targetId: 'exam-1',
+		organizationId: 'org-1',
+		metadata: { changed: 2 },
+		context: { actorId: 'actor-1', actorRole: 'TEACHER', ip: '10.0.0.1', userAgent: 'test' },
+	};
+
+	it('writes through the transaction client, not the shared one', async () => {
+		const txCreate = vi.fn().mockResolvedValue({});
+		await logInTransaction({ auditLog: { create: txCreate } } as never, input);
+		expect(txCreate).toHaveBeenCalledWith({
+			data: {
+				action: 'HALL_MARKS_ENTERED', description: null, targetType: 'Exam', targetId: 'exam-1', metadata: { changed: 2 },
+				organizationId: 'org-1', ip: '10.0.0.1', userAgent: 'test', actorId: 'actor-1', actorRole: 'TEACHER',
+			},
+		});
+		expect(create).not.toHaveBeenCalled();
+	});
+
+	it('throws when the write fails, so the surrounding transaction rolls back', async () => {
+		const txCreate = vi.fn().mockRejectedValue(new Error('audit down'));
+		await expect(logInTransaction({ auditLog: { create: txCreate } } as never, input)).rejects.toThrow('audit down');
+	});
+
+	it('leaves the tenant column to its default when no organization is given', async () => {
+		const txCreate = vi.fn().mockResolvedValue({});
+		const { organizationId: _omit, ...withoutOrganization } = input;
+		void _omit;
+		await logInTransaction({ auditLog: { create: txCreate } } as never, withoutOrganization);
+		expect(txCreate.mock.calls[0]![0].data).not.toHaveProperty('organizationId');
+	});
+});
+
+describe('log (fire-and-forget)', () => {
+	it('never throws to the caller when the write fails', async () => {
+		create.mockRejectedValueOnce(new Error('db down'));
+		expect(() => log({ action: 'X', context: { actorId: 'a', actorRole: 'ADMIN' } })).not.toThrow();
+		await new Promise((resolve) => setImmediate(resolve));
 	});
 });
