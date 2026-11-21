@@ -1,18 +1,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AccountSetupForm } from "./_components/AccountSetupForm";
-import { api } from "@/lib/api";
-import type { ApiList, ApiSuccess, Institute, StudentBarcode, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import { requireUser } from "@/lib/session";
+import type { ApiList, Institute, StudentBarcode } from "@/lib/types";
 
 export default async function AccountSetupPage() {
   const cookie = (await cookies()).toString();
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
 
   // Setup is a student-only onboarding step — everyone else has nothing to do here.
   if (user.role !== "STUDENT") {
