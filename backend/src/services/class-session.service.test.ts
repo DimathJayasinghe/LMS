@@ -6,12 +6,14 @@ const {
 	courseFindUnique,
 	classSessionFindMany,
 	classSessionFindUnique,
+	classSessionUpdate,
 	assertStudentContentAccess,
 	assertCourseAccess,
 } = vi.hoisted(() => ({
 	courseFindUnique: vi.fn(),
 	classSessionFindMany: vi.fn(),
 	classSessionFindUnique: vi.fn(),
+	classSessionUpdate: vi.fn(),
 	assertStudentContentAccess: vi.fn(),
 	assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
 }));
@@ -19,15 +21,15 @@ const {
 vi.mock('@/config/database', () => ({
 	prisma: {
 		course: { findUnique: courseFindUnique },
-		classSession: { findMany: classSessionFindMany, findUnique: classSessionFindUnique },
+		classSession: { findMany: classSessionFindMany, findUnique: classSessionFindUnique, update: classSessionUpdate },
 	},
 }));
 
 vi.mock('@/services/access.service', () => ({ assertStudentContentAccess }));
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
-vi.mock('@/services/stream.service', () => ({}));
+vi.mock('@/services/stream.service', () => ({ broadcastTimetableUpdated: vi.fn() }));
 
-import { listClassSessions, getClassSessionById } from './class-session.service';
+import { listClassSessions, getClassSessionById, updateClassSession } from './class-session.service';
 
 const teacher = { userId: 'teacher-1', role: Role.TEACHER } as const;
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER } as const;
@@ -155,5 +157,33 @@ describe('hasRecording flag', () => {
 		const result = await getClassSessionById('course-1', 'sess-1', teacher);
 		expect(result).toMatchObject({ hasRecording: true });
 		expect(result).not.toHaveProperty('_count');
+	});
+});
+
+
+describe('updating session mode with a live class', () => {
+	it('rejects switching a scheduled session to hall only', async () => {
+		classSessionFindUnique.mockResolvedValueOnce({ ...sessionRow, zoomMeetingId: 'meeting' });
+		await expect(updateClassSession('course-1', 'sess-1', { classType: 'PHYSICAL' }, teacher)).rejects.toMatchObject({ code: 'SESSION_HAS_LIVE_CLASS', statusCode: 409 });
+		expect(classSessionUpdate).not.toHaveBeenCalled();
+	});
+	it('allows a hall-only change when no meeting exists', async () => {
+		classSessionFindUnique.mockResolvedValueOnce(sessionRow);
+		classSessionUpdate.mockResolvedValueOnce(sessionRow);
+		await expect(updateClassSession('course-1', 'sess-1', { classType: 'PHYSICAL' }, teacher)).resolves.toMatchObject({ classType: 'PHYSICAL' });
+	});
+	it('allows a scheduled session to retain simulcast mode', async () => {
+		classSessionFindUnique.mockResolvedValueOnce({ ...sessionRow, zoomMeetingId: 'meeting' });
+		classSessionUpdate.mockResolvedValueOnce({ ...sessionRow, classType: null, zoomMeetingId: 'meeting' });
+		await expect(updateClassSession('course-1', 'sess-1', { classType: null }, teacher)).resolves.toMatchObject({ classType: null, liveScheduled: true });
+	});
+	it('returns not found before checking the mode', async () => {
+		classSessionFindUnique.mockResolvedValueOnce(null);
+		await expect(updateClassSession('course-1', 'sess-1', { classType: 'PHYSICAL' }, teacher)).rejects.toMatchObject({ code: 'CLASS_SESSION_NOT_FOUND', statusCode: 404 });
+	});
+	it('checks course ownership before loading the session', async () => {
+		assertCourseAccess.mockRejectedValueOnce(forbidden);
+		await expect(updateClassSession('course-1', 'sess-1', { classType: 'PHYSICAL' }, otherTeacher)).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
+		expect(classSessionFindUnique).not.toHaveBeenCalled();
 	});
 });

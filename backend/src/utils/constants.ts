@@ -215,9 +215,6 @@ export const JOB_NAME_GENERATE_SESSIONS = 'generate_sessions';
 /** Repeatable-job cron: generate next week's sessions every Sunday 20:00 UTC */
 export const JOB_CRON_WEEKLY_TIMETABLE = '0 20 * * 0';
 
-/** How many days ahead the weekly generator materializes sessions */
-export const TIMETABLE_GENERATE_AHEAD_DAYS = 14;
-
 /** Asia/Colombo is UTC+5:30 — offset in minutes for timetable time math */
 export const COLOMBO_UTC_OFFSET_MIN = 330;
 

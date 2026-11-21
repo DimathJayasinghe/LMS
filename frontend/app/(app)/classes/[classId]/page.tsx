@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
 import { LiveClassAction } from "./_components/LiveClassAction";
+import { SessionEditDialog } from "./_components/SessionEditDialog";
 import { CourseSeenTracker } from "./_components/CourseSeenTracker";
 import { CourseModules } from "./_components/CourseModules";
 import { api } from "@/lib/api-server";
@@ -245,13 +246,12 @@ export default async function ClassDetailPage({
                         {formatSessionDate(session.date)} · {session.durationMinutes} min
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {session.classType && (
-                        <Badge variant="outline">
-                          {session.classType === "ONLINE" ? "Online" : "Physical"}
-                        </Badge>
-                      )}
-                      {session.classType === "ONLINE" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">
+                        {session.classType === "ONLINE" ? "Online only" : session.classType === "PHYSICAL" ? "In hall" : "In hall + live stream"}
+                      </Badge>
+                      {isStaff && <SessionEditDialog classId={classId} session={session} />}
+                      {session.classType !== "PHYSICAL" && (
                         <LiveClassAction
                           classId={classId}
                           sessionId={session.id}

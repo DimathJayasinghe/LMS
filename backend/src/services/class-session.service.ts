@@ -167,6 +167,10 @@ export const updateClassSession = async (
     throw new AppError('CLASS_SESSION_NOT_FOUND', 404, 'Class session not found.');
   }
 
+  if (input.classType === ClassType.PHYSICAL && session.zoomMeetingId) {
+    throw new AppError('SESSION_HAS_LIVE_CLASS', 409, 'A session with a live class cannot be changed to hall only.');
+  }
+
   const updated = await prisma.classSession.update({
     where: { id: sessionId },
     data: {

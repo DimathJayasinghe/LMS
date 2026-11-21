@@ -5,12 +5,13 @@ import { initSentry, captureException } from '@/config/sentry';
 import { processSmsJob } from '@/jobs/sms.job';
 import { scheduleWeeklyTimetableGeneration } from '@/jobs/notification.queue';
 import { generateSessions } from '@/services/timetable.service';
+import { createSettingsReader } from '@/services/settings.service';
 import type { SmsJobData } from '@/types/job.types';
 import {
 	JOB_QUEUE_SMS,
 	JOB_QUEUE_TIMETABLE,
 	JOB_SMS_CONCURRENCY,
-	TIMETABLE_GENERATE_AHEAD_DAYS,
+	DEFAULT_ORGANIZATION_ID,
 } from '@/utils/constants';
 
 const smsWorker = new Worker<SmsJobData>(
@@ -29,7 +30,8 @@ const timetableWorker = new Worker(
 	JOB_QUEUE_TIMETABLE,
 	async () => {
 		const from = new Date();
-		const to = new Date(Date.now() + TIMETABLE_GENERATE_AHEAD_DAYS * 24 * 60 * 60 * 1000);
+		const days = await createSettingsReader(DEFAULT_ORGANIZATION_ID)('timetable.generateAheadDays');
+		const to = new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
 		const result = await generateSessions(from, to);
 		logger.info(result, 'Timetable sessions generated');
 	},

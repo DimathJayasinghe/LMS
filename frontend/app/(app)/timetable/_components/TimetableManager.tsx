@@ -73,7 +73,7 @@ export function TimetableManager({
         dayOfWeek: Number(form.get("dayOfWeek")),
         startTime: String(form.get("startTime")),
         durationMinutes: Number(form.get("durationMinutes")),
-        classType: String(form.get("classType")) || null,
+        classType: String(form.get("classType")) === "SIMULCAST" ? null : String(form.get("classType")),
         instituteId: instituteId || null,
       }, { headers: idempotencyHeaders() });
     });
@@ -97,7 +97,7 @@ export function TimetableManager({
       dayOfWeek: Number(data.get("dayOfWeek")),
       startTime: String(data.get("startTime")),
       durationMinutes: Number(data.get("durationMinutes")),
-      classType: String(data.get("classType")) || null,
+      classType: String(data.get("classType")) === "SIMULCAST" ? null : String(data.get("classType")),
       instituteId: instituteId || null,
     }, { headers: idempotencyHeaders() }));
   };
@@ -155,8 +155,8 @@ export function TimetableManager({
         <label className="text-sm">Start time<input name="startTime" type="time" required className={field} /></label>
         <label className="text-sm">Duration (minutes)<input name="durationMinutes" type="number" min={1} max={600} defaultValue={60} required className={field} /></label>
         <label className="text-sm">Mode
-          <select name="classType" className={field} defaultValue="">
-            <option value="">All cohorts</option><option value="ONLINE">Online</option><option value="PHYSICAL">Physical</option>
+          <select name="classType" required className={field} defaultValue="">
+            <option value="" disabled>Select a mode</option><option value="PHYSICAL">In hall</option><option value="ONLINE">Online only</option><option value="SIMULCAST">In hall + live stream</option>
           </select>
         </label>
         <label className="text-sm md:col-span-2">Institute (physical location)
@@ -200,8 +200,8 @@ export function TimetableManager({
                 </select></label>
                 <label className="text-xs">Start<input name="startTime" type="time" required defaultValue={slot.startTime} className={field} /></label>
                 <label className="text-xs">Minutes<input name="durationMinutes" type="number" min={1} max={600} required defaultValue={slot.durationMinutes} className={field} /></label>
-                <label className="text-xs">Mode<select name="classType" defaultValue={slot.classType ?? ""} className={field}>
-                  <option value="">All</option><option value="ONLINE">Online</option><option value="PHYSICAL">Physical</option>
+                <label className="text-xs">Mode<select name="classType" defaultValue={slot.classType ?? "SIMULCAST"} className={field}>
+                  <option value="PHYSICAL">In hall</option><option value="ONLINE">Online only</option><option value="SIMULCAST">In hall + live stream</option>
                 </select></label>
                 <div className="flex items-end"><Button size="sm" variant="outline" className="w-full" disabled={busy !== null}>Save</Button></div>
                 <label className="text-xs md:col-start-2 md:col-span-5">Institute<select name="instituteId" defaultValue={slot.instituteId ?? ""} className={field}>

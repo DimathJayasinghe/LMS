@@ -17,7 +17,7 @@ interface LiveClassActionProps {
 }
 
 /**
- * Schedule/start/join CTA for an ONLINE session's live class (see
+ * Schedule/start/join CTA for a session's live class (see
  * live-class.endpoints.md). Scheduling is a one-time POST that provisions the
  * real Zoom meeting; once scheduled, everyone joins inside the LMS via
  * `/classes/:classId/live/:sessionId` — never a raw zoom.us link.

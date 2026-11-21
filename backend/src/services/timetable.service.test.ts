@@ -110,6 +110,14 @@ describe('conflict-aware slot authoring', () => {
 		expect(timetableSlotCreate).not.toHaveBeenCalled();
 	});
 
+	it('rejects same-course overlaps across modes', async () => {
+		timetableSlotFindMany.mockResolvedValue([{
+			startTime: '10:30', durationMinutes: 60, courseId: 'course-1', instituteId: null,
+			classType: 'ONLINE', course: { teacherId: 'teacher-1' },
+		}]);
+		await expect(createSlot({ courseId: 'course-1', dayOfWeek: 1, startTime: '10:00', durationMinutes: 60, classType: 'PHYSICAL' }, teacher)).rejects.toMatchObject({ code: 'TIMETABLE_CONFLICT', statusCode: 409 });
+	});
+
 	it('allows adjacent slots and never persists a recurring Zoom link', async () => {
 		timetableSlotFindMany.mockResolvedValue([{
 			startTime: '11:00', durationMinutes: 60, courseId: 'course-2', instituteId: null,

@@ -81,8 +81,8 @@ export const scheduleLiveClass = async (
   const session = await getSessionOrThrow(sessionId);
   await assertCourseAccess(session.courseId, actor);
 
-  if (session.classType !== ClassType.ONLINE) {
-    throw new AppError('SESSION_NOT_ONLINE', 400, 'Only ONLINE sessions can be scheduled as a live class.');
+  if (session.classType === ClassType.PHYSICAL) {
+    throw new AppError('SESSION_NOT_ONLINE', 400, 'Hall-only sessions cannot be scheduled as a live class.');
   }
   if (session.zoomMeetingId) {
     throw new AppError('ALREADY_SCHEDULED', 409, 'This session already has a live class scheduled.');

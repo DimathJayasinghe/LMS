@@ -464,7 +464,7 @@ A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the class isn't one they teach
 
 ### PATCH `/:classId/sessions/:sessionId`
 
-Update class session details.
+Update class session details. Requires an `Idempotency-Key` UUID. A null `classType` means in hall + live stream; `ONLINE` means online only and `PHYSICAL` means in hall only. Changing the date or duration does not reschedule an existing Zoom meeting. Changing a session with an existing meeting to `PHYSICAL` returns `409 SESSION_HAS_LIVE_CLASS`.
 
 **Request body**
 
@@ -491,6 +491,7 @@ Update class session details.
 - 401 auth middleware error
 - 403 forbidden (role guard)
 - 404 `CLASS_SESSION_NOT_FOUND` (service error shape)
+- 409 `SESSION_HAS_LIVE_CLASS` when changing an existing live class to hall only
 
 ### DELETE `/:classId/sessions/:sessionId`
 
