@@ -8,19 +8,24 @@ import { registerSchema, loginSchema } from '../schemas/auth.schema';
  * Creates the auth router with the injected rate limiter.
  * The limiter is created lazily after Redis connection status is known.
  */
-export const createAuthRouter = (authLimiter: RequestHandler): Router => {
+export const createAuthRouter = ({ loginAccountLimiter, loginIpLimiter, registerLimiter, refreshLimiter }: {
+  loginAccountLimiter: RequestHandler;
+  loginIpLimiter: RequestHandler;
+  registerLimiter: RequestHandler;
+  refreshLimiter: RequestHandler;
+}): Router => {
   const router = Router();
 
   // POST /api/auth/register — Create a new student account
   // Middleware order: rateLimiter → validateBody → controller
-  router.post('/register', authLimiter, validateBody(registerSchema), AuthController.register);
+  router.post('/register', registerLimiter, validateBody(registerSchema), AuthController.register);
 
   // POST /api/auth/login — Authenticate user
   // Stricter rate limit to prevent brute-force password attacks
-  router.post('/login', authLimiter, validateBody(loginSchema), AuthController.login);
+  router.post('/login', loginIpLimiter, loginAccountLimiter, validateBody(loginSchema), AuthController.login);
 
   // POST /api/auth/refresh — Silent token rotation
-  router.post('/refresh', AuthController.refresh);
+  router.post('/refresh', refreshLimiter, AuthController.refresh);
 
   // POST /api/auth/logout — Clear session
   router.post('/logout', AuthController.logout);

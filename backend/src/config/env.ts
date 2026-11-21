@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RATE_LIMIT_GLOBAL_MAX, RATE_LIMIT_AUTH_MAX } from '../utils/constants';
 import dotenv from 'dotenv';
 import { SMS_DRIVERS, STORAGE_DRIVERS, findLocalDrivers } from './drivers';
 
@@ -15,6 +16,14 @@ const envSchema = z.object({
   // Server
   PORT: z.coerce.number().default(5000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+
+  // Rate limits per minute
+  RATE_LIMIT_GLOBAL_ANON_MAX: z.coerce.number().int().positive().default(RATE_LIMIT_GLOBAL_MAX),
+  RATE_LIMIT_GLOBAL_USER_MAX: z.coerce.number().int().positive().default(200),
+  RATE_LIMIT_LOGIN_ACCOUNT_MAX: z.coerce.number().int().positive().default(RATE_LIMIT_AUTH_MAX),
+  RATE_LIMIT_LOGIN_IP_MAX: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_REGISTER_IP_MAX: z.coerce.number().int().positive().default(30),
+  RATE_LIMIT_REFRESH_MAX: z.coerce.number().int().positive().default(20),
 
   // Database
   DATABASE_URL: z.string().url(),
