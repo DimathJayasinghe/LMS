@@ -59,7 +59,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 
 | ID | Requirement | Status | Evidence / where tracked |
 |---|---|---|---|
-| R-ATT-01 | QR/barcode scan at the entrance, institute-aware | Partial | `AttendanceSource.QR/BARCODE`; `attendance.endpoints.md`. Audit 2026-11-19: scan resolves LMS QR and institute barcode but checks no enrollment, mode, payment or time window and is not branch-aware in the UI; ambiguous code resolution and a static QR (F-07, F-08, F-12, F-37, F-43) |
+| R-ATT-01 | QR/barcode scan at the entrance, institute-aware | Partial | `AttendanceSource.QR/BARCODE`; `attendance.endpoints.md`. Audit 2026-11-19: scan resolves the LMS QR and institute barcodes through one resolver that refuses a code held by several students (F-07, fixed in Wave 0) but checks no enrollment, mode, payment or time window, is not branch-aware in the UI, and the QR is static (F-08, F-12, F-37, F-43) |
 | R-ATT-02 | NFC tap | Gap | Not planned |
 | R-ATT-03 | Online attendance from live join or video watch | Partial | Zoom webhook + reconciliation; `2026-07-12-video-watch-attendance-design.md`. Audit 2026-11-19: by code, the webhook matches by email, which the Meeting SDK join very likely does not supply (Zoom-side behaviour not observed), and the video flag is client-asserted (F-14, F-24, F-40, F-54) |
 | R-ATT-04 | Hybrid sessions record from either source without duplicates | Done | `@@unique([userId, classSessionId])` |

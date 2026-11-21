@@ -6,6 +6,7 @@ import { env } from '../config/env';
 import { AppError } from '../utils/app-error';
 import { BCRYPT_SALT_ROUNDS } from '../utils/constants';
 import { logger } from '../config/logger';
+import { assertScanCodeFree } from './scan-code.service';
 import type { RegisterInput, LoginInput } from '../schemas/auth.schema';
 import type { JwtPayload } from '../types/auth.types';
 
@@ -160,26 +161,36 @@ export const register = async (
 
   const hashedPassword = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
 
-  const created = await prisma.user.create({
-    data: {
-      email: data.email,
-      name: data.name,
-      password: hashedPassword,
-      phone: data.phone ?? null,
-      nic: data.nic ?? null,
-      address: data.address ?? null,
-      city: data.city ?? null,
-      // role defaults to STUDENT (schema default)
-      // deletedAt defaults to null (active)
-    },
-  });
+  // indexNumber is only known once autoincrement assigns it, so the LMS QR (derived from it)
+  // is a follow-up write. Both happen in one transaction so a card that collides with an
+  // existing code fails the whole registration instead of leaving a student without a card.
+  const user = await prisma
+    .$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: data.email,
+          name: data.name,
+          password: hashedPassword,
+          phone: data.phone ?? null,
+          nic: data.nic ?? null,
+          address: data.address ?? null,
+          city: data.city ?? null,
+          // role defaults to STUDENT (schema default)
+          // deletedAt defaults to null (active)
+        },
+      });
 
-  // indexNumber is only known once autoincrement assigns it, so the LMS QR
-  // (derived from it) is a follow-up write, not part of the create() data.
-  const user = await prisma.user.update({
-    where: { id: created.id },
-    data: { barcode: formatLmsBarcode(created.indexNumber) },
-  });
+      const barcode = formatLmsBarcode(created.indexNumber);
+      await assertScanCodeFree(tx, barcode, { exceptUserId: created.id, allowLmsFormat: true });
+
+      return tx.user.update({ where: { id: created.id }, data: { barcode } });
+    })
+    .catch((error: unknown) => {
+      if (error instanceof AppError && error.code === 'CODE_UNAVAILABLE') {
+        logger.warn({ email: data.email }, 'Registration refused: the generated LMS card is already held by another user.');
+      }
+      throw error;
+    });
 
   const tokens = await issueTokenPair(user.id, user.role);
 

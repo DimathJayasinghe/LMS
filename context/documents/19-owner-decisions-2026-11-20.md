@@ -320,7 +320,7 @@
 
 **Reversibility:** Resolver and rule are code; random codes additive (legacy accepted); reissue per student; only the optional reprint is irreversible.
 
-**Code impact:** user.service.ts resolveStudentByCode replaces resolveStudentByBarcode; attendance.scanBarcode and payment collect-by-barcode use it; every code writer calls the uniqueness check; auth.service formatLmsBarcode gets the random generator; reissue and generate-missing endpoints; scanner photo and ambiguous fallback; collision report script. Wave 0 slice: resolver, collision report and uniqueness for new writes; random scheme and reissue follow in Wave 1. Size M. Vitest: resolver matrix, uniqueness with simulated concurrent write, reissue invalidates the old code.
+**Code impact:** scan-code.service.ts resolveStudentByCode (user.service.ts resolveStudentByBarcode stays as a thin wrapper for the desk route until the Wave 1 rename); attendance.scanBarcode and payment collect-by-barcode use it; every code writer calls the uniqueness check; auth.service formatLmsBarcode gets the random generator; reissue and generate-missing endpoints; scanner photo and ambiguous fallback; collision report script. Wave 0 slice: resolver, collision report and uniqueness for new writes; random scheme and reissue follow in Wave 1. Size M. Vitest: resolver matrix, uniqueness with simulated concurrent write, reissue invalidates the old code.
 
 ### D-ACCESS-5: Attendance source of truth: one row, strongest source wins, one writer
 

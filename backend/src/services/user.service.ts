@@ -3,6 +3,7 @@ import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
+import { assertScanCodeFree, resolveStudentByCode } from '@/services/scan-code.service';
 import type {
 	ListUsersQuery,
 	UpdateRoleInput,
@@ -182,24 +183,25 @@ export const assignBarcode = async (
 	input: AssignBarcodeInput,
 	actorRole: Role,
 ): Promise<SafeUser> => {
-	const user = await prisma.user.findUnique({ where: { id } });
+	return prisma.$transaction(async (tx) => {
+		const user = await tx.user.findUnique({ where: { id } });
 
-	if (!user) {
-		throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
-	}
+		if (!user) {
+			throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
+		}
 
-	assertCanManagePrivilegedTarget(actorRole, user.role);
+		assertCanManagePrivilegedTarget(actorRole, user.role);
 
-	const existing = await prisma.user.findUnique({ where: { barcode: input.barcode } });
+		// Re-assigning the code the user already holds changes nothing about who owns it.
+		if (user.barcode?.toLowerCase() !== input.barcode.toLowerCase()) {
+			await assertScanCodeFree(tx, input.barcode, { exceptUserId: id });
+		}
 
-	if (existing && existing.id !== id) {
-		throw new AppError('BARCODE_IN_USE', 409, 'This barcode is already assigned.');
-	}
-
-	return prisma.user.update({
-		where: { id },
-		data: { barcode: input.barcode },
-		select: userSelect,
+		return tx.user.update({
+			where: { id },
+			data: { barcode: input.barcode },
+			select: userSelect,
+		});
 	});
 };
 
@@ -325,36 +327,32 @@ export const createMyInstituteBarcode = async (
 	userId: string,
 	input: CreateStudentBarcodeInput,
 ): Promise<StudentBarcodeSummary> => {
-	const institute = await prisma.institute.findUnique({ where: { id: input.instituteId } });
+	return prisma.$transaction(async (tx) => {
+		const institute = await tx.institute.findUnique({ where: { id: input.instituteId } });
 
-	if (!institute || !institute.isActive) {
-		throw new AppError('INSTITUTE_NOT_FOUND', 404, 'Institute not found.');
-	}
+		if (!institute || !institute.isActive) {
+			throw new AppError('INSTITUTE_NOT_FOUND', 404, 'Institute not found.');
+		}
 
-	const [ownExisting, takenByOther] = await Promise.all([
-		prisma.studentBarcode.findUnique({
+		const ownExisting = await tx.studentBarcode.findUnique({
 			where: { userId_instituteId: { userId, instituteId: input.instituteId } },
-		}),
-		prisma.studentBarcode.findUnique({
-			where: { instituteId_barcode: { instituteId: input.instituteId, barcode: input.barcode } },
-		}),
-	]);
+		});
 
-	if (ownExisting) {
-		throw new AppError(
-			'STUDENT_BARCODE_EXISTS',
-			409,
-			'You already registered a barcode for this institute. Remove it first to change it.',
-		);
-	}
+		if (ownExisting) {
+			throw new AppError(
+				'STUDENT_BARCODE_EXISTS',
+				409,
+				'You already registered a barcode for this institute. Remove it first to change it.',
+			);
+		}
 
-	if (takenByOther) {
-		throw new AppError('BARCODE_TAKEN_AT_INSTITUTE', 409, 'This barcode is already registered at this institute.');
-	}
+		// A code must identify one student across both code kinds and every institute.
+		await assertScanCodeFree(tx, input.barcode, { exceptUserId: userId });
 
-	return prisma.studentBarcode.create({
-		data: { userId, instituteId: input.instituteId, barcode: input.barcode },
-		select: studentBarcodeSelect,
+		return tx.studentBarcode.create({
+			data: { userId, instituteId: input.instituteId, barcode: input.barcode },
+			select: studentBarcodeSelect,
+		});
 	});
 };
 
@@ -375,35 +373,16 @@ interface ResolvedBarcodeStudent {
 }
 
 /**
- * Resolves a scanned code to a student for staff-facing flows (payment collection today;
- * a natural future fit for the entrance attendance scanner too, which currently only checks
- * `User.barcode` — see 06-progress-tracker.md). Tries the institute-scoped `StudentBarcode`
- * first; a code that matches more than one institute (barcode uniqueness is only enforced
- * *per institute*, not globally) is treated as unresolved rather than guessed.
+ * Resolves a scanned code to a student for the front desk's payment lookup, through the same
+ * resolver as the entrance scanner: a code held by several students is refused (`AMBIGUOUS_CODE`),
+ * never guessed, and the desk searches by index number or name instead.
  */
 export const resolveStudentByBarcode = async (code: string): Promise<ResolvedBarcodeStudent> => {
-	const instituteMatches = await prisma.studentBarcode.findMany({
-		where: { barcode: code },
-		select: { instituteId: true, user: { select: { id: true, name: true, indexNumber: true } } },
-	});
+	const { student, instituteId, matchedBarcode } = await resolveStudentByCode(code);
 
-	if (instituteMatches.length === 1) {
-		const match = instituteMatches[0]!;
-		return { user: match.user, instituteId: match.instituteId, matchedBarcode: code };
-	}
-
-	const user = await prisma.user.findUnique({
-		where: { barcode: code },
-		select: { id: true, name: true, indexNumber: true },
-	});
-
-	if (!user) {
-		throw new AppError(
-			'BARCODE_NOT_FOUND',
-			404,
-			'No student found with this barcode. Please verify the barcode is assigned.',
-		);
-	}
-
-	return { user, instituteId: null, matchedBarcode: code };
+	return {
+		user: { id: student.id, name: student.name, indexNumber: student.indexNumber },
+		instituteId,
+		matchedBarcode,
+	};
 };

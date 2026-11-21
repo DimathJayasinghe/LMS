@@ -100,8 +100,8 @@ Physical classes are held at **pre-configured physical centers ("institutes")** 
 > **Attendance-marking reality check (audited 2026-11-19; supersedes the 2026-07-10 note)**: the schema and
 > docs describe three ways to mark attendance (QR/barcode scan, live Zoom join, recorded-video watch). The
 > entrance scan resolves a code against both the LMS QR (`User.barcode`) and a student's institute barcode
-> (`StudentBarcode`), but it does **not** check enrollment, delivery mode or payment, and scan resolution
-> between the two code kinds can be ambiguous (findings F-07, F-12). The live-Zoom
+> (`StudentBarcode`) through one resolver that refuses a code held by several students (F-07, fixed in
+> Wave 0), but it does **not** check enrollment, delivery mode or payment (F-12). The live-Zoom
 > automatic path matches a participant only by email, which the embedded Meeting SDK join does not supply, so
 > it is unreliable as built (F-14). The recorded-video flag is client-asserted (F-24). See
 > [18-flow-audit-findings-register.md](./18-flow-audit-findings-register.md) and

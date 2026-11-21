@@ -1171,7 +1171,7 @@ model StudentBarcode {
   organizationId String?       @default("00000000-0000-4000-8000-000000000001")
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([instituteId, barcode]) // unique WITHIN an institute (not globally)
+  @@unique([instituteId, barcode]) // database backstop is per institute; services refuse any code another student holds (scan-code.service.ts)
   @@unique([userId, instituteId]) // one barcode per student per institute
   @@index([userId])
   @@index([instituteId])

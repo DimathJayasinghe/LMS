@@ -17,8 +17,13 @@ The attendance endpoints require authentication (except for the Zoom webhook). T
 Enum: `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. In the tables below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk scans at the entrance).
 
 - `AttendanceSource` includes **`QR`** alongside `BARCODE`, `ZOOM_WEBHOOK`, and `MANUAL`.
-- Entrance scanning is institute-aware: `(instituteId, barcode)` resolves a per-institute
-  `StudentBarcode`, with the globally unique LMS `User.barcode` as fallback.
+- Entrance scanning is institute-aware for the session (the institute must match the timetable slot),
+  but a **code identifies exactly one student across the LMS card (`User.barcode`) and every
+  institute card (`StudentBarcode`)** (2026-11-21, audit F-07). One shared resolver
+  (`scan-code.service.ts`) serves the scanner and the desk's `GET /users/resolve-barcode`; a code held
+  by several students is refused with `409 AMBIGUOUS_CODE`, never guessed, and the desk searches by
+  index number or name instead. Codes are compared case-insensitively. Writers of every code kind
+  check uniqueness under a lock (see `users.endpoints.md` and `account-setup.endpoints.md`).
 - **`TEACHER` can now read attendance for their own courses (2026-07-10)** — `GET /session/:sessionId`
   and `GET /class/:classId` were `SUPER_ADMIN`+`ADMIN` only; added `TEACHER`, scoped via
   `assertCourseAccess` (same ownership gate as session/exam/video mutations).
@@ -37,7 +42,7 @@ There are three intended ways attendance gets marked; here's exactly what's real
 since the schema anticipates more than the code currently does:
 
 1. **Entrance scan (`POST /scan`).** The request carries an institute and a device source. The
-   service checks the institute-specific `StudentBarcode` first and then the global LMS QR. A
+   service resolves the code to one student across both code kinds (an ambiguous code is refused). A
    timetable-generated session can only be scanned at its configured institute. Keyboard-wedge
    input records `BARCODE`; camera input records `QR`.
    - **Frontend (updated 2026-08-13):** the staff `/attendance` scanner (`StaffScanner`) supports
@@ -116,8 +121,9 @@ Returned in most endpoints:
 ### POST `/scan`
 
 Admin scans a student's code at a physical institute. Uses upsert to prevent duplicate records
-from rapid scans. Resolution order is the selected institute's `StudentBarcode`, then the global
-LMS `User.barcode`. If the session came from a timetable slot, its configured institute must match.
+from rapid scans. The code is resolved to one student across the LMS `User.barcode` and every
+institute `StudentBarcode` (case-insensitive); several holders is `409 AMBIGUOUS_CODE`. If the session
+came from a timetable slot, its configured institute must match.
 
 **Request body**
 
@@ -150,6 +156,7 @@ LMS `User.barcode`. If the session came from a timetable slot, its configured in
 - 404 `CLASS_SESSION_NOT_FOUND`
 - 404 `INSTITUTE_NOT_FOUND`
 - 404 `BARCODE_NOT_FOUND`
+- 409 `AMBIGUOUS_CODE` (the code matches more than one student; no attendance is written)
 - 409 `SESSION_INSTITUTE_MISMATCH`
 
 ### POST `/zoom-webhook`

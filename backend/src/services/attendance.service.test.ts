@@ -5,7 +5,8 @@ const {
 	classSessionFindUnique,
 	courseFindUnique,
 	instituteFindUnique,
-	studentBarcodeFindUnique,
+	studentBarcodeFindMany,
+	userFindMany,
 	userFindUnique,
 	attendanceUpsert,
 	attendanceFindMany,
@@ -14,7 +15,8 @@ const {
 	classSessionFindUnique: vi.fn(),
 	courseFindUnique: vi.fn(),
 	instituteFindUnique: vi.fn(),
-	studentBarcodeFindUnique: vi.fn(),
+	studentBarcodeFindMany: vi.fn(),
+	userFindMany: vi.fn(),
 	userFindUnique: vi.fn(),
 	attendanceUpsert: vi.fn(),
 	attendanceFindMany: vi.fn().mockResolvedValue([]),
@@ -26,8 +28,8 @@ vi.mock('@/config/database', () => ({
 		classSession: { findUnique: classSessionFindUnique },
 		course: { findUnique: courseFindUnique },
 		institute: { findUnique: instituteFindUnique },
-		studentBarcode: { findUnique: studentBarcodeFindUnique },
-		user: { findUnique: userFindUnique },
+		studentBarcode: { findMany: studentBarcodeFindMany },
+		user: { findUnique: userFindUnique, findMany: userFindMany },
 		attendance: {
 			upsert: attendanceUpsert,
 			findMany: attendanceFindMany,
@@ -57,7 +59,8 @@ beforeEach(() => {
 	classSessionFindUnique.mockReset().mockResolvedValue(session);
 	courseFindUnique.mockReset().mockResolvedValue(course);
 	instituteFindUnique.mockReset().mockResolvedValue({ id: scanInput.instituteId, isActive: true });
-	studentBarcodeFindUnique.mockReset().mockResolvedValue({ user: student });
+	studentBarcodeFindMany.mockReset().mockResolvedValue([{ instituteId: scanInput.instituteId, user: student }]);
+	userFindMany.mockReset().mockResolvedValue([]);
 	userFindUnique.mockReset().mockResolvedValue(student);
 	attendanceUpsert.mockReset().mockResolvedValue({ id: 'attendance-1' });
 	attendanceFindMany.mockClear();
@@ -65,20 +68,12 @@ beforeEach(() => {
 });
 
 describe('scanBarcode - institute-aware resolution', () => {
-	it('resolves an institute-issued barcode inside the selected institute', async () => {
+	it('resolves an institute-issued barcode and marks that student', async () => {
 		await scanBarcode(scanInput);
 
-		expect(studentBarcodeFindUnique).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: {
-					instituteId_barcode: {
-						instituteId: scanInput.instituteId,
-						barcode: scanInput.barcode,
-					},
-				},
-			}),
+		expect(studentBarcodeFindMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { barcode: { equals: scanInput.barcode, mode: 'insensitive' } } }),
 		);
-		expect(userFindUnique).not.toHaveBeenCalled();
 		expect(attendanceUpsert).toHaveBeenCalledWith(
 			expect.objectContaining({
 				create: expect.objectContaining({
@@ -91,17 +86,18 @@ describe('scanBarcode - institute-aware resolution', () => {
 		expect(upsertArgs.update).not.toHaveProperty('source');
 	});
 
-	it('falls back to the global LMS barcode when no institute barcode matches', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce(null);
+	it('resolves the global LMS barcode when no institute barcode matches', async () => {
+		studentBarcodeFindMany.mockResolvedValue([]);
+		userFindMany.mockResolvedValue([student]);
 
-		await scanBarcode({ ...scanInput, barcode: 'LMS-001', source: AttendanceSource.QR });
+		await scanBarcode({ ...scanInput, barcode: 'LMS-000001', source: AttendanceSource.QR });
 
-		expect(userFindUnique).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: 'LMS-001' } }),
+		expect(userFindMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { barcode: { equals: 'LMS-000001', mode: 'insensitive' } } }),
 		);
 		expect(attendanceUpsert).toHaveBeenCalledWith(
 			expect.objectContaining({
-				create: expect.objectContaining({ source: AttendanceSource.QR }),
+				create: expect.objectContaining({ userId: student.id, source: AttendanceSource.QR }),
 			}),
 		);
 	});
@@ -113,7 +109,7 @@ describe('scanBarcode - institute-aware resolution', () => {
 			code: 'INSTITUTE_NOT_FOUND',
 			statusCode: 404,
 		});
-		expect(studentBarcodeFindUnique).not.toHaveBeenCalled();
+		expect(studentBarcodeFindMany).not.toHaveBeenCalled();
 	});
 
 	it('rejects an institute that conflicts with the session timetable slot', async () => {
@@ -126,13 +122,13 @@ describe('scanBarcode - institute-aware resolution', () => {
 			code: 'SESSION_INSTITUTE_MISMATCH',
 			statusCode: 409,
 		});
-		expect(studentBarcodeFindUnique).not.toHaveBeenCalled();
+		expect(studentBarcodeFindMany).not.toHaveBeenCalled();
 	});
 
 	it('rejects a deactivated student resolved from an institute barcode', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce({
-			user: { ...student, deletedAt: new Date() },
-		});
+		studentBarcodeFindMany.mockResolvedValue([
+			{ instituteId: scanInput.instituteId, user: { ...student, deletedAt: new Date() } },
+		]);
 
 		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
 			code: 'STUDENT_DEACTIVATED',
@@ -142,9 +138,9 @@ describe('scanBarcode - institute-aware resolution', () => {
 	});
 
 	it('rejects a non-student resolved from an institute barcode', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce({
-			user: { ...student, role: Role.TEACHER },
-		});
+		studentBarcodeFindMany.mockResolvedValue([
+			{ instituteId: scanInput.instituteId, user: { ...student, role: Role.TEACHER } },
+		]);
 
 		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
 			code: 'INVALID_ROLE_FOR_ATTENDANCE',
@@ -154,14 +150,45 @@ describe('scanBarcode - institute-aware resolution', () => {
 	});
 
 	it('returns BARCODE_NOT_FOUND when neither institute nor LMS barcode matches', async () => {
-		studentBarcodeFindUnique.mockResolvedValueOnce(null);
-		userFindUnique.mockResolvedValueOnce(null);
+		studentBarcodeFindMany.mockResolvedValue([]);
+		userFindMany.mockResolvedValue([]);
 
 		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
 			code: 'BARCODE_NOT_FOUND',
 			statusCode: 404,
 		});
 		expect(attendanceUpsert).not.toHaveBeenCalled();
+	});
+
+	it('refuses an ambiguous code and marks nobody (the desk searches by name or index instead)', async () => {
+		studentBarcodeFindMany.mockResolvedValue([{ instituteId: scanInput.instituteId, user: student }]);
+		userFindMany.mockResolvedValue([{ ...student, id: 'student-2' }]);
+
+		await expect(scanBarcode(scanInput)).rejects.toMatchObject({
+			code: 'AMBIGUOUS_CODE',
+			statusCode: 409,
+		});
+		expect(attendanceUpsert).not.toHaveBeenCalled();
+	});
+
+	it('does not let an institute card shadow another student\'s LMS card (the same code held by two students is ambiguous, not first-match)', async () => {
+		studentBarcodeFindMany.mockResolvedValue([{ instituteId: scanInput.instituteId, user: { ...student, id: 'squatter' } }]);
+		userFindMany.mockResolvedValue([{ ...student, id: 'victim' }]);
+
+		await expect(scanBarcode({ ...scanInput, barcode: 'LMS-000042' })).rejects.toMatchObject({
+			code: 'AMBIGUOUS_CODE',
+		});
+		expect(attendanceUpsert).not.toHaveBeenCalled();
+	});
+
+	it('resolves an institute card held at another institute (codes are organization-wide)', async () => {
+		studentBarcodeFindMany.mockResolvedValue([{ instituteId: '99999999-9999-4999-8999-999999999999', user: student }]);
+
+		await scanBarcode(scanInput);
+
+		expect(attendanceUpsert).toHaveBeenCalledWith(
+			expect.objectContaining({ create: expect.objectContaining({ userId: student.id }) }),
+		);
 	});
 });
 
