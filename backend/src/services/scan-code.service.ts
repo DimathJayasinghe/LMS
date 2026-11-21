@@ -110,6 +110,7 @@ export const assertScanCodeFree = async (
 ): Promise<void> => {
   const code = normalizeScanCode(rawCode);
 
+  // Printable ASCII codes use the same uppercase folding in JavaScript and supported PostgreSQL collations.
   await withAdvisoryLock(tx, SCAN_CODE_LOCK_NAMESPACE, DEFAULT_ORGANIZATION_ID, code.toUpperCase());
 
   if (!options.allowLmsFormat && LMS_CODE_PATTERN.test(code)) {
