@@ -184,13 +184,18 @@ Before deploying the Bunny production guard, set `BUNNY_READ_ONLY_API_KEY` (webh
 
 ## Scan-code collision report (run before deploying F-07)
 
-Before deployment, query the production database with `SHOW lc_ctype;`. Continue only if the result is `en_US.utf8`, `C.UTF-8` or `C`; stop and contact the owner otherwise. Build the new backend image first, while the current services remain in use. With PostgreSQL running, use a host directory **outside the repository** for the report (replace the placeholders):
+Before deployment, query the production database with `SELECT datctype FROM pg_database WHERE datname = current_database();`. Continue only if the result is `en_US.utf8`, `C.UTF-8` or `C`; stop and contact the owner otherwise. Build the new backend image first, while the current services remain in use. With PostgreSQL running, use a host directory **outside the repository** for the report (replace the placeholders). Build first:
 
 ```sh
 docker compose build backend
+```
+
+Have the front desk stop assigning cards and registering students before the final report, and keep those activities stopped until the new image is serving. Run the report as the last step immediately before the deploy command:
+
+```sh
 docker compose run --rm --no-deps -v <host dir outside the repo>:/reports backend node dist/scripts/report-scan-code-collisions.js --out /reports/<name>.csv
 ```
 
-The report exits 0 when clean, 2 when rows are listed, and 1 on error. If rows are listed, stop the deployment and send the report to the owner for resolution; it contains personal data and must never be committed. The report checks collisions, reserved formats and stored codes outside printable ASCII. For local development only, `npm run scan-codes:report -- --out <path outside the repo>` runs from `backend/`; the production image does not include its development tooling.
+The report exits 0 when clean, 2 when rows are listed, and 1 on error. If rows are listed, stop the deployment and send the report to the owner for resolution; it contains personal data and must never be committed. After resolving any rows, repeat the final report immediately before deploying. Once it exits 0, deploy the new backend image, then rerun the report from the new running container and expect exit 0. The report checks collisions, reserved formats and stored codes outside printable ASCII. For local development only, `npm run scan-codes:report -- --out <path outside the repo>` runs from `backend/`; the production image does not include its development tooling.
 
 Mock tests do not establish transaction serialization. Run the disposable-stack live verification script supplied with the change against a real database to check the database behavior before release.
