@@ -1,6 +1,7 @@
 import { ClassType, Prisma, Role, VideoStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import { hasPrismaCode } from '@/utils/prisma-error';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type {
   CreateClassSessionInput,
@@ -171,17 +172,52 @@ export const updateClassSession = async (
     throw new AppError('SESSION_HAS_LIVE_CLASS', 409, 'A session with a live class cannot be changed to hall only.');
   }
 
-  const updated = await prisma.classSession.update({
-    where: { id: sessionId },
-    data: {
-      title: input.title,
-      description: input.description ?? undefined,
-      classType: input.classType === undefined ? undefined : input.classType,
-      date: input.date,
-      durationMinutes: input.durationMinutes,
-    },
-    select: classSessionSelect,
-  });
+  // A hall-only change only commits while no meeting exists, so a live class scheduled since the read above cannot end up on a hall-only session.
+  const where: Prisma.ClassSessionWhereUniqueInput =
+    input.classType === ClassType.PHYSICAL ? { id: sessionId, zoomMeetingId: null } : { id: sessionId };
+  // Generation keys a session by (slot, original date). Moving a generated session frees that key, so the original
+  // occurrence stays reserved by a deleted marker; otherwise the next generation run would add the lesson again.
+  const movesGeneratedOccurrence =
+    Boolean(session.timetableSlotId) && input.date !== undefined && input.date.getTime() !== session.date.getTime();
+
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.classSession.update({
+        where,
+        data: {
+          title: input.title,
+          description: input.description ?? undefined,
+          classType: input.classType === undefined ? undefined : input.classType,
+          date: input.date,
+          durationMinutes: input.durationMinutes,
+        },
+        select: classSessionSelect,
+      });
+      if (movesGeneratedOccurrence) {
+        await tx.classSession.create({
+          data: {
+            title: session.title,
+            classType: session.classType,
+            date: session.date,
+            durationMinutes: session.durationMinutes,
+            courseId: session.courseId,
+            timetableSlotId: session.timetableSlotId,
+            deletedAt: new Date(),
+          },
+        });
+      }
+      return row;
+    });
+  } catch (error) {
+    if (input.classType === ClassType.PHYSICAL && hasPrismaCode(error, 'P2025')) {
+      throw new AppError('SESSION_HAS_LIVE_CLASS', 409, 'A session with a live class cannot be changed to hall only.');
+    }
+    if (hasPrismaCode(error, 'P2002')) {
+      throw new AppError('SESSION_DATE_TAKEN', 409, 'This lesson already has a session on that date.');
+    }
+    throw error;
+  }
 
   await StreamService.broadcastTimetableUpdated({
     courseId: classId,

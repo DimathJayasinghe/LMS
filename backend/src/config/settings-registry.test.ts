@@ -12,6 +12,11 @@ describe('settings registry', () => {
   it('keeps temporary passwords within the credential byte limit', () => {
     expect(settingsRegistry['identity.tempPassword.length'].schema.safeParse(73).success).toBe(false);
   });
+  it('keeps the timetable generation window at least as long as the weekly job interval', () => {
+    const { schema } = settingsRegistry['timetable.generateAheadDays'];
+    expect(schema.safeParse(6).success).toBe(false);
+    expect(schema.safeParse(7).success).toBe(true);
+  });
   it('accepts every registered default', () => {
     for (const entry of Object.values(settingsRegistry)) expect(entry.schema.safeParse(entry.default).success).toBe(true);
   });

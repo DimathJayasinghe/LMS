@@ -94,3 +94,28 @@ describe('scheduleLiveClass session modes', () => {
 		await expect(scheduleLiveClass('session-1', actor)).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
 	});
 });
+
+describe('scheduleLiveClass concurrent mode change', () => {
+	const actor = { userId: 'teacher-1', role: Role.TEACHER } as const;
+	const schedulable = { id: 'session-1', courseId: 'course-1', title: 'Live lesson', classType: null, zoomMeetingId: null, deletedAt: null, date: new Date(), durationMinutes: 60 };
+	it('stores the meeting only while the session is unscheduled and not hall only', async () => {
+		mocks.findSession.mockResolvedValueOnce(schedulable);
+		mocks.createMeeting.mockResolvedValueOnce({ meetingId: '1', joinUrl: 'url', password: 'pass' });
+		await scheduleLiveClass('session-1', actor);
+		expect(mocks.updateSession.mock.calls[0]?.[0].where).toEqual({
+			id: 'session-1', zoomMeetingId: null, OR: [{ classType: null }, { classType: ClassType.ONLINE }],
+		});
+	});
+	it('answers 409 when the session was switched to hall only while the meeting was being created', async () => {
+		mocks.findSession.mockResolvedValueOnce(schedulable);
+		mocks.createMeeting.mockResolvedValueOnce({ meetingId: '1', joinUrl: 'url', password: 'pass' });
+		mocks.updateSession.mockRejectedValueOnce(Object.assign(new Error('P2025'), { code: 'P2025' }));
+		await expect(scheduleLiveClass('session-1', actor)).rejects.toMatchObject({ code: 'SESSION_CHANGED', statusCode: 409 });
+	});
+	it('does not hide other database failures', async () => {
+		mocks.findSession.mockResolvedValueOnce(schedulable);
+		mocks.createMeeting.mockResolvedValueOnce({ meetingId: '1', joinUrl: 'url', password: 'pass' });
+		mocks.updateSession.mockRejectedValueOnce(new Error('connection lost'));
+		await expect(scheduleLiveClass('session-1', actor)).rejects.toThrow('connection lost');
+	});
+});

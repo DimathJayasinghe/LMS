@@ -7,6 +7,7 @@ const {
 	classSessionFindMany,
 	classSessionFindUnique,
 	classSessionUpdate,
+	classSessionCreate,
 	assertStudentContentAccess,
 	assertCourseAccess,
 } = vi.hoisted(() => ({
@@ -14,16 +15,21 @@ const {
 	classSessionFindMany: vi.fn(),
 	classSessionFindUnique: vi.fn(),
 	classSessionUpdate: vi.fn(),
+	classSessionCreate: vi.fn(),
 	assertStudentContentAccess: vi.fn(),
 	assertCourseAccess: vi.fn().mockResolvedValue({ id: 'course-1', teacherId: 'teacher-1' }),
 }));
 
-vi.mock('@/config/database', () => ({
-	prisma: {
-		course: { findUnique: courseFindUnique },
-		classSession: { findMany: classSessionFindMany, findUnique: classSessionFindUnique, update: classSessionUpdate },
-	},
-}));
+vi.mock('@/config/database', () => {
+	const classSession = { findMany: classSessionFindMany, findUnique: classSessionFindUnique, update: classSessionUpdate, create: classSessionCreate };
+	return {
+		prisma: {
+			course: { findUnique: courseFindUnique },
+			classSession,
+			$transaction: async (run: (tx: { classSession: typeof classSession }) => unknown) => run({ classSession }),
+		},
+	};
+});
 
 vi.mock('@/services/access.service', () => ({ assertStudentContentAccess }));
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
@@ -185,5 +191,46 @@ describe('updating session mode with a live class', () => {
 		assertCourseAccess.mockRejectedValueOnce(forbidden);
 		await expect(updateClassSession('course-1', 'sess-1', { classType: 'PHYSICAL' }, otherTeacher)).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE', statusCode: 403 });
 		expect(classSessionFindUnique).not.toHaveBeenCalled();
+	});
+});
+
+describe('updating a session that came from a timetable slot', () => {
+	const slotRow = { ...sessionRow, timetableSlotId: 'slot-1' };
+	const prismaError = (code: string) => Object.assign(new Error(code), { code });
+	it('keeps the original occurrence reserved when the date moves so generation does not repeat the lesson', async () => {
+		classSessionFindUnique.mockResolvedValueOnce(slotRow);
+		classSessionUpdate.mockResolvedValueOnce({ ...slotRow, date: new Date('2026-07-02T00:00:00.000Z') });
+		await updateClassSession('course-1', 'sess-1', { date: new Date('2026-07-02T00:00:00.000Z') }, teacher);
+		expect(classSessionCreate).toHaveBeenCalledTimes(1);
+		expect(classSessionCreate.mock.calls[0]?.[0].data).toMatchObject({
+			timetableSlotId: 'slot-1', date: slotRow.date, courseId: 'course-1', deletedAt: expect.any(Date),
+		});
+		expect(classSessionUpdate.mock.invocationCallOrder[0]).toBeLessThan(classSessionCreate.mock.invocationCallOrder[0]!);
+	});
+	it('reserves nothing when the date is unchanged, absent, or the session has no slot', async () => {
+		classSessionFindUnique.mockResolvedValue(slotRow);
+		classSessionUpdate.mockResolvedValue(slotRow);
+		await updateClassSession('course-1', 'sess-1', { date: slotRow.date, durationMinutes: 90 }, teacher);
+		await updateClassSession('course-1', 'sess-1', { durationMinutes: 90 }, teacher);
+		classSessionFindUnique.mockResolvedValue(sessionRow);
+		await updateClassSession('course-1', 'sess-1', { date: new Date('2026-07-02T00:00:00.000Z') }, teacher);
+		expect(classSessionCreate).not.toHaveBeenCalled();
+	});
+	it('answers 409 when the new date is already taken by the same slot', async () => {
+		classSessionFindUnique.mockResolvedValueOnce(slotRow);
+		classSessionUpdate.mockRejectedValueOnce(prismaError('P2002'));
+		await expect(updateClassSession('course-1', 'sess-1', { date: new Date('2026-07-08T00:00:00.000Z') }, teacher)).rejects.toMatchObject({ code: 'SESSION_DATE_TAKEN', statusCode: 409 });
+	});
+	it('answers 409 when a live class appeared after the check and the mode is hall only', async () => {
+		classSessionFindUnique.mockResolvedValueOnce(sessionRow);
+		classSessionUpdate.mockRejectedValueOnce(prismaError('P2025'));
+		await expect(updateClassSession('course-1', 'sess-1', { classType: 'PHYSICAL' }, teacher)).rejects.toMatchObject({ code: 'SESSION_HAS_LIVE_CLASS', statusCode: 409 });
+		expect(classSessionUpdate.mock.calls[0]?.[0].where).toEqual({ id: 'sess-1', zoomMeetingId: null });
+	});
+	it('does not guard on the meeting for other mode changes', async () => {
+		classSessionFindUnique.mockResolvedValueOnce(sessionRow);
+		classSessionUpdate.mockResolvedValueOnce(sessionRow);
+		await updateClassSession('course-1', 'sess-1', { classType: 'ONLINE' }, teacher);
+		expect(classSessionUpdate.mock.calls[0]?.[0].where).toEqual({ id: 'sess-1' });
 	});
 });

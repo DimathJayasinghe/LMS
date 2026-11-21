@@ -89,6 +89,7 @@ Requires an `Idempotency-Key` UUID so a client retry cannot create two provider 
 | `FORBIDDEN_COURSE` | 403 | Teacher doesn't own this course |
 | `SESSION_NOT_ONLINE` | 400 | Session's `classType` is `PHYSICAL` |
 | `ALREADY_SCHEDULED` | 409 | `zoomMeetingId` already set |
+| `SESSION_CHANGED` | 409 | The session was set to hall only, or scheduled by another request, while the meeting was being created; the meeting is stored only on an unscheduled, non-hall-only session |
 | `ZOOM_NOT_CONFIGURED` | 503 | Server-to-Server OAuth env vars missing |
 | `ZOOM_AUTH_FAILED` / `ZOOM_CREATE_FAILED` | 502 | Zoom rejected the OAuth or create-meeting request |
 

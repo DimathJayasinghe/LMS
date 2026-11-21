@@ -162,5 +162,5 @@ contain no reusable raw link; authorized staff schedule the occurrence through
 { "status": "success", "data": { "created": 3, "skipped": 5 }, "message": "…" }
 ```
 
-> A **weekly BullMQ job** (Sun 20:00 UTC) auto-generates the next `timetable.generateAheadDays` days (default 14, range 1–365) using the default organization’s setting, so
+> A **weekly BullMQ job** (Sun 20:00 UTC) auto-generates the next `timetable.generateAheadDays` days (default 14, range 7–365; at least the weekly interval, so no days are skipped) using the default organization’s setting, so
 > `/generate` is mainly for backfilling or on-demand refresh.

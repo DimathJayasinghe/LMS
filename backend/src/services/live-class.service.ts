@@ -2,6 +2,7 @@ import { ClassType, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { redis } from '@/config/redis';
 import { AppError } from '@/utils/app-error';
+import { hasPrismaCode } from '@/utils/prisma-error';
 import {
   createZoomMeeting,
   generateMeetingSdkSignature,
@@ -94,14 +95,23 @@ export const scheduleLiveClass = async (
     session.durationMinutes,
   );
 
-  await prisma.classSession.update({
-    where: { id: sessionId },
-    data: {
-      zoomMeetingId: meeting.meetingId,
-      zoomLink: meeting.joinUrl,
-      zoomPassword: meeting.password,
-    },
-  });
+  // The meeting is stored only while the session is still unscheduled and not hall only, so a concurrent mode change
+  // or a second scheduling request cannot leave a hall-only session holding a meeting.
+  try {
+    await prisma.classSession.update({
+      where: { id: sessionId, zoomMeetingId: null, OR: [{ classType: null }, { classType: ClassType.ONLINE }] },
+      data: {
+        zoomMeetingId: meeting.meetingId,
+        zoomLink: meeting.joinUrl,
+        zoomPassword: meeting.password,
+      },
+    });
+  } catch (error) {
+    if (hasPrismaCode(error, 'P2025')) {
+      throw new AppError('SESSION_CHANGED', 409, 'The session changed while the live class was being created. Check its mode and try again.');
+    }
+    throw error;
+  }
 
   return { sessionId, liveScheduled: true };
 };
