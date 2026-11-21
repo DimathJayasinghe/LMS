@@ -41,7 +41,7 @@ content is one coarse rule applied differently depending on the route.
 | T8 Communication | Three SMS events, all to the student's own phone; none for absence, fee due or timetable change | F-25, F-76, F-72 |
 | T9 Documentation drift | Doc 01 contradicts itself and the code; CLAUDE.md and doc 15 overstated the content gate and the attendance channels | F-14, F-26, F-34, F-66 |
 | T10 Commercial and lifecycle model | No teacher settlement, class medium or capacity, drop and transfer lifecycle, non-monthly products, assistant role, substitutes, year rollover, minors' consent and retention | F-91 to F-102 |
-| T11 Scheduling, offboarding and oversight hygiene | Timetable-generated classes cannot go live, front desk not tied to a branch, offboarding without hand-over, no SMS log, thin security audit | F-104, F-105, F-107, F-118, F-120, F-121 |
+| T11 Scheduling, offboarding and oversight hygiene | Timetable-generated classes could not go live (fixed in #107), front desk not tied to a branch, offboarding without hand-over, no SMS log, thin security audit | F-104, F-105, F-107, F-118, F-120, F-121 |
 
 **Most urgent single item:** F-01: browser sessions end about 15 minutes after login (verified in code; the logout itself has not been replayed, so reproduce it before fixing). Users are sent to login mid-exam and mid-queue. The fix needs a server-side renewal path, not only a cookie change (effort M); mechanics are in the private audit notes.
 
@@ -191,7 +191,7 @@ letters are S (hours), M (days), L (a week or more).
 - **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
   entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset (done, #108) and F-21 staff creation; F-104 timetable-generated classes
-  that can go live (done, #107); F-127 read-only owner console.
+  that can go live (a live-checked S fix; done in #107, unreleased); F-127 read-only owner console.
 - **Wave 2 — make access coherent (decisions made, doc 19; sub-order 2a enrollment migration with HYBRID, 2b money core and single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority):** the single content gate with mode and
   payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105 residual: session branch), money and enrollment lifecycle (F-59 to F-65, F-91, F-93, F-94),
   guardian contact, minors and notification events (F-25, F-76, F-98); teacher requests for concessions, waivers, refunds and corrections, executed by the owner or capped (F-125, 2f); late work (F-126, 2e).

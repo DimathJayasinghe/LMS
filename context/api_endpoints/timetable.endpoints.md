@@ -58,7 +58,7 @@ before login).
 
 - `dayOfWeek` — `0`=Sunday … `6`=Saturday.
 - `startTime` — `"HH:mm"`, 24h, **Asia/Colombo** local.
-- `classType` — `ONLINE` | `PHYSICAL` | `null` (all cohorts).
+- `classType` — `ONLINE` (online only) | `PHYSICAL` (in hall only) | `null` (in hall + live stream).
 - `title` — optional; generated sessions fall back to the course name.
 
 ## Endpoints
@@ -117,7 +117,7 @@ Body:
 - `instituteId`, `title`, `durationMinutes` (default 60), `classType`, `isActive` — optional.
 - Slots must finish on the same local calendar day. An active slot returns `409
   TIMETABLE_CONFLICT` if it overlaps the same course, teacher, or non-null institute.
-- A recurring slot never accepts or returns a Zoom link. Each generated online occurrence
+- A recurring slot never accepts or returns a Zoom link. Each generated online or in-hall + live-stream occurrence
   is scheduled separately through the embedded live-class endpoint.
 
 `201` → `{ status, data: TimetableSlot, message }`. Not the course's teacher → `403`. Bad `startTime` → `400`.
@@ -153,7 +153,7 @@ Creates a `ClassSession` for every occurrence of every active slot in the range.
 and never clobbers a hand-edited session.
 
 The range is bounded to 90 days. Call `POST /generate/preview` with the same body
-first to receive `rows`, `createCount`, and `existingCount`. Generated online sessions
+first to receive `rows`, `createCount`, and `existingCount`. Generated online and in-hall + live-stream sessions
 contain no reusable raw link; authorized staff schedule the occurrence through
 `POST /classes/:classId/sessions/:sessionId/live/schedule`.
 
@@ -162,5 +162,5 @@ contain no reusable raw link; authorized staff schedule the occurrence through
 { "status": "success", "data": { "created": 3, "skipped": 5 }, "message": "…" }
 ```
 
-> A **weekly BullMQ job** (Sun 20:00 UTC) auto-generates the next 14 days, so
+> A **weekly BullMQ job** (Sun 20:00 UTC) auto-generates the next `timetable.generateAheadDays` days (default 14, range 7–365; at least the weekly interval, so no days are skipped) using the default organization’s setting, so
 > `/generate` is mainly for backfilling or on-demand refresh.
