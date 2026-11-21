@@ -265,17 +265,82 @@ describe('collectEntrancePayment', () => {
 		expect(result).toEqual(created);
 	});
 
-	it('updates an existing PENDING/FAILED row instead of creating a duplicate', async () => {
+	it.each(['PENDING', 'FAILED'])('converts an existing %s row instead of creating a duplicate, only while it is still not paid', async (status) => {
 		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
-		paymentFindUnique.mockResolvedValueOnce({ id: 'pay-old', status: 'FAILED', payhereId: null });
+		paymentFindUnique.mockResolvedValueOnce({ id: 'pay-old', status, payhereId: null });
 		paymentUpdate.mockResolvedValueOnce(created);
 
 		await collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' });
 
 		expect(paymentUpdate).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { id: 'pay-old' } }),
+			expect.objectContaining({ where: { id: 'pay-old', status: { in: ['PENDING', 'FAILED'] } } }),
 		);
 		expect(paymentCreate).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['a cash row from the desk', { method: 'ENTRANCE', payhereId: null }],
+		['a manual or bulk row', { method: 'MANUAL', payhereId: null }],
+	])('refuses to overwrite %s that is already paid, so a day of cash never changes silently', async (_label, row) => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce({ id: 'pay-cash', status: 'SUCCESS', ...row });
+
+		await expect(
+			collectEntrancePayment('admin-2', { enrollmentId: 'e1', paymentMonth: '2026-07', amount: 1 }),
+		).rejects.toMatchObject({ code: 'ALREADY_PAID', statusCode: 409 });
+		expect(paymentUpdate).not.toHaveBeenCalled();
+		expect(paymentCreate).not.toHaveBeenCalled();
+		expect(dispatch).not.toHaveBeenCalled();
+	});
+
+	it('answers ALREADY_PAID when another desk paid the row between the lookup and the conversion', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce({ id: 'pay-old', status: 'PENDING', payhereId: null });
+		paymentUpdate.mockRejectedValueOnce(Object.assign(new Error('no row'), { code: 'P2025' }));
+
+		await expect(
+			collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' }),
+		).rejects.toMatchObject({ code: 'ALREADY_PAID', statusCode: 409 });
+		expect(dispatch).not.toHaveBeenCalled();
+	});
+
+	it('answers ALREADY_PAID when another desk created the row between the lookup and the insert', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce(null);
+		paymentCreate.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }));
+
+		await expect(
+			collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' }),
+		).rejects.toMatchObject({ code: 'ALREADY_PAID', statusCode: 409 });
+		expect(dispatch).not.toHaveBeenCalled();
+	});
+
+	it('lets any other database error through unchanged', async () => {
+		enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+		paymentFindUnique.mockResolvedValueOnce(null);
+		paymentCreate.mockRejectedValueOnce(new Error('boom'));
+
+		await expect(
+			collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' }),
+		).rejects.toThrow('boom');
+	});
+
+	it.each([
+		['creating', () => { paymentFindUnique.mockResolvedValueOnce(null); paymentCreate.mockResolvedValueOnce(created); }, () => paymentCreate],
+		['converting', () => { paymentFindUnique.mockResolvedValueOnce({ id: 'p', status: 'PENDING', payhereId: null }); paymentUpdate.mockResolvedValueOnce(created); }, () => paymentUpdate],
+	])('stamps when the money was taken (collectedAt) when %s', async (_label, arrange, writer) => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-07-15T10:00:00Z'));
+		try {
+			enrollmentFindUnique.mockResolvedValueOnce(activeEnrollment);
+			arrange();
+			await collectEntrancePayment('admin-1', { enrollmentId: 'e1', paymentMonth: '2026-07' });
+			expect(writer()).toHaveBeenCalledWith(
+				expect.objectContaining({ data: expect.objectContaining({ collectedAt: new Date('2026-07-15T10:00:00Z') }) }),
+			);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('rejects with ALREADY_PAID_ONLINE when the month is already a confirmed online payment', async () => {

@@ -170,6 +170,7 @@ model Organization {
   notifications               Notification[]
   notificationSettings        NotificationSetting[]
   organizationSettings        OrganizationSetting[]
+  cashTallies                 CashTally[]
   institutes                  Institute[]
   timetableSlots              TimetableSlot[]
   studentBarcodes             StudentBarcode[]
@@ -228,6 +229,8 @@ model User {
   smsLogs                           SmsLog[]
   notifications                     Notification[]
   refreshTokens                     RefreshToken[]
+  cashTalliesClosed                 CashTally[]                  @relation("CashTallyCollector")
+  cashTalliesReconciled             CashTally[]                  @relation("CashTallyReconciler")
   updatedOrganizationSettings       OrganizationSetting[]
 
   createdAt DateTime @default(now())
@@ -518,6 +521,7 @@ model Payment {
   collectedById String? // staff who took an ENTRANCE/MANUAL payment
   collectedBy   User?   @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
 
+  collectedAt            DateTime? // when staff took the money; createdAt/updatedAt move on conversions and refunds
   collectedAtInstituteId String?
   collectedAtInstitute   Institute? @relation(fields: [collectedAtInstituteId], references: [id], onDelete: SetNull)
   collectedViaBarcode    String? // raw barcode value that identified the student — a
@@ -540,6 +544,7 @@ model Payment {
   @@index([method])
   @@index([paymentMonth])
   @@index([collectedAtInstituteId])
+  @@index([collectedById, collectedAt])
   @@index([organizationId])
 }
 
@@ -1121,6 +1126,7 @@ model Institute {
   studentBarcodes StudentBarcode[]
   timetableSlots  TimetableSlot[]
   payments        Payment[]
+  cashTallies     CashTally[]
   markerGroups    MarkerGroup[]
   examAudiences   ExamAudience[]
 
@@ -1207,4 +1213,31 @@ model OrganizationSetting {
 
   @@unique([organizationId, key])
   @@index([organizationId])
+}
+
+/// End-of-day cash count by one collector (and branch) for one Colombo calendar day. A record, not a lock:
+/// later cash changes the live system amount and the row reports itself stale. One row per (collector, day, branch).
+model CashTally {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  collectorId    String
+  collector      User         @relation("CashTallyCollector", fields: [collectorId], references: [id], onDelete: Restrict)
+  instituteId    String?
+  institute      Institute?   @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  day            String // Colombo calendar day, YYYY-MM-DD
+  countedAmount  Decimal      @db.Decimal(12, 2)
+  systemAmount   Decimal      @db.Decimal(12, 2)
+  variance       Decimal      @db.Decimal(12, 2)
+  paymentCount   Int
+  note           String?
+  reconciledAt   DateTime?
+  reconciledById String?
+  reconciledBy   User?        @relation("CashTallyReconciler", fields: [reconciledById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([collectorId, day])
+  @@index([day])
 }

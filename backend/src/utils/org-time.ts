@@ -34,12 +34,25 @@ export const shiftMonth = (month: string, delta: number): string => {
 export const monthsEndingAt = (month: string, count: number): string[] =>
   Array.from({ length: count }, (_, i) => shiftMonth(month, i - count + 1));
 
+/** True for a real calendar date written as YYYY-MM-DD (so 2026-02-30 is not). */
+export const isRealCalendarDay = (day: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const [year, month, date] = day.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date)).toISOString().slice(0, 10) === day;
+};
+
+/** Whole calendar days from `from` to `to` (negative when `to` is earlier). */
+export const daysBetween = (from: string, to: string): number =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
+/** The calendar day `delta` days away from `day` (`YYYY-MM-DD`). */
+export const shiftDay = (day: string, delta: number): string =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
+
 /** Start inclusive, end exclusive, in UTC. */
 export const dayRangeInTz = (day: string, tz: string): { start: Date; end: Date } => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new RangeError('Invalid calendar day');
+  if (!isRealCalendarDay(day)) throw new RangeError('Invalid calendar day');
   const [year, month, date] = day.split('-').map(Number) as [number, number, number];
-  const calendarDate = new Date(Date.UTC(year, month - 1, date));
-  if (calendarDate.toISOString().slice(0, 10) !== day) throw new RangeError('Invalid calendar day');
   const next = new Date(Date.UTC(year, month - 1, date + 1));
   return { start: midnightInTz(year, month, date, tz), end: midnightInTz(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), tz) };
 };
