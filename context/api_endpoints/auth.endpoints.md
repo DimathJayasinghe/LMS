@@ -136,6 +136,7 @@ Creates a new student account and sets auth cookies.
 - 400 validation error (see validation error shape)
 - 409 `EMAIL_ALREADY_EXISTS` (service error shape)
 - 409 `NIC_ALREADY_EXISTS` (service error shape)
+- 409 `CODE_UNAVAILABLE` — registration could not allocate its generated card; retry registration.
 
 ### POST `/login`
 

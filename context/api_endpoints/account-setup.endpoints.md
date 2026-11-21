@@ -115,7 +115,7 @@ R2 — the PUT never landed; re-upload).
 
 ## `GET /institute-barcodes` / `POST /institute-barcodes` / `DELETE /institute-barcodes/:barcodeId`
 
-Self-scoped CRUD over the caller's own `StudentBarcode` rows.
+Self-scoped CRUD over the caller's own `StudentBarcode` rows. Codes are trimmed printable ASCII, 1–50 characters.
 
 **`POST` request**
 ```json

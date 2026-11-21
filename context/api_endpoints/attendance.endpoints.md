@@ -136,7 +136,7 @@ came from a timetable slot, its configured institute must match.
 }
 ```
 
-`source` accepts `BARCODE` or `QR` and defaults to `BARCODE` for older clients.
+`barcode` is trimmed printable ASCII, 3–64 characters. `source` accepts `BARCODE` or `QR` and defaults to `BARCODE` for older clients.
 
 **Success (200)**
 

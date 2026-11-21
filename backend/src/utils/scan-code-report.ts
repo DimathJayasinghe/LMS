@@ -4,7 +4,7 @@ import { lstatSync, realpathSync } from 'node:fs';
 // ─── Scan-code collision report ──────────────────────────────
 // Read-only operator report: every code held by more than one student across both code tables
 // (compared case-insensitively, like the resolver), and every institute card written in the
-// reserved `LMS-<n>` card format. Run it before the unambiguous resolver is deployed.
+// reserved `LMS-<n>` card format or outside printable ASCII. Run it before deployment.
 
 export interface ReportRow {
   reason: 'COLLISION' | 'RESERVED_FORMAT' | 'NON_PRINTABLE_ASCII';

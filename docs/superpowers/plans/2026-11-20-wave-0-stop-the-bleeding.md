@@ -142,7 +142,7 @@ F-04 and F-06 share one PR because D-ACCESS-8 puts list, metadata and stream beh
 
 **Live verification (disposable stack):** seed an artificial collision and confirm both the scanner and the desk lookup show the ambiguity message; run the report and confirm the rows are listed; confirm normal scans (LMS card, institute card) are unchanged.
 
-**Deploy ordering (hard):** run the report against production first and have the front desk resolve every listed collision. If the report lists many existing collisions, stop and ask the owner for a one-line confirmation of the alternative (narrow candidates by the scanning branch) before enforcing organization-wide uniqueness. This is the only point in Wave 0 where a decision may reopen.
+**Deploy ordering (hard):** run the report against production first using the maintenance guide production-image runbook and have the front desk resolve every listed collision. If the report lists many existing collisions, stop and ask the owner for a one-line confirmation of the alternative (narrow candidates by the scanning branch) before enforcing organization-wide uniqueness. This is the only point in Wave 0 where a decision may reopen.
 
 **Migration:** none (no new unique constraint before M3). **Effort:** M (2.5 days). **Rollback:** revert the PR; no data changes were made, only reads and rejected writes.
 

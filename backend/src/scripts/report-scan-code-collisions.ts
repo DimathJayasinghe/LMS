@@ -6,7 +6,8 @@ export {};
  * `LMS-<n>` card format. Run it against production BEFORE deploying the unambiguous scan resolver and
  * have the front desk resolve every listed row first.
  *
- *   npm run scan-codes:report -- --out /somewhere/outside/the/repo/scan-code-report.csv
+ * Local development: npm run scan-codes:report -- --out /somewhere/outside/the/repo/scan-code-report.csv
+ * For production, use the production-image command in the maintenance guide.
  *
  * Without --out it prints counts only. The CSV names students, so it is never written inside the
  * repository and must not be committed.

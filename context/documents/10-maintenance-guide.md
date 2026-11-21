@@ -178,3 +178,17 @@ Infrastructure numbers are environment variables with defaults in `backend/src/c
 | `REFRESH_REUSE_GRACE_SECONDS` | `10` | A refresh token presented again within this many seconds of its rotation is treated as a duplicate (several tabs, retried request) instead of theft. `0` restores strict single use; range 0-60. A `Refresh token reuse detected` line in the backend log outside this window is a real signal. |
 
 **Rolling back the session change:** before reverting the backend code run `DELETE FROM "RefreshToken" WHERE "rotatedAt" IS NOT NULL;`, because the previous code would treat a rotated row as a live token. The `rotatedAt` column can stay.
+
+
+## Scan-code collision report (run before deploying F-07)
+
+Before deployment, query the production database with `SHOW lc_ctype;`. Continue only if the result is `en_US.utf8`, `C.UTF-8` or `C`; stop and contact the owner otherwise. Build the new backend image first, while the current services remain in use. With PostgreSQL running, use a host directory **outside the repository** for the report (replace the placeholders):
+
+```sh
+docker compose build backend
+docker compose run --rm --no-deps -v <host dir outside the repo>:/reports backend node dist/scripts/report-scan-code-collisions.js --out /reports/<name>.csv
+```
+
+The report exits 0 when clean, 2 when rows are listed, and 1 on error. If rows are listed, stop the deployment and send the report to the owner for resolution; it contains personal data and must never be committed. The report checks collisions, reserved formats and stored codes outside printable ASCII. For local development only, `npm run scan-codes:report -- --out <path outside the repo>` runs from `backend/`; the production image does not include its development tooling.
+
+Mock tests do not establish transaction serialization. Run the disposable-stack live verification script supplied with the change against a real database to check the database behavior before release.

@@ -206,7 +206,7 @@ A deactivated or non-student holder is still returned, as before.
 
 **Query params**
 
-- `code`: string, required, 1–50 chars — the scanned/typed barcode value.
+- `code`: string, required, 1–50 printable ASCII characters after trimming — the scanned/typed barcode value.
 
 **Success (200)**
 
@@ -303,7 +303,7 @@ keys return 400; replaying the same key returns the original stored response.
 
 ### PATCH `/:id/barcode`
 
-Assigns a barcode to a user.
+Assigns a barcode to a user. The code is trimmed printable ASCII, 3–50 characters. The user’s own default `LMS-<index padded to 6 digits>` card can be restored.
 
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
 keys return 400; replaying the same key returns the original stored response.
@@ -333,4 +333,4 @@ keys return 400; replaying the same key returns the original stored response.
 - 403 forbidden (role guard)
 - 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN` (same guard as `/:id/status`)
 - 404 `USER_NOT_FOUND` (service error shape)
-- 409 `CODE_UNAVAILABLE` — the code is held by another user as an LMS card or an institute card (compared case-insensitively), or is in the reserved `LMS-<number>` card format. The message never names the other holder. Re-assigning the code the user already holds is accepted.
+- 409 `CODE_UNAVAILABLE` — the code is held by another user as an LMS card or an institute card (compared case-insensitively), or is in the reserved `LMS-<number>` format other than the user’s own default card. The message never names the other holder. Re-assigning an existing code is checked against other holders.
