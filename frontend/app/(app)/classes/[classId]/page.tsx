@@ -1,6 +1,7 @@
+import { requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, Clock, Lock, Pencil, PlayCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,8 @@ import EnrollPanel from "./_components/EnrollPanel";
 import { LiveClassAction } from "./_components/LiveClassAction";
 import { CourseSeenTracker } from "./_components/CourseSeenTracker";
 import { CourseModules } from "./_components/CourseModules";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api-server";
+import { ApiError } from "@/lib/api";
 import { formatDuration } from "@/lib/video";
 import type {
   ApiList,
@@ -18,7 +20,6 @@ import type {
   CourseModule,
   Enrollment,
   Subject,
-  User,
   VideoRecording,
 } from "@/lib/types";
 
@@ -48,12 +49,7 @@ export default async function ClassDetailPage({
   const cookie = (await cookies()).toString();
   const { classId } = await params;
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
 
   // Front desk and marker accounts never open recordings (the API refuses them).
   const canOpenRecordings = user.role !== "ADMIN" && user.role !== "MARKER";

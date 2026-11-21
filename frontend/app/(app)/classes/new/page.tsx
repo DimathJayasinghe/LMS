@@ -1,18 +1,14 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { CourseForm } from "../_components/CourseForm";
-import { api } from "@/lib/api";
-import type { AcademicStaff, ApiList, ApiSuccess, Subject, SubjectTeacherAssignment, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import type { AcademicStaff, ApiList, Subject, SubjectTeacherAssignment } from "@/lib/types";
 
 export default async function NewClassPage() {
   const cookie = (await cookies()).toString();
-  let viewer: User;
-  try {
-    viewer = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const viewer = await requireUser(cookie);
   if (viewer.role !== "TEACHER" && viewer.role !== "SUPER_ADMIN") redirect("/classes");
 
   const subjectPath = viewer.role === "TEACHER" ? "/subjects/mine" : "/subjects";

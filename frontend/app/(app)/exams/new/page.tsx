@@ -1,23 +1,19 @@
+import { requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { ExamForm } from "./_components/ExamForm";
-import { api } from "@/lib/api";
-import type { ApiList, ApiSuccess, Course, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import type { ApiList, Course } from "@/lib/types";
 
 export const metadata = { title: "New exam · LMS" };
 
 export default async function NewExamPage() {
   const cookie = (await cookies()).toString();
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
   if (user.role !== "TEACHER" && user.role !== "SUPER_ADMIN") redirect("/exams");
 
   const courses = await api

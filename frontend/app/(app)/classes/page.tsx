@@ -1,19 +1,17 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Search } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import ClassCard from "./_components/ClassCard";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import type {
   ApiList,
-  ApiSuccess,
   Course,
   LearningEnrollment,
   Subject,
-  User,
 } from "@/lib/types";
 
 export default async function ClassesPage({
@@ -25,21 +23,14 @@ export default async function ClassesPage({
   const { search } = await searchParams;
   const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
 
-  let user: User;
-  let courses: Course[];
-  let subjects: Subject[];
-  try {
-    const [me, classList, subjectList] = await Promise.all([
-      api.get<ApiSuccess<User>>("/auth/me", { cookie }),
-      api.get<ApiList<Course>>(`/classes${query}`, { cookie }),
-      api.get<ApiList<Subject>>("/subjects", { cookie }),
-    ]);
-    user = me.data;
-    courses = classList.data;
-    subjects = subjectList.data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const [me, classList, subjectList] = await Promise.all([
+    requireUser(cookie),
+    api.get<ApiList<Course>>(`/classes${query}`, { cookie }),
+    api.get<ApiList<Subject>>("/subjects", { cookie }),
+  ]);
+  const user = me;
+  const courses = classList.data;
+  const subjects = subjectList.data;
 
   // Resolve subject names client-side — the class payload carries only subjectId.
   const subjectName = new Map(subjects.map((s) => [s.id, s.name]));

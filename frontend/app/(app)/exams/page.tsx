@@ -1,13 +1,13 @@
+import { requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Button } from "@/components/ui/button";
 import ExamCard, { type ExamCardState } from "./_components/ExamCard";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { cn } from "@/lib/utils";
-import type { ApiList, ApiSuccess, Course, Exam, MySubmission, User } from "@/lib/types";
+import type { ApiList, Course, Exam, MySubmission } from "@/lib/types";
 
 export const metadata = { title: "Exams · LMS" };
 
@@ -32,21 +32,14 @@ export default async function ExamsPage({
     : "all";
   const query = active === "all" ? "" : `?status=${active}`;
 
-  let user: User;
-  let exams: Exam[];
-  let courses: Course[];
-  try {
-    const [me, examList, courseList] = await Promise.all([
-      api.get<ApiSuccess<User>>("/auth/me", { cookie }),
-      api.get<ApiList<Exam>>(`/exams${query}`, { cookie }),
-      api.get<ApiList<Course>>("/classes", { cookie }),
-    ]);
-    user = me.data;
-    exams = examList.data;
-    courses = courseList.data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const [me, examList, courseList] = await Promise.all([
+    requireUser(cookie),
+    api.get<ApiList<Exam>>(`/exams${query}`, { cookie }),
+    api.get<ApiList<Course>>("/classes", { cookie }),
+  ]);
+  const user = me;
+  const exams = examList.data;
+  const courses = courseList.data;
 
   // Exams carry only `courseId`; resolve names from the course list.
   const courseName = new Map(courses.map((c) => [c.id, c.name]));

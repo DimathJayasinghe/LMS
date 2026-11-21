@@ -1,5 +1,5 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { CalendarDays, QrCode } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { ComingSoon } from "@/components/custom/ComingSoon";
@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { AttendanceQr } from "./_components/AttendanceQr";
 import { AttendanceReport } from "./_components/AttendanceReport";
 import { StaffScanner } from "./_components/StaffScanner";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { attendanceSourceLabel } from "@/lib/attendance";
-import type { ApiList, ApiSuccess, AttendanceRecord, Course, Institute, User } from "@/lib/types";
+import type { ApiList, AttendanceRecord, Course, Institute } from "@/lib/types";
 
 export const metadata = { title: "Attendance · LMS" };
 
@@ -22,12 +22,7 @@ const dateFmt = new Intl.DateTimeFormat("en-LK", {
 export default async function AttendancePage() {
   const cookie = (await cookies()).toString();
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
 
   // Front-desk gets the entrance scanner; SUPER_ADMIN also gets recovery reports.
   if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {

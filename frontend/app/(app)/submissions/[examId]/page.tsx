@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
@@ -8,7 +9,8 @@ import { ExamNotice } from "../../exams/[examId]/_components/ExamNotice";
 import { GradeSubmissionRow } from "./_components/GradeSubmissionRow";
 import { MarkerAssignmentPanel } from "./_components/MarkerAssignmentPanel";
 import { PublishResultsButton } from "./_components/PublishResultsButton";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api-server";
+import { ApiError } from "@/lib/api";
 import { examTypeLabel, formatExamWindow, getExamStatus } from "@/lib/exam";
 import type {
   AcademicStaff,
@@ -17,7 +19,6 @@ import type {
   ExamDetail,
   ExamMarkerAssignment,
   ExamSubmission,
-  User,
 } from "@/lib/types";
 
 export default async function GradeExamPage({
@@ -28,12 +29,7 @@ export default async function GradeExamPage({
   const cookie = (await cookies()).toString();
   const { examId } = await params;
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
   if (user.role === "STUDENT") redirect("/exams");
 
   const backLink = (

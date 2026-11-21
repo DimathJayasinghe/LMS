@@ -1,10 +1,10 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { api } from "@/lib/api";
-import type { ApiList, ApiSuccess, Course, Institute, TimetableSlot, UpcomingTimetableSession, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import type { ApiList, Course, Institute, TimetableSlot, UpcomingTimetableSession } from "@/lib/types";
 import { TimetableManager } from "./_components/TimetableManager";
 import { LiveClassAction } from "../classes/[classId]/_components/LiveClassAction";
 
@@ -42,29 +42,20 @@ function timeRange(start: string, durationMinutes: number): string {
 export default async function TimetablePage() {
   const cookie = (await cookies()).toString();
 
-  let slots: TimetableSlot[];
-  let courses: Course[];
-  let institutes: Institute[];
-  let upcoming: UpcomingTimetableSession[];
-  let user: User;
-  try {
-    const now = new Date();
-    const to = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const [slotList, classList, instituteList, upcomingList, me] = await Promise.all([
-      api.get<ApiList<TimetableSlot>>("/timetable/slots", { cookie }),
-      api.get<ApiList<Course>>("/classes", { cookie }),
-      api.get<ApiList<Institute>>("/institutes", { cookie }),
-      api.get<ApiList<UpcomingTimetableSession>>(`/timetable/sessions?from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, { cookie }),
-      api.get<ApiSuccess<User>>("/auth/me", { cookie }),
-    ]);
-    slots = slotList.data;
-    courses = classList.data;
-    institutes = instituteList.data;
-    upcoming = upcomingList.data;
-    user = me.data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const now = new Date();
+  const to = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const [slotList, classList, instituteList, upcomingList, me] = await Promise.all([
+    api.get<ApiList<TimetableSlot>>("/timetable/slots", { cookie }),
+    api.get<ApiList<Course>>("/classes", { cookie }),
+    api.get<ApiList<Institute>>("/institutes", { cookie }),
+    api.get<ApiList<UpcomingTimetableSession>>(`/timetable/sessions?from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, { cookie }),
+    requireUser(cookie),
+  ]);
+  const slots = slotList.data;
+  const courses = classList.data;
+  const institutes = instituteList.data;
+  const upcoming = upcomingList.data;
+  const user = me;
 
   const courseName = new Map(courses.map((c) => [c.id, c.name]));
   const canManage = ["SUPER_ADMIN", "TEACHER", "ADMIN"].includes(user.role);

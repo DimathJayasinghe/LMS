@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -5,8 +6,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { AuditFilters } from "./_components/AuditFilters";
 import { AuditLogTable } from "./_components/AuditLogTable";
-import { api } from "@/lib/api";
-import type { ApiList, ApiSuccess, AuditLogEntry, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import type { ApiList, AuditLogEntry } from "@/lib/types";
 
 export const metadata = { title: "Audit Log · LMS" };
 
@@ -20,12 +21,7 @@ export default async function AuditLogPage({
   const cookie = (await cookies()).toString();
   const sp = await searchParams;
 
-  let viewer: User;
-  try {
-    viewer = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const viewer = await requireUser(cookie);
   // Audit logs contain IPs, user-agents, and every privileged mutation's
   // before/after state — super-admin only (see the 2026-07-10 role-guard fix,
   // the route used to be gated to front-desk ADMIN by mistake).

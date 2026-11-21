@@ -1,9 +1,10 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StudentPayments } from "./_components/StudentPayments";
 import { AdminPayments } from "./_components/AdminPayments";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { currentPaymentMonth } from "@/lib/payhere";
 import type {
   ApiList,
@@ -12,7 +13,6 @@ import type {
   Payment,
   PaymentStatus,
   PaymentSummary,
-  User,
 } from "@/lib/types";
 
 export const metadata = { title: "Payments · LMS" };
@@ -29,12 +29,7 @@ export default async function PaymentsPage({
   const cookie = (await cookies()).toString();
   const sp = await searchParams;
 
-  let viewer: User;
-  try {
-    viewer = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const viewer = await requireUser(cookie);
 
   // ── Student view ─────────────────────────────────────────
   if (viewer.role === "STUDENT") {

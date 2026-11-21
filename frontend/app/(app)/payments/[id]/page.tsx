@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ApiError, api } from "@/lib/api";
+import { api } from "@/lib/api-server";
+import { ApiError } from "@/lib/api";
 import type { ApiSuccess, Payment } from "@/lib/types";
 import { PaymentReceipt } from "../_components/PaymentReceipt";
 

@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -5,8 +6,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { UserFilters } from "./_components/UserFilters";
 import { UsersTable } from "./_components/UsersTable";
-import { api } from "@/lib/api";
-import type { ApiList, ApiSuccess, Role, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import type { ApiList, Role, User } from "@/lib/types";
 
 export const metadata = { title: "Users · LMS" };
 
@@ -21,12 +22,7 @@ export default async function UsersPage({
   const cookie = (await cookies()).toString();
   const sp = await searchParams;
 
-  let viewer: User;
-  try {
-    viewer = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const viewer = await requireUser(cookie);
   if (viewer.role !== "SUPER_ADMIN" && viewer.role !== "ADMIN") redirect("/dashboard");
 
   const page = Math.max(1, Number(sp.page) || 1);
