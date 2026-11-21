@@ -18,14 +18,6 @@ export const normalizeScanCode = (raw: string): string => raw.trim();
 
 const unavailable = (): AppError => new AppError('CODE_UNAVAILABLE', 409, 'This code is unavailable.');
 
-const studentSelect = {
-  id: true,
-  name: true,
-  indexNumber: true,
-  role: true,
-  deletedAt: true,
-} satisfies Prisma.UserSelect;
-
 export interface ScanStudent {
   id: string;
   name: string;
@@ -49,21 +41,21 @@ export interface ResolvedScanStudent {
 export const resolveStudentByCode = async (rawCode: string): Promise<ResolvedScanStudent> => {
   const code = normalizeScanCode(rawCode);
 
-  const [userIds, cardIds] = await Promise.all([
-    prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "User" WHERE upper("barcode") = upper(${code})`,
-    prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "StudentBarcode" WHERE upper("barcode") = upper(${code})`,
-  ]);
-  const [userMatches, cardMatches] = await Promise.all([
-    prisma.user.findMany({ where: { id: { in: userIds.map(({ id }) => id) } }, select: studentSelect }),
-    prisma.studentBarcode.findMany({
-      where: { id: { in: cardIds.map(({ id }) => id) } },
-      select: { instituteId: true, user: { select: studentSelect } },
-    }),
-  ]);
+  const matches = await prisma.$queryRaw<(ScanStudent & { kind: 'USER' | 'CARD'; instituteId: string | null })[]>`
+    SELECT 'USER' AS "kind", NULL::text AS "instituteId",
+      u."id", u."name", u."indexNumber", u."role"::text AS "role", u."deletedAt"
+    FROM "User" u WHERE upper(u."barcode") = upper(${code})
+    UNION ALL
+    SELECT 'CARD' AS "kind", b."instituteId"::text AS "instituteId",
+      u."id", u."name", u."indexNumber", u."role"::text AS "role", u."deletedAt"
+    FROM "StudentBarcode" b JOIN "User" u ON u."id" = b."userId"
+    WHERE upper(b."barcode") = upper(${code})
+  `;
 
   const holders = new Map<string, ScanStudent>();
-  for (const user of userMatches) holders.set(user.id, user);
-  for (const card of cardMatches) holders.set(card.user.id, card.user);
+  for (const { id, name, indexNumber, role, deletedAt } of matches) {
+    holders.set(id, { id, name, indexNumber, role, deletedAt });
+  }
 
   if (holders.size === 0) {
     throw new AppError(
@@ -82,7 +74,7 @@ export const resolveStudentByCode = async (rawCode: string): Promise<ResolvedSca
   }
 
   const student = [...holders.values()][0]!;
-  const ownCards = cardMatches.filter((card) => card.user.id === student.id);
+  const ownCards = matches.filter((match) => match.kind === 'CARD' && match.id === student.id);
 
   return {
     student,

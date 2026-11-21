@@ -2,9 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
-const { userFindMany, studentBarcodeFindMany, lockSpy, queryRaw } = vi.hoisted(() => ({
-	userFindMany: vi.fn(),
-	studentBarcodeFindMany: vi.fn(),
+const { lockSpy, queryRaw } = vi.hoisted(() => ({
 	lockSpy: vi.fn(),
 	queryRaw: vi.fn(),
 }));
@@ -12,8 +10,6 @@ const { userFindMany, studentBarcodeFindMany, lockSpy, queryRaw } = vi.hoisted((
 vi.mock('@/config/database', () => ({
 	prisma: {
 		$queryRaw: queryRaw,
-		user: { findMany: userFindMany },
-		studentBarcode: { findMany: studentBarcodeFindMany },
 	},
 }));
 
@@ -50,9 +46,7 @@ const makeTx = () => {
 };
 
 beforeEach(() => {
-	queryRaw.mockReset().mockResolvedValue([{ id: 'candidate' }]);
-	userFindMany.mockReset().mockResolvedValue([]);
-	studentBarcodeFindMany.mockReset().mockResolvedValue([]);
+	queryRaw.mockReset().mockResolvedValue([]);
 	lockSpy.mockReset().mockResolvedValue(undefined);
 });
 
@@ -72,130 +66,60 @@ describe('LMS_CODE_PATTERN', () => {
 });
 
 describe('resolveStudentByCode', () => {
-	it.each(['A_1', '50%', 'END\\'])('binds the literal code %s to exact uppercase comparisons', async (code) => {
-		queryRaw.mockReset().mockResolvedValue([]);
-		await resolveStudentByCode(code).catch(() => undefined);
-		expect(queryRaw).toHaveBeenCalledTimes(2);
-		for (const [strings, bound] of queryRaw.mock.calls) {
-			expect(strings.join('?')).toMatch(/upper\("barcode"\)\s*=\s*upper\(\?\)/i);
-			expect(bound).toBe(code);
-		}
+	const user = (id: string, over: Partial<{ role: Role; deletedAt: Date | null }> = {}) => ({
+		kind: 'USER', instituteId: null, ...student(id, over),
+	});
+	const card = (id: string, instituteId: string) => ({ kind: 'CARD', instituteId, ...student(id) });
+
+	it.each(['A_1', '50%', 'END\\'])('binds %s unchanged in both exact comparisons in one query', async (code) => {
+		await expect(resolveStudentByCode(code)).rejects.toMatchObject({ code: 'BARCODE_NOT_FOUND' });
+		expect(queryRaw).toHaveBeenCalledTimes(1);
+		const [strings, ...values] = queryRaw.mock.calls[0];
+		const sql = strings.join('?');
+		expect(sql.match(/upper\((?:\w+\.)?"barcode"\)\s*=\s*upper\(\?\)/gi)).toHaveLength(2);
+		expect(sql).toMatch(/UNION ALL/i);
+		expect(values).toEqual([code, code]);
 	});
 
-	it('404s when the code is held by nobody', async () => {
-		await expect(resolveStudentByCode('NOPE')).rejects.toMatchObject({
-			code: 'BARCODE_NOT_FOUND',
-			statusCode: 404,
+	it('returns a user holder with normalized input and no institute', async () => {
+		queryRaw.mockResolvedValue([user('u1')]);
+		await expect(resolveStudentByCode('  lms-1 ')).resolves.toEqual({
+			student: student('u1'), instituteId: null, matchedBarcode: 'lms-1',
 		});
 	});
 
-	it('loads details for the ids returned by the exact comparisons', async () => {
-		await resolveStudentByCode('  nug-001 ').catch(() => undefined);
-		expect(queryRaw).toHaveBeenCalledTimes(2);
-		expect(userFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['candidate'] } } }));
-		expect(studentBarcodeFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['candidate'] } } }));
+	it('reports the institute for one card, including a user match for the same holder', async () => {
+		queryRaw.mockResolvedValue([user('u1'), card('u1', 'inst-1')]);
+		await expect(resolveStudentByCode('x')).resolves.toMatchObject({ student: student('u1'), instituteId: 'inst-1' });
+		queryRaw.mockResolvedValue([card('u1', 'inst-1')]);
+		await expect(resolveStudentByCode('x')).resolves.toMatchObject({ student: student('u1'), instituteId: 'inst-1' });
 	});
 
-	it('resolves a code held only as a User.barcode, with no institute', async () => {
-		userFindMany.mockResolvedValue([student('u1')]);
-
-		await expect(resolveStudentByCode('LMS-000001')).resolves.toEqual({
-			student: student('u1'),
-			instituteId: null,
-			matchedBarcode: 'LMS-000001',
-		});
-	});
-
-	it('resolves a code held by one StudentBarcode row and reports its institute', async () => {
-		studentBarcodeFindMany.mockResolvedValue([{ instituteId: 'inst-1', user: student('u1') }]);
-
-		await expect(resolveStudentByCode('NUG-001')).resolves.toMatchObject({
-			student: { id: 'u1' },
-			instituteId: 'inst-1',
-		});
-	});
-
-	it('resolves the same student held in both tables (one distinct student)', async () => {
-		userFindMany.mockResolvedValue([student('u1')]);
-		studentBarcodeFindMany.mockResolvedValue([{ instituteId: 'inst-1', user: student('u1') }]);
-
-		await expect(resolveStudentByCode('X-1')).resolves.toMatchObject({
-			student: { id: 'u1' },
-			instituteId: 'inst-1',
-		});
-	});
-
-	it('reports no institute when the same student holds the code at two institutes', async () => {
-		studentBarcodeFindMany.mockResolvedValue([
-			{ instituteId: 'inst-1', user: student('u1') },
-			{ instituteId: 'inst-2', user: student('u1') },
-		]);
-
-		await expect(resolveStudentByCode('X-1')).resolves.toMatchObject({
-			student: { id: 'u1' },
-			instituteId: null,
-		});
+	it('returns no institute for two cards of the same holder', async () => {
+		queryRaw.mockResolvedValue([card('u1', 'inst-1'), card('u1', 'inst-2')]);
+		await expect(resolveStudentByCode('x')).resolves.toMatchObject({ instituteId: null });
 	});
 
 	it.each([
-		[
-			'User.barcode of one student and StudentBarcode of another',
-			[student('u1')],
-			[{ instituteId: 'inst-1', user: student('u2') }],
-		],
-		[
-			'two StudentBarcode rows of different students at different institutes',
-			[],
-			[
-				{ instituteId: 'inst-1', user: student('u1') },
-				{ instituteId: 'inst-2', user: student('u2') },
-			],
-		],
-		[
-			'two StudentBarcode rows of different students at the same institute',
-			[],
-			[
-				{ instituteId: 'inst-1', user: student('u1') },
-				{ instituteId: 'inst-1', user: student('u2') },
-			],
-		],
-		['case-variant User.barcode duplicates', [student('u1'), student('u2')], []],
-	])('never picks a winner: %s is ambiguous', async (_name, users, rows) => {
-		userFindMany.mockResolvedValue(users);
-		studentBarcodeFindMany.mockResolvedValue(rows);
-
-		await expect(resolveStudentByCode('DUP')).rejects.toMatchObject({
-			code: 'AMBIGUOUS_CODE',
-			statusCode: 409,
-		});
+		[user('u1'), card('u2', 'inst-1')],
+		[card('u1', 'inst-1'), card('u2', 'inst-2')],
+		[card('u1', 'inst-1'), card('u2', 'inst-1')],
+		[user('u1'), user('u2')],
+		[user('u1'), user('t1', { role: Role.TEACHER })],
+		[user('u1'), user('u3', { deletedAt: new Date('2026-01-01') })],
+	])('rejects distinct holders, including case variants and inactive holders', async (...rows) => {
+		queryRaw.mockResolvedValue(rows);
+		const error = await resolveStudentByCode('DUP').then(() => null, (e: unknown) => e);
+		expect(error).toMatchObject({ code: 'AMBIGUOUS_CODE', statusCode: 409 });
+		expect((error as Error).message).not.toMatch(/u1|u2|Student/);
 	});
 
-	it('does not name the other holders in the ambiguity message', async () => {
-		userFindMany.mockResolvedValue([student('u1'), student('u2')]);
-
-		const err = (await resolveStudentByCode('DUP').then(() => null, (e: unknown) => e)) as Error;
-		expect(err.message).not.toMatch(/u1|u2|Student/);
-		expect(err.message).toMatch(/index number or name/i);
-	});
-
-	it('counts a deactivated or non-student holder as a holder (ambiguity is about the code, not the state)', async () => {
-		userFindMany.mockResolvedValue([student('u1'), student('t1', { role: Role.TEACHER })]);
-		await expect(resolveStudentByCode('DUP')).rejects.toMatchObject({ code: 'AMBIGUOUS_CODE' });
-
-		userFindMany.mockResolvedValue([student('u1'), student('u3', { deletedAt: new Date() })]);
-		await expect(resolveStudentByCode('DUP')).rejects.toMatchObject({ code: 'AMBIGUOUS_CODE' });
-	});
-
-	it('returns a lone deactivated or non-student holder so the caller keeps its own refusal codes', async () => {
-		userFindMany.mockResolvedValue([student('u1', { deletedAt: new Date('2026-01-01') })]);
-		await expect(resolveStudentByCode('A-1')).resolves.toMatchObject({
-			student: { id: 'u1', deletedAt: new Date('2026-01-01') },
-		});
-
-		userFindMany.mockResolvedValue([student('t1', { role: Role.TEACHER })]);
-		await expect(resolveStudentByCode('A-2')).resolves.toMatchObject({
-			student: { id: 't1', role: Role.TEACHER },
-		});
+	it.each([
+		{ role: Role.TEACHER },
+		{ deletedAt: new Date('2026-01-01') },
+	])('returns a lone holder for the caller to validate', async (over) => {
+		queryRaw.mockResolvedValue([user('u1', over)]);
+		await expect(resolveStudentByCode('x')).resolves.toMatchObject({ student: student('u1', over) });
 	});
 });
 
