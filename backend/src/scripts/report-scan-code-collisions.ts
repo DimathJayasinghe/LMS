@@ -20,6 +20,7 @@ import { Pool } from 'pg';
 import {
   COLLISION_REPORT_SQL,
   RESERVED_FORMAT_REPORT_SQL,
+  NON_ASCII_REPORT_SQL,
   assertOutsideRepository,
   reportToCsv,
   summarizeReport,
@@ -54,18 +55,20 @@ const main = async (): Promise<void> => {
   const pool = new Pool({ connectionString });
   let rows: ReportRow[];
   try {
-    const [collisions, reserved] = await Promise.all([
+    const [collisions, reserved, nonAscii] = await Promise.all([
       pool.query<ReportRow>(COLLISION_REPORT_SQL),
       pool.query<ReportRow>(RESERVED_FORMAT_REPORT_SQL),
+      pool.query<ReportRow>(NON_ASCII_REPORT_SQL),
     ]);
-    rows = [...collisions.rows, ...reserved.rows];
+    rows = [...collisions.rows, ...reserved.rows, ...nonAscii.rows];
   } finally {
     await pool.end();
   }
 
   const summary = summarizeReport(rows);
   console.log(`Codes held by more than one student: ${summary.collidingCodes} (${summary.collidingHolders} holders)`);
-  console.log(`Institute cards in the reserved LMS-<n> format: ${summary.reservedFormatCards}`);
+  console.log(`Codes in the reserved LMS-<n> format: ${summary.reservedFormatCards}`);
+  console.log(`Codes outside printable ASCII: ${summary.nonPrintableCodes}`);
 
   if (outPath) {
     writeFileSync(outPath, reportToCsv(rows), { mode: 0o600 });

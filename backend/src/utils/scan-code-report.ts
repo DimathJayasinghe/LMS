@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { lstatSync, realpathSync } from 'node:fs';
 
 // ─── Scan-code collision report ──────────────────────────────
 // Read-only operator report: every code held by more than one student across both code tables
@@ -6,7 +7,7 @@ import path from 'node:path';
 // reserved `LMS-<n>` card format. Run it before the unambiguous resolver is deployed.
 
 export interface ReportRow {
-  reason: 'COLLISION' | 'RESERVED_FORMAT';
+  reason: 'COLLISION' | 'RESERVED_FORMAT' | 'NON_PRINTABLE_ASCII';
   code: string;
   holderCount: number | null;
   kind: 'USER_BARCODE' | 'INSTITUTE_CARD';
@@ -55,7 +56,30 @@ FROM "StudentBarcode" b
 JOIN "User" u ON u."id" = b."userId"
 JOIN "Institute" i ON i."id" = b."instituteId"
 WHERE b."barcode" ~* '^LMS-[0-9]+$'
-ORDER BY b."barcode", u."indexNumber"
+UNION ALL
+SELECT 'RESERVED_FORMAT', upper(u."barcode"), NULL::int, 'USER_BARCODE', NULL::text,
+       u."id", u."indexNumber", u."name", u."role"::text, (u."deletedAt" IS NOT NULL)
+FROM "User" u
+WHERE u."barcode" ~* '^LMS-[0-9]+$'
+  AND upper(u."barcode") <> 'LMS-' || lpad(u."indexNumber"::text, greatest(6, length(u."indexNumber"::text)), '0')
+ORDER BY code, "indexNumber"
+`;
+
+export const NON_ASCII_REPORT_SQL = `
+SELECT 'NON_PRINTABLE_ASCII' AS reason, u."barcode" AS code, NULL::int AS "holderCount",
+       'USER_BARCODE' AS kind, NULL::text AS "instituteCode",
+       u."id" AS "userId", u."indexNumber", u."name", u."role"::text AS role,
+       (u."deletedAt" IS NOT NULL) AS deactivated
+FROM "User" u
+WHERE u."barcode" COLLATE "C" ~ '[^ -~]'
+UNION ALL
+SELECT 'NON_PRINTABLE_ASCII', b."barcode", NULL::int, 'INSTITUTE_CARD', i."code",
+       u."id", u."indexNumber", u."name", u."role"::text, (u."deletedAt" IS NOT NULL)
+FROM "StudentBarcode" b
+JOIN "User" u ON u."id" = b."userId"
+JOIN "Institute" i ON i."id" = b."instituteId"
+WHERE b."barcode" COLLATE "C" ~ '[^ -~]'
+ORDER BY code, "indexNumber"
 `;
 
 const CSV_COLUMNS: (keyof ReportRow)[] = [
@@ -87,6 +111,7 @@ export interface ReportSummary {
   collidingCodes: number;
   collidingHolders: number;
   reservedFormatCards: number;
+  nonPrintableCodes: number;
 }
 
 export const summarizeReport = (rows: ReportRow[]): ReportSummary => {
@@ -95,15 +120,19 @@ export const summarizeReport = (rows: ReportRow[]): ReportSummary => {
     collidingCodes: new Set(collisions.map((row) => row.code)).size,
     collidingHolders: new Set(collisions.map((row) => `${row.code}\u0000${row.userId}`)).size,
     reservedFormatCards: rows.filter((row) => row.reason === 'RESERVED_FORMAT').length,
+    nonPrintableCodes: rows.filter((row) => row.reason === 'NON_PRINTABLE_ASCII').length,
   };
 };
 
 /** The report names students, so it must never be written where a `git add` could pick it up. */
 export const assertOutsideRepository = (outPath: string, repositoryRoots: string[]): void => {
-  const resolved = path.resolve(outPath);
+  const output = path.resolve(outPath);
+  const parent = realpathSync(path.dirname(output));
+  const destination = path.join(parent, path.basename(output));
+  const resolved = lstatSync(destination, { throwIfNoEntry: false }) ? realpathSync(destination) : destination;
   for (const root of repositoryRoots) {
-    const relative = path.relative(path.resolve(root), resolved);
-    if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    const relative = path.relative(realpathSync(root), resolved);
+    if (relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative))) {
       throw new Error(`Refusing to write the report inside the repository (${root}). Choose an --out path outside it.`);
     }
   }

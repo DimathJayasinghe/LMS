@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import { mkdtempSync, mkdirSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import {
 	COLLISION_REPORT_SQL,
 	RESERVED_FORMAT_REPORT_SQL,
+	NON_ASCII_REPORT_SQL,
 	assertOutsideRepository,
 	reportToCsv,
 	summarizeReport,
@@ -24,6 +27,18 @@ const row = (over: Partial<ReportRow> = {}): ReportRow => ({
 });
 
 describe('report queries', () => {
+	it('reports user cards with a reserved code other than their own', () => {
+		expect(RESERVED_FORMAT_REPORT_SQL).toContain('USER_BARCODE');
+		expect(RESERVED_FORMAT_REPORT_SQL).toMatch(/upper\(u\."barcode"\)\s*<>/i);
+		expect(RESERVED_FORMAT_REPORT_SQL).toContain('"indexNumber"');
+	});
+
+	it('reports stored non-printable or non-ASCII codes from both tables', () => {
+		expect(NON_ASCII_REPORT_SQL).toContain('"User"');
+		expect(NON_ASCII_REPORT_SQL).toContain('"StudentBarcode"');
+		expect(NON_ASCII_REPORT_SQL).toContain('NON_PRINTABLE_ASCII');
+	});
+
 	it('are read-only SELECTs over both code tables', () => {
 		for (const sql of [COLLISION_REPORT_SQL, RESERVED_FORMAT_REPORT_SQL]) {
 			expect(sql.trim().toUpperCase().startsWith('WITH') || sql.trim().toUpperCase().startsWith('SELECT')).toBe(true);
@@ -70,29 +85,40 @@ describe('summarizeReport', () => {
 			row({ code: 'B', userId: 'u4' }),
 			row({ reason: 'RESERVED_FORMAT', code: 'LMS-000009', holderCount: null }),
 		];
-		expect(summarizeReport(rows)).toEqual({ collidingCodes: 2, collidingHolders: 4, reservedFormatCards: 1 });
+		expect(summarizeReport(rows)).toEqual({ collidingCodes: 2, collidingHolders: 4, reservedFormatCards: 1, nonPrintableCodes: 0 });
 	});
 
 	it('reports zeros for a clean database', () => {
-		expect(summarizeReport([])).toEqual({ collidingCodes: 0, collidingHolders: 0, reservedFormatCards: 0 });
+		expect(summarizeReport([])).toEqual({ collidingCodes: 0, collidingHolders: 0, reservedFormatCards: 0, nonPrintableCodes: 0 });
 	});
 });
 
 describe('assertOutsideRepository', () => {
-	const root = path.resolve('/work/LMS');
+	const base = mkdtempSync(path.join(tmpdir(), 'scan-report-'));
+	const root = path.join(base, 'LMS');
+	mkdirSync(root);
+	mkdirSync(path.join(root, 'out'));
+	const sibling = path.join(base, 'LMS-reports');
+	mkdirSync(sibling);
+	const link = path.join(base, 'linked');
+	symlinkSync(path.join(root, 'missing.csv'), path.join(sibling, 'dangling.csv'));
+	symlinkSync(root, link);
 
-	it('refuses a path inside the checkout, however it is spelled', () => {
-		expect(() => assertOutsideRepository('/work/LMS/report.csv', [root])).toThrow(/outside/i);
-		expect(() => assertOutsideRepository('/work/LMS/backend/../out/report.csv', [root])).toThrow(/outside/i);
-		expect(() => assertOutsideRepository('/work/LMS', [root])).toThrow(/outside/i);
+	it('refuses a file named ..x.csv inside the repository', () => {
+		expect(() => assertOutsideRepository(path.join(root, '..x.csv'), [root])).toThrow(/outside/i);
+		expect(() => assertOutsideRepository(path.join(sibling, '..x.csv'), [root])).not.toThrow();
 	});
 
-	it('refuses a path inside any of several roots', () => {
-		expect(() => assertOutsideRepository('/app/out.csv', [root, '/app'])).toThrow(/outside/i);
+	it('refuses a dangling output symlink', () => {
+		expect(() => assertOutsideRepository(path.join(sibling, 'dangling.csv'), [root])).toThrow();
 	});
 
-	it('accepts a path elsewhere, including a sibling directory with a similar name', () => {
-		expect(() => assertOutsideRepository('/tmp/report.csv', [root])).not.toThrow();
-		expect(() => assertOutsideRepository('/work/LMS-reports/report.csv', [root])).not.toThrow();
+	it('refuses a symlinked parent pointing inside the repository', () => {
+		expect(() => assertOutsideRepository(path.join(link, 'report.csv'), [root])).toThrow(/outside/i);
+	});
+
+	it('refuses a path inside any root and permits a sibling', () => {
+		expect(() => assertOutsideRepository(path.join(root, 'out', 'report.csv'), [root])).toThrow(/outside/i);
+		expect(() => assertOutsideRepository(path.join(sibling, 'report.csv'), [root])).not.toThrow();
 	});
 });
