@@ -1,11 +1,13 @@
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { ArrowLeft, CalendarDays, Clock, Info } from "lucide-react";
 import { VideoPlayer } from "@/components/features/VideoPlayer";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api-server";
+import { ApiError } from "@/lib/api";
 import { formatDuration } from "@/lib/video";
-import type { ApiSuccess, User, VideoRecording } from "@/lib/types";
+import type { ApiSuccess, VideoRecording } from "@/lib/types";
 
 const sessionDateFmt = new Intl.DateTimeFormat("en-LK", {
   dateStyle: "medium",
@@ -20,16 +22,13 @@ export default async function VideoPage({
   const cookie = (await cookies()).toString();
   const { classId, videoId } = await params;
 
-  try {
-    await api.get<ApiSuccess<User>>("/auth/me", { cookie });
-  } catch {
-    redirect("/auth/login");
-  }
+  await requireUser(cookie);
 
   let video: VideoRecording;
   try {
-    video = (await api.get<ApiSuccess<VideoRecording>>(`/videos/${videoId}`, { cookie })).data;
+    video = (await guard401(api.get<ApiSuccess<VideoRecording>>(`/videos/${videoId}`, { cookie }))).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     if (e instanceof ApiError && e.status === 403) {
       return (

@@ -1,6 +1,7 @@
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft, Ban, FileText, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ExamStatusBadge } from "@/components/features/ExamStatusBadge";
@@ -8,7 +9,8 @@ import { ExamNotice } from "../../exams/[examId]/_components/ExamNotice";
 import { GradeSubmissionRow } from "./_components/GradeSubmissionRow";
 import { MarkerAssignmentPanel } from "./_components/MarkerAssignmentPanel";
 import { PublishResultsButton } from "./_components/PublishResultsButton";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api-server";
+import { ApiError } from "@/lib/api";
 import { examTypeLabel, formatExamWindow, getExamStatus } from "@/lib/exam";
 import type {
   AcademicStaff,
@@ -17,7 +19,6 @@ import type {
   ExamDetail,
   ExamMarkerAssignment,
   ExamSubmission,
-  User,
 } from "@/lib/types";
 
 export default async function GradeExamPage({
@@ -28,12 +29,7 @@ export default async function GradeExamPage({
   const cookie = (await cookies()).toString();
   const { examId } = await params;
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
   if (user.role === "STUDENT") redirect("/exams");
 
   const backLink = (
@@ -48,8 +44,9 @@ export default async function GradeExamPage({
 
   let exam: ExamDetail;
   try {
-    exam = (await api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie })).data;
+    exam = (await guard401(api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie }))).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
@@ -59,9 +56,10 @@ export default async function GradeExamPage({
   let gateError: string | null = null;
   try {
     submissions = (
-      await api.get<ApiList<ExamSubmission>>(`/submissions/exam/${examId}`, { cookie })
+      await guard401(api.get<ApiList<ExamSubmission>>(`/submissions/exam/${examId}`, { cookie }))
     ).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && (e.code === "MARKER_NOT_ASSIGNED" || e.status === 403)) {
       gateError = "You're not assigned to mark this exam.";
     } else {
@@ -75,14 +73,14 @@ export default async function GradeExamPage({
   const total = submissions?.length ?? 0;
   const [availableMarkers, assignedMarkers] = canPublish
     ? await Promise.all([
-        api
-          .get<ApiList<AcademicStaff>>("/users/academic-staff?role=MARKER", { cookie })
+        guard401(api
+          .get<ApiList<AcademicStaff>>("/users/academic-staff?role=MARKER", { cookie }))
           .then((response) => response.data)
-          .catch(() => [] as AcademicStaff[]),
-        api
-          .get<ApiList<ExamMarkerAssignment>>(`/exams/${examId}/markers`, { cookie })
+          .catch((error) => { unstable_rethrow(error); return [] as AcademicStaff[]; }),
+        guard401(api
+          .get<ApiList<ExamMarkerAssignment>>(`/exams/${examId}/markers`, { cookie }))
           .then((response) => response.data)
-          .catch(() => [] as ExamMarkerAssignment[]),
+          .catch((error) => { unstable_rethrow(error); return [] as ExamMarkerAssignment[]; }),
       ])
     : [[], []];
 

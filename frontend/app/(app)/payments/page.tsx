@@ -1,9 +1,10 @@
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StudentPayments } from "./_components/StudentPayments";
 import { AdminPayments } from "./_components/AdminPayments";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { currentPaymentMonth } from "@/lib/payhere";
 import type {
   ApiList,
@@ -12,7 +13,6 @@ import type {
   Payment,
   PaymentStatus,
   PaymentSummary,
-  User,
 } from "@/lib/types";
 
 export const metadata = { title: "Payments · LMS" };
@@ -29,24 +29,19 @@ export default async function PaymentsPage({
   const cookie = (await cookies()).toString();
   const sp = await searchParams;
 
-  let viewer: User;
-  try {
-    viewer = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const viewer = await requireUser(cookie);
 
   // ── Student view ─────────────────────────────────────────
   if (viewer.role === "STUDENT") {
     const [enrollments, payments] = await Promise.all([
-      api
-        .get<ApiList<Enrollment>>("/enrollments/my", { cookie })
+      guard401(api
+        .get<ApiList<Enrollment>>("/enrollments/my", { cookie }))
         .then((r) => r.data)
-        .catch(() => [] as Enrollment[]),
-      api
-        .get<ApiList<Payment>>("/payments/my", { cookie })
+        .catch((error) => { unstable_rethrow(error); return [] as Enrollment[]; }),
+      guard401(api
+        .get<ApiList<Payment>>("/payments/my", { cookie }))
         .then((r) => r.data)
-        .catch(() => [] as Payment[]),
+        .catch((error) => { unstable_rethrow(error); return [] as Payment[]; }),
     ]);
 
     return (
@@ -75,13 +70,13 @@ export default async function PaymentsPage({
   query.set("paymentMonth", month);
 
   const [list, summary] = await Promise.all([
-    api
-      .get<ApiList<Payment>>(`/payments?${query.toString()}`, { cookie })
-      .catch(() => ({ data: [] as Payment[], count: 0 }) as ApiList<Payment>),
-    api
-      .get<ApiSuccess<PaymentSummary>>(`/payments/summary?month=${month}`, { cookie })
+    guard401(api
+      .get<ApiList<Payment>>(`/payments?${query.toString()}`, { cookie }))
+      .catch((error) => { unstable_rethrow(error); return ({ data: [] as Payment[], count: 0 }) as ApiList<Payment>; }),
+    guard401(api
+      .get<ApiSuccess<PaymentSummary>>(`/payments/summary?month=${month}`, { cookie }))
       .then((r) => r.data)
-      .catch(() => null),
+      .catch((error) => { unstable_rethrow(error); return null; }),
   ]);
 
   return (

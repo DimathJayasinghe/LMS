@@ -1,34 +1,32 @@
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { SubjectTeacherManager } from "./_components/SubjectTeacherManager";
-import { api, ApiError } from "@/lib/api";
-import type { AcademicStaff, ApiList, ApiSuccess, Subject, SubjectTeacherAssignment, User } from "@/lib/types";
+import { api } from "@/lib/api-server";
+import { ApiError } from "@/lib/api";
+import type { AcademicStaff, ApiList, ApiSuccess, Subject, SubjectTeacherAssignment } from "@/lib/types";
 
 export default async function SubjectTeachersPage({ params }: { params: Promise<{ subjectId: string }> }) {
   const cookie = (await cookies()).toString();
   const { subjectId } = await params;
-  let viewer: User;
-  try {
-    viewer = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const viewer = await requireUser(cookie);
   if (viewer.role !== "SUPER_ADMIN") redirect("/dashboard");
 
   let subject: Subject;
   try {
-    subject = (await api.get<ApiSuccess<Subject>>(`/subjects/${subjectId}`, { cookie })).data;
+    subject = (await guard401(api.get<ApiSuccess<Subject>>(`/subjects/${subjectId}`, { cookie }))).data;
   } catch (error) {
+    unstable_rethrow(error);
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
 
   const [teachers, assignments] = await Promise.all([
-    api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie }),
-    api.get<ApiList<SubjectTeacherAssignment>>(`/subjects/${subjectId}/teachers`, { cookie }),
+    guard401(api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie })),
+    guard401(api.get<ApiList<SubjectTeacherAssignment>>(`/subjects/${subjectId}/teachers`, { cookie })),
   ]);
 
   return (

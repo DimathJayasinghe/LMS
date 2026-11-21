@@ -1,17 +1,48 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { RedisStore } from 'rate-limit-redis';
 import { redis } from './redis';
 import { logger } from './logger';
 import { env } from './env';
 import {
-  RATE_LIMIT_GLOBAL_MAX,
+  COOKIE_ACCESS_TOKEN,
+  COOKIE_REFRESH_TOKEN,
   RATE_LIMIT_GLOBAL_WINDOW_MS,
-  RATE_LIMIT_AUTH_MAX,
   RATE_LIMIT_AUTH_WINDOW_MS,
   RATE_LIMIT_STREAM_MAX,
   RATE_LIMIT_STREAM_WINDOW_MS,
 } from '../utils/constants';
+
+export const addressKey = (req: Request): string => `ip:${ipKeyGenerator(req.ip ?? '0.0.0.0')}`;
+
+const tokenKey = (req: Request, cookie: string, secret: string): string => {
+  const token = req.cookies?.[cookie] as unknown;
+  if (typeof token === 'string') {
+    try {
+      const payload = jwt.verify(token, secret);
+      if (typeof payload !== 'string' && typeof payload.userId === 'string' && payload.userId) return `u:${payload.userId}`;
+    } catch {
+      // Invalid and expired tokens share the anonymous address bucket.
+    }
+  }
+  return addressKey(req);
+};
+
+export const accessKey = (req: Request): string => tokenKey(req, COOKIE_ACCESS_TOKEN, env.JWT_ACCESS_SECRET);
+export const refreshKey = (req: Request): string => tokenKey(req, COOKIE_REFRESH_TOKEN, env.JWT_REFRESH_SECRET);
+export const loginAccountKey = (req: Request): string => {
+  const email: unknown = req.body?.email;
+  return `${addressKey(req)}:account:${typeof email === 'string' ? email.trim().toLowerCase() : ''}`;
+};
+export const skipGlobal = (req: Request): boolean => req.path.replace(/\/$/, '') === '/auth/refresh';
+
+interface LimiterOptions {
+  keyGenerator?: (req: Request) => string;
+  skip?: (req: Request) => boolean;
+  skipSuccessfulRequests?: boolean;
+  requestWasSuccessful?: (req: Request, res: Response) => boolean;
+}
 
 /**
  * Creates an express-rate-limit instance.
@@ -27,9 +58,9 @@ import {
  */
 const createLimiter = (
   windowMs: number,
-  max: number,
+  max: number | ((req: Request) => number),
   keyPrefix: string,
-  options: { skipSuccessfulRequests?: boolean; requestWasSuccessful?: (req: Request, res: Response) => boolean } = {},
+  options: LimiterOptions = {},
 ): ReturnType<typeof rateLimit> => {
   // Check if Redis is connected at creation time
   const isRedisReady = redis.status === 'ready' || redis.status === 'connect';
@@ -72,29 +103,50 @@ const createLimiter = (
  */
 export const createRateLimiters = (): {
   globalLimiter: ReturnType<typeof rateLimit>;
-  authLimiter: ReturnType<typeof rateLimit>;
+  loginAccountLimiter: ReturnType<typeof rateLimit>;
+  loginIpLimiter: ReturnType<typeof rateLimit>;
+  registerLimiter: ReturnType<typeof rateLimit>;
+  refreshLimiter: ReturnType<typeof rateLimit>;
   streamLimiter: ReturnType<typeof rateLimit>;
   zoomWebhookLimiter: ReturnType<typeof rateLimit>;
 } => ({
   /**
    * Global limiter: applied to all `/api/*` routes.
-   * 100 requests per minute per IP — generous for normal usage,
-   * tight enough to block naive DoS.
+   * Uses separate limits for authenticated users and anonymous addresses.
    */
   globalLimiter: createLimiter(
     RATE_LIMIT_GLOBAL_WINDOW_MS,
-    RATE_LIMIT_GLOBAL_MAX,
+    (req) => accessKey(req).startsWith('u:') ? env.RATE_LIMIT_GLOBAL_USER_MAX : env.RATE_LIMIT_GLOBAL_ANON_MAX,
     'rl:global:',
+    { keyGenerator: accessKey, skip: skipGlobal },
   ),
 
   /**
-   * Auth limiter: applied to `/api/auth/login` and `/api/auth/register`.
-   * 10 requests per minute per IP — prevents brute-force password attacks.
+   * Auth limiters: applied to login, registration and refresh routes.
    */
-  authLimiter: createLimiter(
+  loginAccountLimiter: createLimiter(
     RATE_LIMIT_AUTH_WINDOW_MS,
-    RATE_LIMIT_AUTH_MAX,
-    'rl:auth:',
+    env.RATE_LIMIT_LOGIN_ACCOUNT_MAX,
+    'rl:login-account:',
+    { keyGenerator: loginAccountKey },
+  ),
+  loginIpLimiter: createLimiter(
+    RATE_LIMIT_AUTH_WINDOW_MS,
+    env.RATE_LIMIT_LOGIN_IP_MAX,
+    'rl:login-ip:',
+    { keyGenerator: addressKey },
+  ),
+  registerLimiter: createLimiter(
+    RATE_LIMIT_AUTH_WINDOW_MS,
+    env.RATE_LIMIT_REGISTER_IP_MAX,
+    'rl:register:',
+    { keyGenerator: addressKey },
+  ),
+  refreshLimiter: createLimiter(
+    RATE_LIMIT_AUTH_WINDOW_MS,
+    env.RATE_LIMIT_REFRESH_MAX,
+    'rl:refresh:',
+    { keyGenerator: refreshKey },
   ),
 
   // Counts every request except signature-verified ones (the verifier sets `zoomVerified`),

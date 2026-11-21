@@ -200,6 +200,11 @@ The report exits 0 when clean, 2 when rows are listed, and 1 on error. If rows a
 
 Mock tests do not establish transaction serialization. Run the disposable-stack live verification script supplied with the change against a real database to check the database behavior before release.
 
+## Client addresses and rate limits
+
+Limits are per minute and configured by `RATE_LIMIT_GLOBAL_ANON_MAX` (100), `RATE_LIMIT_GLOBAL_USER_MAX` (200), `RATE_LIMIT_LOGIN_ACCOUNT_MAX` (10), `RATE_LIMIT_LOGIN_IP_MAX` (60), `RATE_LIMIT_REGISTER_IP_MAX` (30), and `RATE_LIMIT_REFRESH_MAX` (20). Refresh is excluded from the global bucket. A connected Redis store shares counters; the in-memory fallback is local to the API process.
+
+In the Compose nginx topology, nginx sets `X-Real-IP` to the connecting address and the frontend forwards it only to `INTERNAL_API_URL`; keep the backend port private. If a trusted proxy precedes nginx, configure nginx real-IP handling for that proxy's verified source ranges first. For a Vercel rewrite, the repository's nginx configuration currently reports the rewrite layer as the client. Configure and verify a trusted-source real-IP policy for the actual deployment before relying on per-address limits; do not trust forwarded headers from arbitrary sources. After deployment, send a request through each active topology and compare the logged address to the expected client address.
 
 ## Owner account operations
 

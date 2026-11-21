@@ -3,7 +3,7 @@ import Footer from "@/components/custom/Footer";
 import ScrollReveal from "@/app/home/_components/ScrollReveal";
 import CourseCard from "./_components/CourseCard";
 import Timetable from "./_components/Timetable";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import type { ApiList, PublicCourse, PublicUpcomingSession } from "@/lib/types";
 
 export const metadata = { title: "Classes & Timetable · LMS" };

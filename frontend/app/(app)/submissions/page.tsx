@@ -1,37 +1,33 @@
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { CheckCircle2, ClipboardCheck, FileText } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { ExamStatusBadge } from "@/components/features/ExamStatusBadge";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-server";
 import { examTypeLabel, formatExamWindow, getExamStatus } from "@/lib/exam";
-import type { ApiList, ApiSuccess, Course, Exam, User } from "@/lib/types";
+import type { ApiList, Course, Exam } from "@/lib/types";
 
 export const metadata = { title: "Submissions · LMS" };
 
 export default async function SubmissionsPage() {
   const cookie = (await cookies()).toString();
 
-  let user: User;
-  try {
-    user = (await api.get<ApiSuccess<User>>("/auth/me", { cookie })).data;
-  } catch {
-    redirect("/auth/login");
-  }
+  const user = await requireUser(cookie);
   // Students grade nothing — send them to their own exams view.
   if (user.role === "STUDENT") redirect("/exams");
 
   const [exams, courses] = await Promise.all([
-    api
-      .get<ApiList<Exam>>("/exams", { cookie })
+    guard401(api
+      .get<ApiList<Exam>>("/exams", { cookie }))
       .then((r) => r.data)
-      .catch(() => [] as Exam[]),
-    api
-      .get<ApiList<Course>>("/classes", { cookie })
+      .catch((error) => { unstable_rethrow(error); return [] as Exam[]; }),
+    guard401(api
+      .get<ApiList<Course>>("/classes", { cookie }))
       .then((r) => r.data)
-      .catch(() => [] as Course[]),
+      .catch((error) => { unstable_rethrow(error); return [] as Course[]; }),
   ]);
 
   const courseName = new Map(courses.map((c) => [c.id, c.name]));
