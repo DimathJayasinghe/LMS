@@ -426,7 +426,7 @@ export type VideoStatus = "UPLOADING" | "READY" | "FAILED";
 export interface VideoRecording {
   id: string;
   title: string;
-  /** Provider video id: sent only to the owning teacher and the owner, never to students. */
+  /** Provider video id field: sent only to the owning teacher and the owner (a student's signed embed URL contains it, by design). */
   bunnyVideoId?: string;
   durationSeconds?: number | null;
   status: VideoStatus;

@@ -240,6 +240,9 @@ Results are ordered by class session date (newest first).
 | Status | Code | Cause |
 |--------|------|-------|
 | 401 | — | Not authenticated |
+| 403 | `FORBIDDEN_ROLE` | Front desk (`ADMIN`) or `MARKER` account |
+| 403 | `FORBIDDEN_COURSE` | `TEACHER` who does not teach the course |
+| 403 | `NOT_ENROLLED` | Student without an active enrollment |
 | 404 | `CLASS_NOT_FOUND` | Course does not exist |
 
 ---
@@ -250,7 +253,7 @@ Fetches metadata for a single video recording. Does **not** generate a stream UR
 
 A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one they teach.
 
-**Roles:** `STUDENT` (enrolled), `TEACHER` (own course), `SUPER_ADMIN`; `ADMIN` and `MARKER` get `403 FORBIDDEN_ROLE` (checked before the video is looked up, so a refused role learns nothing about which ids exist). Enrollment only, no payment check; `bunnyVideoId` is omitted for students.
+**Roles:** `STUDENT` (enrolled), `TEACHER` (own course), `SUPER_ADMIN`; `ADMIN` and `MARKER` get `403 FORBIDDEN_ROLE` (checked before the video is looked up, so a refused role learns nothing about which ids exist). Enrollment only, no payment check; `bunnyVideoId` is omitted for students, and a recording that is not `READY` returns `404` to a student.
 
 **Success (200)**
 
@@ -266,7 +269,10 @@ A `TEACHER` caller gets `403 FORBIDDEN_COURSE` if the video's course isn't one t
 | Status | Code | Cause |
 |--------|------|-------|
 | 401 | — | Not authenticated |
-| 404 | `VIDEO_NOT_FOUND` | Video does not exist |
+| 403 | `FORBIDDEN_ROLE` | Front desk (`ADMIN`) or `MARKER` account |
+| 403 | `FORBIDDEN_COURSE` | `TEACHER` who does not teach the course |
+| 403 | `NOT_ENROLLED` | Student without an active enrollment |
+| 404 | `VIDEO_NOT_FOUND` | Video does not exist, or (for a student) is not ready |
 
 ---
 
@@ -327,6 +333,10 @@ This is an HDCP triggering issue with their hardware — the DRM is working as i
 | Status | Code | Cause |
 |--------|------|-------|
 | 401 | — | Not authenticated |
+| 403 | `FORBIDDEN_ROLE` | Front desk (`ADMIN`) or `MARKER` account |
+| 403 | `FORBIDDEN_COURSE` | `TEACHER` who does not teach the course |
+| 403 | `NOT_ENROLLED` | Student without an active enrollment |
+| 402 | `PAYMENT_REQUIRED` | Student has not paid the current month |
 | 404 | `VIDEO_NOT_FOUND` | Video does not exist |
 
 ---

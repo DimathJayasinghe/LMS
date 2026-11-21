@@ -91,7 +91,11 @@ beforeEach(() => {
 	]);
 	videoCount.mockResolvedValue(1);
 	userFindUnique.mockResolvedValue({ name: 'Nimal Perera', indexNumber: 42 });
-	getSignedBunnyEmbedUrl.mockReturnValue({ embedUrl: 'https://iframe.example/embed?token=x', expiresAt: 1 });
+	// The real signed URL embeds the provider id in its path; a paid student gets it by design.
+	getSignedBunnyEmbedUrl.mockReturnValue({
+		embedUrl: 'https://iframe.example/embed/lib-1/bunny-secret-guid?token=x&expires=1',
+		expiresAt: 1,
+	});
 	assertCourseAccess.mockImplementation(async (_courseId: string, actor: Actor) => {
 		if (actor.role === Role.TEACHER && actor.userId !== 'teacher-1') {
 			throw new AppError('FORBIDDEN_COURSE', 403, 'You can only manage your own courses.');
@@ -210,6 +214,34 @@ describe('recording reads: check ordering', () => {
 	});
 });
 
+describe('recording reads: students see only finished recordings', () => {
+	const notReady = async () => ({ ...studentRow, status: VideoStatus.UPLOADING, bunnyVideoId: 'bunny-secret-guid' });
+
+	it.each([VideoStatus.UPLOADING, VideoStatus.FAILED])(
+		'an enrolled student asking for a %s recording gets 404, like a missing one',
+		async (status) => {
+			videoFindUnique.mockImplementation(async () => ({ ...(await notReady()), status }));
+			await expect(getVideoById('vid-1', paidStudent)).rejects.toMatchObject({
+				code: 'VIDEO_NOT_FOUND',
+				statusCode: 404,
+			});
+		},
+	);
+
+	it('an unenrolled student still gets NOT_ENROLLED first, not a 404 that hints at the status', async () => {
+		videoFindUnique.mockImplementation(notReady);
+		await expect(getVideoById('vid-1', unenrolledStudent)).rejects.toMatchObject(ENROLL_ERR);
+	});
+
+	it.each([
+		['owner', owner],
+		['owning teacher', owningTeacher],
+	])('the %s can still read a recording that is not ready (they monitor uploads)', async (_n, actor) => {
+		videoFindUnique.mockImplementation(notReady);
+		await expect(getVideoById('vid-1', actor)).resolves.toMatchObject({ status: VideoStatus.UPLOADING });
+	});
+});
+
 describe('recording reads: response shape', () => {
 	it('never includes the provider video id for a student, in list or get', async () => {
 		const list = await listVideosByClass('course-1', query, paidStudent);
@@ -220,9 +252,10 @@ describe('recording reads: response shape', () => {
 		expect(videoFindUnique.mock.calls[0]![0].select.bunnyVideoId).toBeUndefined();
 	});
 
-	it('the stream result carries no provider video id either, only the signed embed URL', async () => {
+	it('the stream result carries no provider id as a metadata field; the signed embed URL is what a viewer needs', async () => {
 		const result = await generateStreamUrl('vid-1', paidStudent);
 		expect(JSON.stringify(result.video)).not.toContain('bunny-secret-guid');
+		expect(result.video).not.toHaveProperty('bunnyVideoId');
 		expect(getSignedBunnyEmbedUrl).toHaveBeenCalledWith('bunny-secret-guid');
 		expect(result.embedUrl).toContain('token=');
 	});

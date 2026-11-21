@@ -46,8 +46,8 @@ const videoWithSessionSelect = {
   classSession: videoSessionRelation,
 } satisfies Prisma.VideoRecordingSelect;
 
-// Students never receive the provider's video id: they only ever get a signed,
-// short-lived embed URL from generateStreamUrl.
+// Student-facing records omit the provider's video id as a metadata field; the
+// signed embed URL from generateStreamUrl (which contains it) is what a viewer uses.
 const { bunnyVideoId: _omitProviderId, ...studentVideoFields } = videoSelect;
 void _omitProviderId;
 const studentVideoWithSessionSelect = {
@@ -245,7 +245,7 @@ export const deleteVideoRecording = async (
 };
 
 // ─── List Videos for a Class ─────────────────────────────────
-// Any authenticated user can list videos for a course.
+// Enrolled students, the owning teacher and the owner can list a course's videos.
 // Returns paginated results ordered newest-first.
 
 export const listVideosByClass = async (
@@ -313,6 +313,12 @@ export const getVideoById = async (
 
   await assertRecordingAccess(actor, video.classSession.courseId, { requirePaid: false });
 
+  // Students only ever see finished recordings (as in the list); an unfinished one
+  // reads as not found. Checked after access so an unenrolled student learns nothing.
+  if (actor.role === Role.STUDENT && video.status !== VideoStatus.READY) {
+    throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
+  }
+
   return video;
 };
 
@@ -322,8 +328,7 @@ export const getVideoById = async (
 //
 // Security:
 //  - Token-authenticated (signed URL), expires after BUNNY_TOKEN_TTL_SECONDS
-//    (4 hours). It is NOT bound to the viewer's IP: a copied URL works until
-//    it expires, which is why the per-viewer watermark exists.
+//    (4 hours). It is not bound to the viewer's IP.
 //  - Only the roles in RECORDING_READER_ROLES reach this point; front-desk and
 //    marker accounts are refused before the video is even looked up.
 
@@ -338,8 +343,8 @@ export const generateStreamUrl = async (
 }> => {
   assertRecordingReaderRole(actor);
 
-  // The provider id is needed here to sign the URL, for every role; it never
-  // leaves this function (the returned `video` omits it).
+  // The provider id is needed here to sign the URL, for every role; the returned
+  // `video` omits it.
   const stored = await prisma.videoRecording.findUnique({
     where: { id: videoId },
     select: videoWithSessionSelect,

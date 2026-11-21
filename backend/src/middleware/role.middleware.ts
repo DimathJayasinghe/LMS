@@ -23,6 +23,7 @@ export const requireRole = (...allowedRoles: Role[]) => {
       res.status(403).json({
         status: 'error',
         message: 'You do not have permission to perform this action.',
+        code: 'FORBIDDEN_ROLE',
       });
       return;
     }

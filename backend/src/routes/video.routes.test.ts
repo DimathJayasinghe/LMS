@@ -32,13 +32,15 @@ const handlesFor = (method: string, path: string): Handle[] => {
 };
 
 /** Runs the route's role gate (the second handler, after verifyToken) for an actor with this role. */
-const roleGate = (path: string, role: Role): 'allowed' | number => {
+const roleGate = (path: string, role: Role): 'allowed' | { status: number; code?: string } => {
 	const gate = handlesFor('get', path)[1]!;
-	let status: number | undefined;
+	let refusal: { status: number; code?: string } | undefined;
 	let passed = false;
-	const res = { status: (s: number) => ({ json: () => void (status = s) }) } as unknown as Response;
+	const res = {
+		status: (s: number) => ({ json: (body: { code?: string }) => void (refusal = { status: s, code: body.code }) }),
+	} as unknown as Response;
 	gate({ user: { userId: 'u', role } } as Request, res, () => void (passed = true));
-	return passed ? 'allowed' : status!;
+	return passed ? 'allowed' : refusal!;
 };
 
 describe('video read routes: role gate at the route layer', () => {
@@ -48,8 +50,8 @@ describe('video read routes: role gate at the route layer', () => {
 		it.each([Role.STUDENT, Role.TEACHER, Role.SUPER_ADMIN])(`GET ${path} lets %s through`, (role) => {
 			expect(roleGate(path, role)).toBe('allowed');
 		});
-		it.each([Role.ADMIN, Role.MARKER])(`GET ${path} refuses %s with 403`, (role) => {
-			expect(roleGate(path, role)).toBe(403);
+		it.each([Role.ADMIN, Role.MARKER])(`GET ${path} refuses %s with 403 FORBIDDEN_ROLE`, (role) => {
+			expect(roleGate(path, role)).toEqual({ status: 403, code: 'FORBIDDEN_ROLE' });
 		});
 	}
 });
