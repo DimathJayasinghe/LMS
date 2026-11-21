@@ -1,5 +1,5 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { RedisStore } from 'rate-limit-redis';
 import { redis } from './redis';
@@ -37,6 +37,13 @@ export const loginAccountKey = (req: Request): string => {
 };
 export const skipGlobal = (req: Request): boolean => req.path.replace(/\/$/, '') === '/auth/refresh';
 
+interface LimiterOptions {
+  keyGenerator?: (req: Request) => string;
+  skip?: (req: Request) => boolean;
+  skipSuccessfulRequests?: boolean;
+  requestWasSuccessful?: (req: Request, res: Response) => boolean;
+}
+
 /**
  * Creates an express-rate-limit instance.
  *
@@ -53,8 +60,7 @@ const createLimiter = (
   windowMs: number,
   max: number | ((req: Request) => number),
   keyPrefix: string,
-  keyGenerator?: (req: Request) => string,
-  skip?: (req: Request) => boolean,
+  options: LimiterOptions = {},
 ): ReturnType<typeof rateLimit> => {
   // Check if Redis is connected at creation time
   const isRedisReady = redis.status === 'ready' || redis.status === 'connect';
@@ -81,8 +87,7 @@ const createLimiter = (
     standardHeaders: true,  // Return rate limit info in `RateLimit-*` headers
     legacyHeaders: false,   // Disable deprecated `X-RateLimit-*` headers
     store,
-    keyGenerator,
-    skip,
+    ...options,
     message: {
       status: 'error',
       message: 'Too many requests. Please try again later.',
@@ -103,6 +108,7 @@ export const createRateLimiters = (): {
   registerLimiter: ReturnType<typeof rateLimit>;
   refreshLimiter: ReturnType<typeof rateLimit>;
   streamLimiter: ReturnType<typeof rateLimit>;
+  zoomWebhookLimiter: ReturnType<typeof rateLimit>;
 } => ({
   /**
    * Global limiter: applied to all `/api/*` routes.
@@ -112,8 +118,7 @@ export const createRateLimiters = (): {
     RATE_LIMIT_GLOBAL_WINDOW_MS,
     (req) => accessKey(req).startsWith('u:') ? env.RATE_LIMIT_GLOBAL_USER_MAX : env.RATE_LIMIT_GLOBAL_ANON_MAX,
     'rl:global:',
-    accessKey,
-    skipGlobal,
+    { keyGenerator: accessKey, skip: skipGlobal },
   ),
 
   /**
@@ -123,26 +128,34 @@ export const createRateLimiters = (): {
     RATE_LIMIT_AUTH_WINDOW_MS,
     env.RATE_LIMIT_LOGIN_ACCOUNT_MAX,
     'rl:login-account:',
-    loginAccountKey,
+    { keyGenerator: loginAccountKey },
   ),
   loginIpLimiter: createLimiter(
     RATE_LIMIT_AUTH_WINDOW_MS,
     env.RATE_LIMIT_LOGIN_IP_MAX,
     'rl:login-ip:',
-    addressKey,
+    { keyGenerator: addressKey },
   ),
   registerLimiter: createLimiter(
     RATE_LIMIT_AUTH_WINDOW_MS,
     env.RATE_LIMIT_REGISTER_IP_MAX,
     'rl:register:',
-    addressKey,
+    { keyGenerator: addressKey },
   ),
   refreshLimiter: createLimiter(
     RATE_LIMIT_AUTH_WINDOW_MS,
     env.RATE_LIMIT_REFRESH_MAX,
     'rl:refresh:',
-    refreshKey,
+    { keyGenerator: refreshKey },
   ),
+
+  // Counts every request except signature-verified ones (the verifier sets `zoomVerified`),
+  // so a burst of real participant events at the start of a class is never throttled while
+  // malformed, unsigned and unverified validation requests all count.
+  zoomWebhookLimiter: createLimiter(60 * 1000, env.ZOOM_WEBHOOK_RATE_LIMIT_MAX, 'rl:zoom-webhook:', {
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (_req, res) => res.locals.zoomVerified === true,
+  }),
 
   /**
    * Stream limiter: applied to the signed video-token endpoint.

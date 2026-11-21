@@ -82,6 +82,7 @@ const envSchema = z.object({
 
   // Zoom — Server-to-Server OAuth app (Webhooks + REST API: create meetings, fetch ZAK).
   ZOOM_WEBHOOK_SECRET: z.string().default(''),
+  ZOOM_WEBHOOK_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   ZOOM_ACCOUNT_ID: z.string().default(''),
   ZOOM_CLIENT_ID: z.string().default(''),
   ZOOM_CLIENT_SECRET: z.string().default(''),
