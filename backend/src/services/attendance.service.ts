@@ -4,6 +4,7 @@ import { AppError } from '@/utils/app-error';
 import { logger } from '@/config/logger';
 import { assertCourseAccess } from '@/services/class.service';
 import { assertStudentContentAccess } from '@/services/access.service';
+import { resolveStudentByCode } from '@/services/scan-code.service';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type { ScanBarcodeInput, ManualAttendanceInput, AttendanceQuery } from '@/schemas/attendance.schema';
 
@@ -104,30 +105,8 @@ export const scanBarcode = async (input: ScanBarcodeInput): Promise<AttendanceRe
     );
   }
 
-  // Institute barcodes are only unique within an institute. The globally unique
-  // LMS code remains a fallback so a student's LMS QR works at every location.
-  const instituteBarcode = await prisma.studentBarcode.findUnique({
-    where: {
-      instituteId_barcode: {
-        instituteId: input.instituteId,
-        barcode: input.barcode,
-      },
-    },
-    select: {
-      user: { select: { id: true, deletedAt: true, role: true } },
-    },
-  });
-
-  const student =
-    instituteBarcode?.user ??
-    (await prisma.user.findUnique({
-      where: { barcode: input.barcode },
-      select: { id: true, deletedAt: true, role: true },
-    }));
-
-  if (!student) {
-    throw new AppError('BARCODE_NOT_FOUND', 404, 'No student found with this barcode. Please verify the barcode is assigned.');
-  }
+  // One resolver for both code kinds: a code held by several students is refused, never guessed.
+  const { student } = await resolveStudentByCode(input.barcode);
 
   if (student.deletedAt) {
     throw new AppError('STUDENT_DEACTIVATED', 403, 'This student account has been deactivated.');

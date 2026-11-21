@@ -182,6 +182,7 @@ These rules **must never be violated**. Every code review checks against this li
 ### 5.4 Idempotent Mutations
 - All high-stakes `POST` routes (payments, mark finalization, account activation) require an `Idempotency-Key` header.
 - Backed by the `IdempotencyRecord` table plus a Redis `SET NX` lock that closes the TOCTOU race window (see the two-layer pattern in `Guides_And_Summeries/improvements_summary.md`).
+- A uniqueness rule that spans several tables (for example a scan code across `User.barcode` and `StudentBarcode`) cannot be a database constraint, so every writer checks it inside one transaction after `withAdvisoryLock` (`backend/src/utils/advisory-lock.ts`; key `namespace:organizationId:key`) and reuses the one guard (`scan-code.service.ts`). Do not add inline `pg_advisory_xact_lock(hashtextextended(<id>, 0))` calls.
 
 ### 5.5 Soft Deletes Only
 - Models with child relations (ClassSession, Exam) use a nullable `deletedAt` timestamp — never hard delete.

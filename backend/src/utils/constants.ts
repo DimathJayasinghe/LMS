@@ -354,3 +354,8 @@ export const NOTIFICATION_TEMPLATES = {
 } as const;
 
 export type NotificationTemplateKey = keyof typeof NOTIFICATION_TEMPLATES;
+
+// ─── Tenancy ─────────────────────────────────────────────────
+
+/** Id of the one default organization every row belongs to until M2 introduces per-request tenant context. */
+export const DEFAULT_ORGANIZATION_ID = '00000000-0000-4000-8000-000000000001';

@@ -37,6 +37,8 @@ function scanErrorMessage(e: unknown): string {
   switch (e.code) {
     case "BARCODE_NOT_FOUND":
       return "No student found for this code.";
+    case "AMBIGUOUS_CODE":
+      return "This code matches more than one student. Search by name or index number instead.";
     case "STUDENT_DEACTIVATED":
       return "That student account is deactivated.";
     case "INVALID_ROLE_FOR_ATTENDANCE":

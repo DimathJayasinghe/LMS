@@ -133,6 +133,18 @@ describe("StaffScanner — wedge scan", () => {
     expect(await screen.findByText("No student found for this code.")).toBeInTheDocument();
   });
 
+  it("maps AMBIGUOUS_CODE to a message that sends the desk to name or index search", async () => {
+    post.mockRejectedValueOnce(new ApiError(409, "dup", "AMBIGUOUS_CODE"));
+    const user = userEvent.setup();
+    render(<StaffScanner classes={classes} institutes={institutes} />);
+    await pickSession(user);
+
+    await user.type(screen.getByLabelText("Scan code"), "DUP{Enter}");
+    expect(
+      await screen.findByText("This code matches more than one student. Search by name or index number instead."),
+    ).toBeInTheDocument();
+  });
+
   it("dedupes the roster when the same student is scanned twice", async () => {
     post.mockResolvedValue({ data: rec("a1", "u1", "Nimal", 42) });
     const user = userEvent.setup();

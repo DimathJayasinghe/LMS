@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { scanCodeSchema } from './scan-code.schema';
 
 // ─── Barcode Scan ────────────────────────────────────────────
 export const scanBarcodeSchema = z.object({
-  barcode: z.string().trim().min(3, 'Barcode must be at least 3 characters.').max(64),
+  barcode: scanCodeSchema.min(3, 'Barcode must be at least 3 characters.').max(64),
   classSessionId: z.string().uuid('Invalid class session ID.'),
   instituteId: z.string().uuid('Invalid institute ID.'),
   source: z.enum(['BARCODE', 'QR']).default('BARCODE'),

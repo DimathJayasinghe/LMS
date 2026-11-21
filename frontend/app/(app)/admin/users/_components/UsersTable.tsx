@@ -100,7 +100,7 @@ export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
                         autoFocus
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
-                        placeholder="LMS-0001"
+                        placeholder="A-0001"
                         className="w-28 rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
                       />
                       <Button
