@@ -27,6 +27,18 @@ beforeEach(() => {
 });
 
 describe("TimetableManager", () => {
+  it("requires an explicit mode and sends simulcast as null", async () => {
+    const user = userEvent.setup();
+    render(<TimetableManager courses={courses} institutes={institutes} slots={[]} />);
+    await user.selectOptions(screen.getByLabelText("Class"), "course-1");
+    await user.type(screen.getByLabelText("Start time"), "10:00");
+    await user.click(screen.getByRole("button", { name: /add slot/i }));
+    expect(mocks.post).not.toHaveBeenCalled();
+    await user.selectOptions(screen.getByLabelText("Mode"), "SIMULCAST");
+    await user.click(screen.getByRole("button", { name: /add slot/i }));
+    expect(mocks.post).toHaveBeenCalledWith("/timetable/slots", expect.objectContaining({ classType: null }), expect.anything());
+  });
+
   it("creates a recurring slot with an idempotency key", async () => {
     const user = userEvent.setup();
     render(<TimetableManager courses={courses} institutes={institutes} slots={[]} />);
@@ -59,6 +71,7 @@ describe("TimetableManager", () => {
 
     await user.selectOptions(screen.getByLabelText("Class"), "course-1");
     await user.type(screen.getByLabelText("Start time"), "10:00");
+    await user.selectOptions(screen.getByLabelText("Mode"), "ONLINE");
     await user.click(screen.getByRole("button", { name: /add slot/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("This time overlaps an active slot.");

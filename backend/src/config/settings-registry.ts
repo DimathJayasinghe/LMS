@@ -24,7 +24,7 @@ export const settingsRegistry = {
   'exams.marking.markerMayOverrideTeacher': { schema: z.literal(false), default: false as const },
   'exams.hallMarks.maxRowsPerBatch': int(1, 10000, 500),
   'exams.hallMarks.allowDecimal': bool(false),
-  'timetable.generateAheadDays': int(1, 365, 14),
+  'timetable.generateAheadDays': int(7, 365, 14),
   'exams.uploadGraceSeconds': int(0, 3600, 180),
   'exams.autoSubmitLeadSeconds': int(0, 300, 15),
   'identity.tempPassword.length': int(8, 72, 10),

@@ -7,6 +7,7 @@ import { api } from "@/lib/api-server";
 import type { ApiList, Course, Institute, TimetableSlot, UpcomingTimetableSession } from "@/lib/types";
 import { TimetableManager } from "./_components/TimetableManager";
 import { LiveClassAction } from "../classes/[classId]/_components/LiveClassAction";
+import { canGoLive, classModeLabel } from "@/lib/class-mode";
 
 // Render Monday-first; API dayOfWeek is 0=Sun … 6=Sat.
 const WEEK: { day: number; label: string }[] = [
@@ -117,11 +118,7 @@ export default async function TimetablePage() {
                           </div>
                           <div className="flex items-center gap-2">
                             {!slot.isActive && <Badge variant="secondary">Inactive</Badge>}
-                            {slot.classType && (
-                              <Badge variant="outline">
-                                {slot.classType === "ONLINE" ? "Online" : "Physical"}
-                              </Badge>
-                            )}
+                            <Badge variant="outline">{classModeLabel(slot.classType)}</Badge>
                           </div>
                         </li>
                       ))}
@@ -146,7 +143,7 @@ export default async function TimetablePage() {
                   <Link href={`/classes/${session.courseId}`} className="font-medium hover:underline">{session.title}</Link>
                   <p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en-LK", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Colombo" }).format(new Date(session.date))}</p>
                 </div>
-                {session.classType === "ONLINE" && (
+                {canGoLive(session.classType) && (
                   <LiveClassAction
                     classId={session.courseId}
                     sessionId={session.id}

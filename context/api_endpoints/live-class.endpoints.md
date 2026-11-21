@@ -70,7 +70,7 @@ noted in the frontend roadmap as a real future phase, not built now.
 ## `POST /schedule`
 
 **Request**: no body (uses the session's title/date/duration).
-Requires an `Idempotency-Key` UUID so a client retry cannot create two provider meetings.
+Requires an `Idempotency-Key` UUID so a client retry cannot create two provider meetings. `ONLINE` and null (in hall + live stream) sessions can be scheduled; `PHYSICAL` sessions cannot. A null-mode session without a meeting remains an in-hall session.
 
 **Success (201)**
 ```json
@@ -87,8 +87,9 @@ Requires an `Idempotency-Key` UUID so a client retry cannot create two provider 
 |---|---|---|
 | `CLASS_SESSION_NOT_FOUND` | 404 | Session doesn't exist or is deleted |
 | `FORBIDDEN_COURSE` | 403 | Teacher doesn't own this course |
-| `SESSION_NOT_ONLINE` | 400 | Session's `classType` isn't `ONLINE` |
+| `SESSION_NOT_ONLINE` | 400 | Session's `classType` is `PHYSICAL` |
 | `ALREADY_SCHEDULED` | 409 | `zoomMeetingId` already set |
+| `SESSION_CHANGED` | 409 | The session was set to hall only, or scheduled by another request, while the meeting was being created; the meeting is stored only on an unscheduled, non-hall-only session |
 | `ZOOM_NOT_CONFIGURED` | 503 | Server-to-Server OAuth env vars missing |
 | `ZOOM_AUTH_FAILED` / `ZOOM_CREATE_FAILED` | 502 | Zoom rejected the OAuth or create-meeting request |
 
