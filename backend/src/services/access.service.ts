@@ -66,12 +66,15 @@ export const isStudentCovered = async ({ userId, courseId, enrollmentId, now }: 
   const [year, monthNumber] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   const graceUntil = graceDays ? `${month}-${String(Math.min(graceDays, lastDay)).padStart(2, '0')}` : null;
-  const enrollment = { userId, courseId, isActive: true, ...(enrollmentId ? { id: enrollmentId } : {}) };
-  const active = await prisma.enrollment.findFirst({ where: enrollment, select: { id: true } });
+  const scope = { userId, courseId, ...(enrollmentId ? { id: enrollmentId } : {}) };
+  const active = await prisma.enrollment.findFirst({ where: { ...scope, isActive: true }, select: { id: true } });
   if (!active) return { covered: false, reason: 'UNPAID', month, graceUntil };
-  const paid = (paymentMonth: string) => prisma.payment.findFirst({ where: { status: PaymentStatus.SUCCESS, paymentMonth, enrollment }, select: { id: true } });
+  // Payments count on any enrollment of the course (as before), so a cancelled enrollment does not void a paid month.
+  const hasPayment = (paymentMonth: string, status: PaymentStatus) => prisma.payment.findFirst({ where: { status, paymentMonth, enrollment: scope }, select: { id: true } });
+  const paid = (paymentMonth: string) => hasPayment(paymentMonth, PaymentStatus.SUCCESS);
   if (await paid(month)) return { covered: true, reason: 'PAID', month, graceUntil };
-  if (dayOfMonthInTz(now, tz) <= graceDays) {
+  // A refunded current month removes access; grace must not give it back.
+  if (dayOfMonthInTz(now, tz) <= graceDays && !await hasPayment(month, PaymentStatus.REFUNDED)) {
     const requiresPrevious = await settings('fees.graceRequiresPreviousMonthPaid');
     const previous = new Date(Date.UTC(year, monthNumber - 2, 1)).toISOString().slice(0, 7);
     if (!requiresPrevious || await paid(previous)) return { covered: true, reason: 'GRACE', month, graceUntil };

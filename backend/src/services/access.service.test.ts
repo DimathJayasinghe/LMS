@@ -114,7 +114,7 @@ describe('assertStudentContentAccess', () => {
 			where: {
 				status: 'SUCCESS',
 				paymentMonth: expect.stringMatching(/^\d{4}-\d{2}$/),
-				enrollment: { userId: student.userId, courseId: 'course-1', isActive: true },
+				enrollment: { userId: student.userId, courseId: 'course-1' },
 			},
 			select: { id: true },
 		});
