@@ -53,10 +53,16 @@ describe("GradeSubmissionRow role states", () => {
     expect(screen.queryByRole("button", { name: "Record correction" })).not.toBeInTheDocument();
   });
 
-  it("keeps pre-publication grading read-only for teachers", async () => {
-    await renderRow("TEACHER", false);
-    expect(screen.getByText(/Assigned markers enter marks here/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save marks" })).not.toBeInTheDocument();
+  it.each(["TEACHER", "SUPER_ADMIN"] as const)("lets %s grade before publication", async (role) => {
+    const user = await renderRow(role, false);
+    await user.clear(screen.getByLabelText("Marks"));
+    await user.type(screen.getByLabelText("Marks"), "75");
+    await user.click(screen.getByRole("button", { name: "Save marks" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith(
+      "/submissions/submission-1/marks",
+      { marks: 75, feedback: "Initial feedback" },
+      { headers: { "Idempotency-Key": expect.any(String) } },
+    ));
   });
 
   it("locks marker edits after publication", async () => {

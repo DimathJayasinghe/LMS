@@ -73,12 +73,12 @@ submissionRoutes.get(
   SubmissionController.listSubmissions,
 );
 
-// ─── Submit Marks (Assigned Marker) ─────────────────────────
+// ─── Submit Marks ─────────────────────────
 // Idempotency key required — prevents double-grading from network retries
 submissionRoutes.patch(
   '/:id/marks',
   verifyToken,
-  requireRole(Role.MARKER),
+  requireRole(Role.SUPER_ADMIN, Role.TEACHER, Role.MARKER),
   validateParams(submissionIdParamSchema),
   validateBody(submitMarksSchema),
   // Revalidate the exact audience before a cached response can expose answers.
