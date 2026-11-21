@@ -345,6 +345,7 @@ The temporary password has `identity.tempPassword.length` characters (default 10
 - 403 `STEP_UP_REQUIRED` (staff target without `currentPassword`) and `ACTOR_PASSWORD_INVALID` (wrong password; 403, not 401, so the actor's session is not ended)
 - 404 `USER_NOT_FOUND`
 - 409 `ACCOUNT_DEACTIVATED`
+- 409 `TARGET_CHANGED` (the account's role changed while the reset ran; retry)
 - 429 `RESET_LIMIT_ACTOR` (`identity.reset.maxPerActorPerDay`, default 40) and `RESET_LIMIT_TARGET` (`identity.reset.maxPerTargetPer24h`, default 3), counted from the audit rows of the last 24 hours
 
 ### PATCH `/:id/barcode`

@@ -124,6 +124,15 @@ describe('owner step-up for staff targets', () => {
   });
 });
 
+describe('a target whose role changes during the request', () => {
+  it('refuses instead of resetting a staff account that was checked as a student, so the step-up cannot be skipped', async () => {
+    m.userFind.mockResolvedValueOnce(target(Role.STUDENT)).mockResolvedValueOnce(target(Role.TEACHER));
+    await expect(resetPassword('target', input, actorOf(Role.SUPER_ADMIN), ctx)).rejects.toMatchObject({ code: 'TARGET_CHANGED', statusCode: 409 });
+    expect(m.userUpdate).not.toHaveBeenCalled();
+    expect(m.auditCreate).not.toHaveBeenCalled();
+  });
+});
+
 describe('reset limits', () => {
   it('refuses when the actor reached the daily limit', async () => {
     m.auditCount.mockResolvedValueOnce(40);

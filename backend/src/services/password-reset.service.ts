@@ -83,8 +83,12 @@ export const resetPassword = async (
     await withAdvisoryLock(tx, 'password-reset', organizationId, 'reset');
 
     // The role may have changed since the first read; the rule is applied again on the row the write will touch.
+    // A different role would also change whether the step-up above was required, so the request is refused.
     const target = await loadTarget(tx, targetId);
     assertMayReset(actor, target);
+    if (target.role !== first.role) {
+      throw new AppError('TARGET_CHANGED', 409, 'This account changed while the reset was running. Try again.');
+    }
     if (target.deletedAt) {
       throw new AppError('ACCOUNT_DEACTIVATED', 409, 'Activate the account before resetting its password.');
     }
