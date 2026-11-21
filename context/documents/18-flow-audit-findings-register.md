@@ -42,7 +42,7 @@
 | F-05 | high | domain-mismatch | Content gate checks only the CURRENT month, not the month the content belongs to | M | yes | live | EP-02, DEL-04, EP-02v | Open |
 | F-07 | high | data-integrity | Scan identity resolution can be ambiguous in some cases (details kept in the private audit notes) | S | yes | live | ACC-15, ATT-01 | Fixed (#99, unreleased; deploy only after the collision report, see the maintenance guide runbook) |
 | F-09 | high | access-leak | Attendance read scoping needs tightening (details kept in the private audit notes) | S | - | code + 2nd | ATT-03, OVR-06 | Fixed (#98, unreleased) |
-| F-10 | high | flow-gap | No bulk 'who owes' list, export or reminder trigger: unpaid months have no Payment row so listPayments cannot enumerate them (a per-student outstanding view exists inside CollectPayment); the only aggregate is a count hidden from front desk | M | - | code + 2nd | PAY-07, OVR-05, UXS-12(staff) | Open |
+| F-10 | high | flow-gap | No bulk 'who owes' list, export or reminder trigger: unpaid months have no Payment row so listPayments cannot enumerate them (a per-student outstanding view exists inside CollectPayment); the only aggregate is a count hidden from front desk | M | - | code + 2nd | PAY-07, OVR-05, UXS-12(staff) | Fixed (#111, unreleased) |
 | F-12 | high | flow-gap | Entrance scan, manual mark and the Zoom webhook never check enrollment, delivery mode or payment, and the staff member sees none of it | M | yes | live | ATT-04, UXS-04(staff) | Open |
 | F-13 | high | flow-gap | In-class / physical-hall paper marks have no entry path at all (INCLASS exams are dead ends) | L | - | code + 2nd | EXM-02, UXS-08(staff) | Fixed (#109, unreleased) |
 | F-14 | high | doc-drift | Zoom 'auto attendance' webhook matches only on participant email, which the Meeting SDK join very likely does not supply (code-verified; Zoom-side behaviour not observed); teachers can still repair it through manual reconciliation | M | - | code + 2nd | ATT-05, DEL-07 | Open |
@@ -103,7 +103,7 @@
 | F-75 | medium | data-integrity | Publishing results sends two SMS per student and ignores the owner's SMS switch | S | - | code | OVR-01 | Open |
 | F-76 | medium | flow-gap | Only three notification events exist; no absence, fee-due, timetable-change, refund or marker-assignment messages, and no scheduled reminder jobs | L | yes | code | OVR-02 | Open |
 | F-77 | medium | flow-gap | No end-of-day cash tally: the API returns collector, branch and amount per row, but there are no collector, branch or date filters, no group-by endpoint and no UI columns, so short-collection is invisible | M | yes | code + 2nd | OVR-09 | Open |
-| F-78 | medium | data-integrity | Outstanding-fees figure is wrong for any month other than the current one and still counts deactivated students | M | - | code | OVR-10, OVR-17 | Open |
+| F-78 | medium | data-integrity | Outstanding-fees figure is wrong for any month other than the current one and still counts deactivated students | M | - | code | OVR-10, OVR-17 | Fixed (#111, unreleased) |
 | F-79 | medium | data-integrity | Teacher income reports follow the course's CURRENT teacher, so reassignment rewrites history and strips the old teacher | M | yes | code | OVR-11 | Open |
 | F-80 | medium | ui-gap | Audit log date filter drops the whole 'to' day and the dropdown omits real audit actions | S | - | code | OVR-12 | Open |
 | F-81 | medium | data-integrity | Audit trail is mutable and best-effort; marker identity and post-publish mark corrections live only there | M | - | code | OVR-13 | Open |

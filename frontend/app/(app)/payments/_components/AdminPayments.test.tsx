@@ -119,6 +119,13 @@ describe("AdminPayments — summary + table", () => {
   });
 });
 
+describe("AdminPayments — who owes", () => {
+  it("links to the who-owes list for the month on screen", () => {
+    render(<AdminPayments {...baseProps} />);
+    expect(screen.getByRole("link", { name: "Who owes" })).toHaveAttribute("href", `/payments/owing?month=${MONTH}`);
+  });
+});
+
 describe("AdminPayments — filters", () => {
   it("pushes month + status on status change", async () => {
     const user = userEvent.setup();

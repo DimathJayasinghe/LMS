@@ -549,6 +549,35 @@ export interface PaymentSummary {
   refundedCount: number;
 }
 
+/** One row of GET /payments/outstanding: an active enrollment with no paid row for the month. */
+export interface OutstandingRow {
+  enrollmentId: string;
+  studentId: string;
+  studentName: string;
+  indexNumber: number;
+  /** The student's own mobile (a guardian number replaces it later). */
+  phone: string | null;
+  courseId: string;
+  courseName: string;
+  classType: EnrollmentMode;
+  monthsOwed: number;
+  /** Fee for the requested month, "N.NN". */
+  amount: string;
+  /** Fee for every owed month in the arrears window, "N.NN". */
+  totalOwed: string;
+  inGrace: boolean;
+  /** Last grace day of the current month ("YYYY-MM-DD"), null for past months or when grace is off. */
+  graceUntil: string | null;
+}
+
+export type ReminderSkipReason = "NOT_OWING" | "IN_GRACE" | "REMINDER_LIMIT_REACHED";
+
+/** POST /payments/outstanding/reminders — one reminder per student, plus the enrollments left out and why. */
+export interface ReminderResult {
+  sent: number;
+  skipped: { enrollmentId: string; reason: ReminderSkipReason }[];
+}
+
 export interface PaymentAdjustment {
   id: string;
   type: PaymentAdjustmentType;
@@ -675,7 +704,7 @@ export interface AuditLogEntry {
 }
 
 // ── Notifications (see notification.endpoints.md) ────────────────────────────
-export type NotificationType = "RESULTS_PUBLISHED" | "PAYMENT_CONFIRMED" | "PAYMENT_OVERRIDDEN";
+export type NotificationType = "RESULTS_PUBLISHED" | "PAYMENT_CONFIRMED" | "PAYMENT_OVERRIDDEN" | "FEE_DUE";
 export type NotificationChannel = "IN_APP" | "SMS";
 
 export interface NotificationEntry {
