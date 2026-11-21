@@ -199,3 +199,17 @@ docker compose run --rm --no-deps -v <host dir outside the repo>:/reports backen
 The report exits 0 when clean, 2 when rows are listed, and 1 on error. If rows are listed, stop the deployment and send the report to the owner for resolution; it contains personal data and must never be committed. After resolving any rows, repeat the final report immediately before deploying. Once it exits 0, deploy the new backend image, then rerun the report from the new running container and expect exit 0. The report checks collisions, reserved formats and stored codes outside printable ASCII. For local development only, `npm run scan-codes:report -- --out <path outside the repo>` runs from `backend/`; the production image does not include its development tooling.
 
 Mock tests do not establish transaction serialization. Run the disposable-stack live verification script supplied with the change against a real database to check the database behavior before release.
+
+
+## Owner account operations
+
+The startup seed creates the initial owner only when the default organization has no owner, including inactive owners. It does not change existing accounts; if the configured email belongs to another account it skips creation. Startup continues when the seed skips. The seed has no built-in credentials: it needs both `LMS_ADMIN_EMAIL` (a valid address) and `LMS_ADMIN_PASSWORD` (8 to 72 bytes), and the operator commands validate the address the same way.
+
+Run the operator commands in an interactive container terminal. Passwords are entered without echo, or a generated password is shown once with `--generate`. Do not put passwords in command arguments.
+
+```bash
+docker compose exec -it backend node dist/scripts/owner-add.js --email owner@example.com
+docker compose exec -it backend node dist/scripts/owner-reset-password.js --email owner@example.com
+```
+
+Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset revokes refresh sessions and both commands record an audit event. Until the Wave 1 settings registry is available, the owner count is not capped; API step-up confirmation and per-request access-token revocation are also deferred.

@@ -88,6 +88,8 @@ could view another teacher's exam content, recordings, submissions, and session 
 adding a new course-scoped read (not just a mutation), call `assertCourseAccess` too — reads are
 easy to forget since they don't "feel" as dangerous as a mutation, but they leak the same content.
 
+Owner safeguards prohibit self role/status changes and removal of the last active owner; owner creation and password recovery are operator-only.
+
 Role enum: `SUPER_ADMIN, TEACHER, ADMIN, MARKER, STUDENT`. Several older `context/api_endpoints/*.md`
 docs were written against an earlier naming scheme and explicitly call out the remap: their `ADMIN`
 means today's `SUPER_ADMIN`, their `STAFF` means today's `ADMIN` (front-desk). Read those notes before
