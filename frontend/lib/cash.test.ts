@@ -28,12 +28,19 @@ describe("varianceLabel", () => {
 });
 
 describe("summarizeCash", () => {
-  it("adds up the cash and counts days still waiting for a count", () => {
+  it("adds up the cash and counts days that need a count", () => {
     const counted = row({ tally: { id: "t", countedAmount: "7500.00", systemAmount: "7500.00", variance: "0.00", paymentCount: 3, note: null, closedAt: "", flagged: false, staleSinceClose: false, reconciledAt: null, reconciledByName: null } });
-    expect(summarizeCash([counted, row({ amount: "1000.50", paymentCount: 1 }), row({ amount: "0.00", paymentCount: 0 })])).toEqual({ amount: 8500.5, payments: 4, uncounted: 1 });
+    expect(summarizeCash([counted, row({ amount: "1000.50", paymentCount: 1 }), row({ amount: "0.00", paymentCount: 0 })])).toEqual({ amount: 8500.5, payments: 4, needCount: 1 });
+  });
+
+  it("asks for a new count when cash changed after the count, until the owner reconciles it", () => {
+    const tally = (over: object) => ({ id: "t", countedAmount: "1.00", systemAmount: "1.00", variance: "0.00", paymentCount: 1, note: null, closedAt: "", flagged: false, staleSinceClose: true, reconciledAt: null, reconciledByName: null, ...over });
+    expect(summarizeCash([row({ tally: tally({}) })]).needCount).toBe(1);
+    expect(summarizeCash([row({ tally: tally({ reconciledAt: "2026-11-21T04:00:00Z" }) })]).needCount).toBe(0);
+    expect(summarizeCash([row({ tally: tally({ staleSinceClose: false }) })]).needCount).toBe(0);
   });
 
   it("is empty for a day with no cash", () => {
-    expect(summarizeCash([])).toEqual({ amount: 0, payments: 0, uncounted: 0 });
+    expect(summarizeCash([])).toEqual({ amount: 0, payments: 0, needCount: 0 });
   });
 });

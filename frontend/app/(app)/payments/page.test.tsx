@@ -46,7 +46,7 @@ describe("payments admin view", () => {
     asAdmin(() => Promise.resolve(cashList({ data: [{ amount: "2500.00", paymentCount: 1, tally: null }] })));
     const props = await adminProps();
     expect(get).toHaveBeenCalledWith("/payments/cash?from=2026-11-21&to=2026-11-21&collectorId=clerk", expect.objectContaining({ cookie: "cookie" }));
-    expect(props.todaysCash).toEqual({ amount: 2500, payments: 1, uncounted: 1 });
+    expect(props.todaysCash).toEqual({ amount: 2500, payments: 1, needCount: 1 });
     vi.useRealTimers();
   });
 

@@ -15,8 +15,8 @@ export function varianceLabel(variance: string, format: (amount: number) => stri
 export interface CashSummary {
   amount: number;
   payments: number;
-  /** Days with cash that nobody has counted yet. */
-  uncounted: number;
+  /** Days with cash that still need a count: never counted, or cash changed after the count (until the owner reconciles it). */
+  needCount: number;
 }
 
 /** Totals for the "Today's cash" strip. */
@@ -24,6 +24,6 @@ export function summarizeCash(rows: CashRow[]): CashSummary {
   return {
     amount: rows.reduce((sum, row) => sum + Number(row.amount), 0),
     payments: rows.reduce((sum, row) => sum + row.paymentCount, 0),
-    uncounted: rows.filter((row) => row.paymentCount > 0 && !row.tally).length,
+    needCount: rows.filter((row) => row.paymentCount > 0 && (!row.tally || (row.tally.staleSinceClose && !row.tally.reconciledAt))).length,
   };
 }

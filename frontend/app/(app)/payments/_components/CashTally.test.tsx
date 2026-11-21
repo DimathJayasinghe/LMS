@@ -28,10 +28,10 @@ describe("the table", () => {
     expect(screen.getByText("Rs 7,500")).toBeInTheDocument();
   });
 
-  it("totals the cash shown and says how many days still need a count", () => {
+  it("totals the cash shown and says how many days need a count", () => {
     setup();
     expect(screen.getByText(/Rs 8,500 from 4 payments/)).toBeInTheDocument();
-    expect(screen.getByText("2 days not counted yet")).toBeInTheDocument();
+    expect(screen.getByText("2 days need a count")).toBeInTheDocument();
   });
 
   it("says so when there is no cash in the range", () => {

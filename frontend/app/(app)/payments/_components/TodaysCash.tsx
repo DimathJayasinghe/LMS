@@ -7,7 +7,7 @@ export function TodaysCash({ summary }: { summary: CashSummary }) {
   if (summary.payments === 0) {
     return <p className="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground print:hidden">No cash taken yet today.</p>;
   }
-  const counted = summary.uncounted === 0;
+  const counted = summary.needCount === 0;
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-border bg-card px-4 py-3 text-sm print:hidden">
       <span className="text-muted-foreground">Your cash today</span>

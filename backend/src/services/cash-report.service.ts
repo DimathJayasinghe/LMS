@@ -11,7 +11,10 @@ interface Scope {
   timezone: string;
 }
 
-/** Cash by (Colombo day, collector, branch) over `from`..`to` inclusive, newest day first. */
+/**
+ * Cash by (Colombo day, collector, branch) over `from`..`to` inclusive, newest day first. `collectedAt` is a timestamp without
+ * a zone that Prisma fills in UTC, so it is read as UTC first and only then moved into the organization's zone.
+ */
 export const queryCashDays = async (
   query: Scope & { from: string; to: string; collectorId?: string; instituteId?: string },
 ): Promise<CashDay[]> => {
@@ -20,7 +23,7 @@ export const queryCashDays = async (
   const collector = query.collectorId ? Prisma.sql`AND p."collectedById" = ${query.collectorId}` : Prisma.empty;
   const institute = query.instituteId ? Prisma.sql`AND p."collectedAtInstituteId" = ${query.instituteId}` : Prisma.empty;
   return prisma.$queryRaw<CashDay[]>(Prisma.sql`
-    SELECT to_char(p."collectedAt" AT TIME ZONE ${query.timezone}, 'YYYY-MM-DD') AS "day",
+    SELECT to_char((p."collectedAt" AT TIME ZONE 'UTC') AT TIME ZONE ${query.timezone}, 'YYYY-MM-DD') AS "day",
            p."collectedById" AS "collectorId", u."name" AS "collectorName",
            p."collectedAtInstituteId" AS "instituteId", i."name" AS "instituteName",
            SUM(p."amount")::text AS "amount", COUNT(*)::int AS "paymentCount"

@@ -18,6 +18,13 @@ describe('queryCashDays', () => {
     expect(sql.values).toEqual(expect.arrayContaining(['org', 'Asia/Colombo', new Date('2026-11-18T18:30:00.000Z'), new Date('2026-11-20T18:30:00.000Z')]));
   });
 
+  it('reads the stored UTC timestamp as UTC before moving it into the organization zone', async () => {
+    m.queryRaw.mockResolvedValue([]);
+    await queryCashDays({ ...base, from: '2026-11-20', to: '2026-11-20' });
+    const text = (m.queryRaw.mock.calls[0]![0] as Prisma.Sql).sql;
+    expect(text).toContain(`(p."collectedAt" AT TIME ZONE 'UTC') AT TIME ZONE ?`);
+  });
+
   it('counts only cash the desk took, whether or not it was refunded since', async () => {
     m.queryRaw.mockResolvedValue([]);
     await queryCashDays({ ...base, from: '2026-11-20', to: '2026-11-20' });

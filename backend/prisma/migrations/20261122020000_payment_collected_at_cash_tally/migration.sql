@@ -27,6 +27,10 @@ CREATE TABLE "CashTally" (
 CREATE INDEX "CashTally_organizationId_idx" ON "CashTally"("organizationId");
 CREATE INDEX "CashTally_collectorId_day_idx" ON "CashTally"("collectorId", "day");
 CREATE INDEX "CashTally_day_idx" ON "CashTally"("day");
+-- One count per collector, day and branch. Prisma cannot express partial indexes (and a nullable branch needs two), so these
+-- live only here; `prisma migrate diff` stays clean. The service also takes an advisory lock, so these are the backstop.
+CREATE UNIQUE INDEX "CashTally_collectorId_day_instituteId_key" ON "CashTally"("collectorId", "day", "instituteId") WHERE "instituteId" IS NOT NULL;
+CREATE UNIQUE INDEX "CashTally_collectorId_day_noInstitute_key" ON "CashTally"("collectorId", "day") WHERE "instituteId" IS NULL;
 ALTER TABLE "CashTally" ADD CONSTRAINT "CashTally_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "CashTally" ADD CONSTRAINT "CashTally_collectorId_fkey" FOREIGN KEY ("collectorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "CashTally" ADD CONSTRAINT "CashTally_instituteId_fkey" FOREIGN KEY ("instituteId") REFERENCES "Institute"("id") ON DELETE SET NULL ON UPDATE CASCADE;

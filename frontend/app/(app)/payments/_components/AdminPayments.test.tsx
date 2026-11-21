@@ -133,7 +133,7 @@ describe("AdminPayments — cash", () => {
   });
 
   it("shows the user's cash today above the collect form when it is available", () => {
-    render(<AdminPayments {...baseProps} todaysCash={{ amount: 7500, payments: 3, uncounted: 1 }} />);
+    render(<AdminPayments {...baseProps} todaysCash={{ amount: 7500, payments: 3, needCount: 1 }} />);
     expect(screen.getByText("Your cash today")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Count the day" })).toBeInTheDocument();
   });

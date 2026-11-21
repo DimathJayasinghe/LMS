@@ -73,7 +73,7 @@ export function CashTally({ rows, from, to, tallyEnabled, viewerId, isOwner, ins
         <>
           <p className="text-sm text-muted-foreground">
             {formatCurrency(summary.amount)} from {summary.payments} payment{summary.payments === 1 ? "" : "s"}
-            {tallyEnabled && summary.uncounted > 0 && <> · <span className="text-foreground">{summary.uncounted} day{summary.uncounted === 1 ? "" : "s"} not counted yet</span></>}
+            {tallyEnabled && summary.needCount > 0 && <> · <span className="text-foreground">{summary.needCount} day{summary.needCount === 1 ? "" : "s"} need{summary.needCount === 1 ? "s" : ""} a count</span></>}
           </p>
           <div className="overflow-x-auto rounded-2xl border border-border">
             <table className="w-full min-w-[56rem] text-sm">
