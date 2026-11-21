@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { UserFilters } from "./_components/UserFilters";
 import { UsersTable } from "./_components/UsersTable";
+import { CreateStaffDialog } from "./_components/CreateStaffDialog";
 import { api } from "@/lib/api-server";
 import type { ApiList, Role, User } from "@/lib/types";
 
@@ -55,7 +56,11 @@ export default async function UsersPage({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader title="Users" description="Manage accounts, roles, and entrance codes." />
+      <PageHeader
+        title="Users"
+        description="Manage accounts, roles, and entrance codes."
+        action={viewer.role === "SUPER_ADMIN" ? <CreateStaffDialog /> : undefined}
+      />
 
       <UserFilters search={sp.search ?? ""} role={role ?? "all"} status={status} roles={ROLES} />
 

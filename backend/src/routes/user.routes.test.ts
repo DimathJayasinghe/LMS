@@ -22,6 +22,7 @@ vi.mock('@/controllers/user.controller', () => ({
   updateStatus: vi.fn(),
   assignBarcode: vi.fn(),
   resetPassword: vi.fn(),
+  createStaff: vi.fn(),
 }));
 vi.mock('@/controllers/profile.controller', () => ({
   updateProfile: vi.fn(),
@@ -132,5 +133,32 @@ describe('user routes — staff-assisted password reset', () => {
     const handles = stack() as unknown[];
     expect(handles).not.toContain(checkIdempotency);
     expect(handles.indexOf(checkOneTimeSecretIdempotency)).toBe(handles.indexOf(UserController.resetPassword) - 1);
+  });
+});
+
+describe('user routes — staff account creation', () => {
+  const stack = () => handlesFor(userRoutes, 'post', '/staff') as Array<(req: Request, res: Response, next: () => void) => void>;
+  const call = (role: Role) => {
+    const json = vi.fn();
+    const res = { status: vi.fn().mockReturnValue({ json }) } as unknown as Response;
+    const next = vi.fn();
+    stack()[1]!({ user: { userId: 'u', role } } as Request, res, next);
+    return { next, status: res.status as ReturnType<typeof vi.fn> };
+  };
+
+  it('lets only the owner through the role guard', () => {
+    expect(call(Role.SUPER_ADMIN).next).toHaveBeenCalled();
+  });
+
+  it.each([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT])('refuses %s with 403 at the route', (role) => {
+    const { next, status } = call(role);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('uses the one-time-secret idempotency variant immediately before the controller', () => {
+    const handles = stack() as unknown[];
+    expect(handles).not.toContain(checkIdempotency);
+    expect(handles.indexOf(checkOneTimeSecretIdempotency)).toBe(handles.indexOf(UserController.createStaff) - 1);
   });
 });
