@@ -73,6 +73,13 @@ describe("/auth/session", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it("shows the retry state if the refresh call itself rejects", async () => {
+    refreshSession.mockRejectedValue(new Error("boom"));
+    render(<SessionPage />);
+    expect(await screen.findByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
   it("retrying runs the refresh again and then continues", async () => {
     refreshSession.mockResolvedValueOnce({ ok: false, status: 502 }).mockResolvedValueOnce({ ok: true });
     render(<SessionPage />);

@@ -11,10 +11,14 @@ import { isAccessTokenExpired } from "@/lib/session-hint";
  * The `exp` read is a hint, not authorization: the backend still verifies every
  * token. See context/frontend/04-api-integration.md §6.
  */
+// Auth pages that must stay reachable without a session. /auth/account-setup is
+// deliberately NOT here: it is a server-guarded page that needs a live session.
+const PUBLIC_AUTH_PAGES = /^\/auth\/(session|login|signup)(\/|$)/;
+
 export function proxy(request: NextRequest) {
   if (request.method !== "GET") return NextResponse.next();
-  // The matcher already excludes /auth; repeated here so a matcher edit cannot create a redirect loop.
-  if (request.nextUrl.pathname.startsWith("/auth/")) return NextResponse.next();
+  // The matcher already excludes these; repeated here so a matcher edit cannot create a redirect loop.
+  if (PUBLIC_AUTH_PAGES.test(request.nextUrl.pathname)) return NextResponse.next();
 
   const accessToken = request.cookies.get("access_token")?.value;
   if (!isAccessTokenExpired(accessToken, Math.floor(Date.now() / 1000))) {
@@ -35,14 +39,14 @@ export function proxy(request: NextRequest) {
 }
 
 // Matcher values must be constants (statically analysed at build time).
-// Excluded: API routes, Next internals, static files, and the /auth pages
+// Excluded: API routes, Next internals, static files, and the public auth pages
 // (so the refresh page itself can never bounce). Prefetches are skipped via
 // `missing` because Next strips these headers before the proxy runs, so they
 // cannot be checked in code.
 export const config = {
   matcher: [
     {
-      source: "/((?!api|_next/static|_next/image|favicon.ico|auth/|.*\\..*).*)",
+      source: "/((?!api|_next/static|_next/image|favicon.ico|auth/(?:session|login|signup)|.*\\..*).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

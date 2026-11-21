@@ -70,9 +70,17 @@ describe("proxy", () => {
     expect(new URL(location(res)!).searchParams.get("next")).toBe("/classes/7?tab=a");
   });
 
-  it("never redirects /auth/* pages (no loop)", () => {
-    expect(isPassThrough(proxy(req("/auth/session", { cookie: EXPIRED })))).toBe(true);
-    expect(isPassThrough(proxy(req("/auth/login", { cookie: EXPIRED })))).toBe(true);
+  it.each(["/auth/session", "/auth/login", "/auth/signup"])(
+    "never redirects %s (no loop)",
+    (path) => {
+      expect(isPassThrough(proxy(req(path, { cookie: EXPIRED })))).toBe(true);
+    },
+  );
+
+  it("does redirect /auth/account-setup: it is a server-guarded page behind the session", () => {
+    const res = proxy(req("/auth/account-setup", { cookie: EXPIRED }));
+    expect(res.status).toBe(307);
+    expect(new URL(location(res)!).searchParams.get("next")).toBe("/auth/account-setup");
   });
 });
 
@@ -89,6 +97,9 @@ describe("proxy matcher config", () => {
     expect(re.test("/api/auth/me")).toBe(false);
     expect(re.test("/_next/static/chunk.js")).toBe(false);
     expect(re.test("/auth/session")).toBe(false);
+    expect(re.test("/auth/login")).toBe(false);
+    expect(re.test("/auth/signup")).toBe(false);
+    expect(re.test("/auth/account-setup")).toBe(true);
     expect(re.test("/logo.png")).toBe(false);
   });
 

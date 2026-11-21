@@ -38,9 +38,12 @@ function SessionRefresh() {
   }, [router, next]);
 
   useEffect(() => {
-    void run().then((retryable) => {
-      if (retryable) setFailed(true);
-    });
+    // A rejected refresh must end in the retry state, never an endless spinner.
+    void run()
+      .catch(() => true)
+      .then((retryable) => {
+        if (retryable) setFailed(true);
+      });
   }, [run]);
 
   return (
@@ -54,9 +57,11 @@ function SessionRefresh() {
           <Button
             onClick={() => {
               setFailed(false);
-              void run().then((retryable) => {
-                if (retryable) setFailed(true);
-              });
+              void run()
+                .catch(() => true)
+                .then((retryable) => {
+                  if (retryable) setFailed(true);
+                });
             }}
           >
             Try again

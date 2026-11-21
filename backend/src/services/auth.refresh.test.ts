@@ -210,6 +210,14 @@ describe('refreshTokens: check order and user state', () => {
 		await expect(refreshTokens(signRefresh())).rejects.toMatchObject({ code: 'ACCOUNT_DEACTIVATED', statusCode: 403 });
 		expect(tokenCreate).not.toHaveBeenCalled();
 	});
+
+	it('a soft-deleted user presenting a token rotated inside the window still gets no new tokens', async () => {
+		tokenFindUnique.mockResolvedValue(row(secondsAgo(2)));
+		userFindUnique.mockResolvedValue({ ...activeUser, deletedAt: new Date('2026-05-01') });
+
+		await expect(refreshTokens(signRefresh())).rejects.toMatchObject({ code: 'ACCOUNT_DEACTIVATED' });
+		expect(tokenCreate).not.toHaveBeenCalled();
+	});
 });
 
 describe('refreshTokens: opportunistic cleanup', () => {

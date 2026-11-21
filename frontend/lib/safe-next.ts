@@ -1,9 +1,11 @@
 const DEFAULT_NEXT = "/dashboard";
+// Pages that would bounce straight back; /auth/account-setup is a legitimate destination.
+const AUTH_LANDING_PAGES = /^\/auth\/(session|login|signup)(\/|\?|#|$)/;
 
 /**
  * Validates a post-login / post-refresh redirect target. Only a relative path
  * that starts with a single `/` is allowed, so `?next=` can never become an
- * open redirect. The auth pages themselves are refused to avoid bounce loops.
+ * open redirect. The session, login and signup pages are refused to avoid bounce loops.
  */
 export function safeNext(
   raw: string | null | undefined,
@@ -23,6 +25,6 @@ export function safeNext(
   if (decoded.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(decoded)) {
     return fallback;
   }
-  if (decoded === "/auth" || decoded.startsWith("/auth/")) return fallback;
+  if (AUTH_LANDING_PAGES.test(decoded)) return fallback;
   return raw;
 }

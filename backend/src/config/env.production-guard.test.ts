@@ -86,6 +86,11 @@ describe('env REFRESH_REUSE_GRACE_SECONDS', () => {
 		expect(env.REFRESH_REUSE_GRACE_SECONDS).toBe(10);
 	});
 
+	it('treats an empty value as unset (default), not as 0', async () => {
+		const { env } = await loadEnv({ NODE_ENV: 'development', REFRESH_REUSE_GRACE_SECONDS: '' });
+		expect(env.REFRESH_REUSE_GRACE_SECONDS).toBe(10);
+	});
+
 	it.each([['0', 0], ['60', 60]])('accepts the boundary value %s', async (raw, expected) => {
 		const { env } = await loadEnv({ NODE_ENV: 'development', REFRESH_REUSE_GRACE_SECONDS: raw });
 		expect(env.REFRESH_REUSE_GRACE_SECONDS).toBe(expected);

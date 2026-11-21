@@ -36,8 +36,13 @@ describe("safeNext", () => {
     expect(safeNext("//evil.com", "/home")).toBe("/home");
   });
 
-  it("does not send a user back to the session or login pages", () => {
+  it("does not send a user back to the session, login or signup pages", () => {
     expect(safeNext("/auth/session?next=/x")).toBe("/dashboard");
     expect(safeNext("/auth/login")).toBe("/dashboard");
+    expect(safeNext("/auth/signup")).toBe("/dashboard");
+  });
+
+  it("allows returning to the account setup page", () => {
+    expect(safeNext("/auth/account-setup")).toBe("/auth/account-setup");
   });
 });

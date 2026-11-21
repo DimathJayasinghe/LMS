@@ -117,20 +117,36 @@ const REFRESH_LOCK = "lms-auth-refresh";
 /** The one refresh this tab has in flight; every concurrent caller shares it. */
 let inflight: Promise<RefreshResult> | null = null;
 
-async function runRefresh(): Promise<RefreshResult> {
+const REFRESH_TIMEOUT_MS = 10_000;
+// The server tolerates a duplicate presentation of a just-rotated token for a few
+// seconds, so one quick retry after a lost response is safe; later it would look like reuse.
+const REFRESH_RETRY_DELAY_MS = 1_000;
+
+async function attemptRefresh(): Promise<RefreshResult> {
+  // Bounded: this runs while holding the cross-tab lock, so a stalled connection
+  // must not block every other tab.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
   try {
-    await request("/auth/refresh", { method: "POST", _retry: true });
+    await request("/auth/refresh", { method: "POST", _retry: true, signal: controller.signal });
     return { ok: true };
   } catch (err) {
     return { ok: false, status: err instanceof ApiError ? err.status : null };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-/**
- * Rotate tokens via the refresh cookie. Single flight: parallel callers in one
- * tab share one request, and `navigator.locks` serialises it across tabs so two
- * tabs do not present the same refresh token at once.
- */
+async function runRefresh(): Promise<RefreshResult> {
+  const first = await attemptRefresh();
+  // Retry only what may be transient: a network failure or a 5xx. 401/403 are
+  // definitive and 429 means back off.
+  const transient = !first.ok && (first.status === null || first.status >= 500);
+  if (!transient) return first;
+  await new Promise((resolve) => setTimeout(resolve, REFRESH_RETRY_DELAY_MS));
+  return attemptRefresh();
+}
+
 export function refreshSession(): Promise<RefreshResult> {
   if (!inflight) {
     inflight = runLocked().finally(() => {
@@ -142,7 +158,12 @@ export function refreshSession(): Promise<RefreshResult> {
 
 async function runLocked(): Promise<RefreshResult> {
   const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
-  return locks ? await locks.request(REFRESH_LOCK, () => runRefresh()) : runRefresh();
+  try {
+    return locks ? await locks.request(REFRESH_LOCK, () => runRefresh()) : await runRefresh();
+  } catch {
+    // The lock API itself failed; report a transient failure rather than hanging callers.
+    return { ok: false, status: null };
+  }
 }
 
 async function refresh(): Promise<boolean> {

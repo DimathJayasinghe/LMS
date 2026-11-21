@@ -115,7 +115,9 @@ await api.post('/submissions', { examId, answers })
 
 > `lib/api.ts` already does refresh-and-retry for `401 + expired` in the browser. The refresh is **single flight**: parallel
 > callers in one tab share one `POST /auth/refresh`, and `navigator.locks` (`lms-auth-refresh`) serialises it across tabs.
-> `refreshSession()` returns `{ ok: true }` or `{ ok: false, status }` (`status` is `null` for a network error).
+> `refreshSession()` returns `{ ok: true }` or `{ ok: false, status }` (`status` is `null` for a network error). The request is
+> aborted after 10 s so a stalled connection cannot hold the cross-tab lock, and a network error or 5xx is retried once after
+> 1 s (inside the server's duplicate-tolerance window, so a lost response does not look like token reuse); 401, 403 and 429 are not retried.
 
 ---
 
@@ -192,7 +194,7 @@ Expose the current user app-wide via a small provider (Doc 02 §4 pattern). Fetc
   `/auth/session?next=<path>`. That client page runs one `refreshSession()` and returns to `next` (validated by
   `safeNext`, relative paths only). A `401`/`403` from refresh calls `POST /auth/logout` to clear the dead cookies
   and goes to `/auth/login?next=…`; a `429`, `5xx` or network error keeps the cookies and shows a retry button.
-  The matcher excludes `api`, Next internals, static files, `/auth/*` and prefetch requests. The login page honours `?next=`.
+  The matcher excludes `api`, Next internals, static files, `/auth/session`, `/auth/login`, `/auth/signup` and prefetch requests; `/auth/account-setup` is covered because it is a server-guarded page. The login page honours `?next=`.
   This needs the supported same-origin topology (doc 09): the proxy must be able to read the cookie.
 - **Role-gated UI:** `useAuth().user.role` decides which nav items/actions render.
 
