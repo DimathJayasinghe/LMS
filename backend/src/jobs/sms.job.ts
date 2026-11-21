@@ -100,6 +100,14 @@ export const processSmsJob = async (data: SmsJobData): Promise<void> => {
 		throw new AppError('SMS_MESSAGE_REQUIRED', 400, 'SMS message is required.');
 	}
 
+	if (env.SMS_DRIVER === 'log') {
+		// Local development: nothing leaves the machine. The SmsLog row reads SENT so the
+		// rest of the flow (settings gating, history views) can be exercised offline.
+		logger.info({ to: data.to, message: data.message }, 'SMS (log driver, not delivered)');
+		updateSmsLog(data.smsLogId, 'SENT');
+		return;
+	}
+
 	const config = getNotifyConfig();
 	const params = buildNotifyParams(config, data);
 

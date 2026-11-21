@@ -2,11 +2,13 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as PaymentService from '@/services/payment.service';
+import * as PaymentAdjustmentService from '@/services/payment-adjustment.service';
 import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import {
+	collectEntrancePaymentSchema,
 	initiatePaymentSchema,
 	listMyPaymentsQuerySchema,
 	listPaymentsQuerySchema,
@@ -14,7 +16,10 @@ import {
 	payhereNotifySchema,
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
+	financialReportQuerySchema,
+	refundPaymentSchema,
 } from '@/schemas/payment.schema';
+import { getCurrentPaymentMonth } from '@/services/access.service';
 
 type RequestWithFile = Request & { file?: Express.Multer.File };
 
@@ -60,6 +65,20 @@ export const listPayments = asyncHandler(async (req: Request, res: Response): Pr
 export const getPaymentsSummary = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { month } = paymentsSummaryQuerySchema.parse(req.query);
 	const data = await PaymentService.getPaymentsSummary(month);
+
+	res.status(200).json({
+		status: 'success',
+		data,
+	});
+});
+
+export const getFinancialReport = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const query = financialReportQuerySchema.parse(req.query);
+	const data = await PaymentService.getFinancialReport(
+		query.month ?? getCurrentPaymentMonth(),
+		query,
+		req.user!,
+	);
 
 	res.status(200).json({
 		status: 'success',
@@ -113,7 +132,7 @@ export const overridePayment = asyncHandler(
 
 		// Fetch before state for audit
 		const before = await PaymentService.getPaymentById(id, req.user!.userId, req.user!.role);
-		const payment = await PaymentService.overridePayment(id, input);
+		const payment = await PaymentService.overridePayment(id, input, req.user!.userId);
 
 		void AuditService.log({
 			action: AUDIT_ACTION.PAYMENT_OVERRIDDEN,
@@ -135,6 +154,42 @@ export const overridePayment = asyncHandler(
 			status: 'success',
 			data: payment,
 			message: 'Payment updated successfully.',
+		});
+	},
+);
+
+export const listPaymentAdjustments = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const { id } = paymentIdParamSchema.parse(req.params);
+		const adjustments = await PaymentAdjustmentService.listPaymentAdjustments(id, req.user!);
+		res.status(200).json({ status: 'success', data: adjustments, count: adjustments.length });
+	},
+);
+
+export const refundPayment = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const { id } = paymentIdParamSchema.parse(req.params);
+		const input = refundPaymentSchema.parse(req.body);
+		const result = await PaymentAdjustmentService.refundPayment(id, input, req.user!);
+
+		void AuditService.log({
+			action: AUDIT_ACTION.PAYMENT_REFUNDED,
+			description: `Completed refund recorded for ${input.amount.toFixed(2)}`,
+			targetType: 'Payment',
+			targetId: id,
+			metadata: {
+				adjustmentId: result.adjustment.id,
+				amount: input.amount.toFixed(2),
+				externalReference: input.externalReference,
+				remainingRefundable: result.remainingRefundable,
+			},
+			context: extractAuditContext(req),
+		});
+
+		res.status(201).json({
+			status: 'success',
+			data: result,
+			message: 'Completed refund recorded.',
 		});
 	},
 );
@@ -178,6 +233,34 @@ export const bulkUploadPayments = asyncHandler(
 	},
 );
 
+export const collectEntrancePayment = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const input = collectEntrancePaymentSchema.parse(req.body);
+		const payment = await PaymentService.collectEntrancePayment(req.user!.userId, input);
+
+		void AuditService.log({
+			action: AUDIT_ACTION.PAYMENT_ENTRANCE_COLLECTED,
+			description: `Entrance payment collected for ${input.paymentMonth}`,
+			targetType: 'Payment',
+			targetId: payment.id,
+			metadata: {
+				enrollmentId: input.enrollmentId,
+				paymentMonth: input.paymentMonth,
+				amount: payment.amount.toString(),
+				collectedAtInstituteId: input.collectedAtInstituteId,
+				collectedViaBarcode: input.collectedViaBarcode,
+			},
+			context: extractAuditContext(req),
+		});
+
+		res.status(200).json({
+			status: 'success',
+			data: payment,
+			message: 'Payment collected.',
+		});
+	},
+);
+
 // ─── SMS Helpers ──────────────────────────────────────────
 // Payment-confirmed and payment-overridden notifications (in-app + SMS) are
 // now dispatched from PaymentService itself via NotificationService.dispatch
@@ -196,4 +279,3 @@ const sendBulkPaymentSms = async (): Promise<void> => {
 	// Future: Track affected enrollment IDs during bulkUploadPayments
 	// and send SMS to each student with their payment details.
 };
-

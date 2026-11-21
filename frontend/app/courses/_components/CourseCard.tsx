@@ -17,6 +17,9 @@ export default function CourseCard({ course }: { course: PublicCourse }) {
           alt={course.name}
           width={800}
           height={450}
+          // Banners are admin-uploaded, size-capped files served from the public asset bucket; skipping
+          // Next's optimizer avoids an images.remotePatterns allow-list per environment (R2 host, local storage).
+          unoptimized
           className="h-40 w-full object-cover"
         />
       ) : (

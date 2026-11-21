@@ -1,19 +1,31 @@
 import { Router } from 'express';
 import { Role } from '@prisma/client';
 import * as UserController from '@/controllers/user.controller';
+import * as ProfileController from '@/controllers/profile.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
     assignBarcodeSchema,
+    academicStaffQuerySchema,
     createStudentBarcodeSchema,
     listUsersQuerySchema,
     nicUploadUrlSchema,
+    nicConfirmSchema,
+    resolveBarcodeQuerySchema,
     studentBarcodeIdParamSchema,
     updateRoleSchema,
     updateStatusSchema,
     userIdParamSchema,
 } from '@/schemas/user.schema';
+import {
+    updateProfileSchema,
+    avatarUploadUrlSchema,
+    avatarConfirmSchema,
+    changeEmailSchema,
+    changePasswordSchema,
+} from '@/schemas/profile.schema';
 
 export const userRoutes = Router();
 
@@ -29,6 +41,51 @@ userRoutes.get(
 // GET /api/users/me — Current user profile
 userRoutes.get('/me', verifyToken, UserController.getMe);
 
+// ─── Profile self-service (any authenticated role) ─────────
+
+// PATCH /api/users/me/profile — Update own contact details
+userRoutes.patch(
+    '/me/profile',
+    verifyToken,
+    validateBody(updateProfileSchema),
+    ProfileController.updateProfile,
+);
+
+// POST /api/users/me/avatar/upload-url — Presign a direct-to-public-R2 avatar upload
+userRoutes.post(
+    '/me/avatar/upload-url',
+    verifyToken,
+    validateBody(avatarUploadUrlSchema),
+    ProfileController.getAvatarUploadUrl,
+);
+
+// POST /api/users/me/avatar/confirm — Confirm the avatar reached R2, persist the URL
+userRoutes.post(
+    '/me/avatar/confirm',
+    verifyToken,
+    validateBody(avatarConfirmSchema),
+    ProfileController.confirmAvatar,
+);
+
+// DELETE /api/users/me/avatar — Remove own avatar
+userRoutes.delete('/me/avatar', verifyToken, ProfileController.removeAvatar);
+
+// PATCH /api/users/me/email — Change own email (current password + weekly cooldown)
+userRoutes.patch(
+    '/me/email',
+    verifyToken,
+    validateBody(changeEmailSchema),
+    ProfileController.changeEmail,
+);
+
+// PATCH /api/users/me/password — Change own password (current password + weekly cooldown)
+userRoutes.patch(
+    '/me/password',
+    verifyToken,
+    validateBody(changePasswordSchema),
+    ProfileController.changePassword,
+);
+
 // ─── Account Setup (Student-only self-service) ─────────────
 
 // POST /api/users/me/nic/upload-url — Presign a direct-to-R2 NIC photo upload
@@ -38,6 +95,15 @@ userRoutes.post(
     requireRole(Role.STUDENT),
     validateBody(nicUploadUrlSchema),
     UserController.getNicUploadUrl,
+);
+
+// POST /api/users/me/nic/confirm — Confirm the NIC photo actually reached R2
+userRoutes.post(
+    '/me/nic/confirm',
+    verifyToken,
+    requireRole(Role.STUDENT),
+    validateBody(nicConfirmSchema),
+    UserController.confirmNicUpload,
 );
 
 // GET /api/users/me/institute-barcodes — List my per-institute barcodes
@@ -66,6 +132,25 @@ userRoutes.delete(
     UserController.deleteMyInstituteBarcode,
 );
 
+// GET /api/users/resolve-barcode — Resolve a scanned barcode to a student (Admin + Staff)
+userRoutes.get(
+    '/resolve-barcode',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+    validateQuery(resolveBarcodeQuerySchema),
+    UserController.resolveBarcode,
+);
+
+// Minimal academic directory: SUPER_ADMIN selects teachers/markers; TEACHER
+// may list markers for exams. No email, phone, NIC, or account metadata leaks.
+userRoutes.get(
+    '/academic-staff',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+    validateQuery(academicStaffQuerySchema),
+    UserController.listAcademicStaff,
+);
+
 // GET /api/users/:id — Get user by id (Admin + Staff)
 userRoutes.get(
     '/:id',
@@ -82,6 +167,7 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateRoleSchema),
+    checkIdempotency,
     UserController.updateRole,
 );
 
@@ -92,6 +178,7 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(updateStatusSchema),
+    checkIdempotency,
     UserController.updateStatus,
 );
 
@@ -102,5 +189,6 @@ userRoutes.patch(
     requireRole(Role.SUPER_ADMIN, Role.ADMIN),
     validateParams(userIdParamSchema),
     validateBody(assignBarcodeSchema),
+    checkIdempotency,
     UserController.assignBarcode,
 );

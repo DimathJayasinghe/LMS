@@ -5,11 +5,22 @@ import { Camera, CameraOff, Check, Loader2, ScanLine, Search, UserPlus, X } from
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
-import { QrCamera } from "./QrCamera";
-import type { ApiList, ApiSuccess, AttendanceRecord, ClassSession, Course, User } from "@/lib/types";
+import { QrCamera } from "@/components/custom/QrCamera";
+import { attendanceSourceLabel } from "@/lib/attendance";
+import type {
+  ApiList,
+  ApiSuccess,
+  AttendanceRecord,
+  AttendanceSource,
+  ClassSession,
+  Course,
+  Institute,
+  User,
+} from "@/lib/types";
 
 interface Props {
   classes: Course[];
+  institutes: Institute[];
 }
 
 const inputClass =
@@ -30,12 +41,17 @@ function scanErrorMessage(e: unknown): string {
       return "That student account is deactivated.";
     case "INVALID_ROLE_FOR_ATTENDANCE":
       return "That code doesn't belong to a student.";
+    case "INSTITUTE_NOT_FOUND":
+      return "That institute is unavailable. Choose another location.";
+    case "SESSION_INSTITUTE_MISMATCH":
+      return "This session is scheduled at a different institute.";
     default:
       return e.message;
   }
 }
 
-export function StaffScanner({ classes }: Props) {
+export function StaffScanner({ classes, institutes }: Props) {
+  const [instituteId, setInstituteId] = useState("");
   const [classId, setClassId] = useState("");
   const [sessions, setSessions] = useState<ClassSession[]>([]);
   const [sessionId, setSessionId] = useState("");
@@ -53,6 +69,16 @@ export function StaffScanner({ classes }: Props) {
 
   const scanInputRef = useRef<HTMLInputElement>(null);
   const lastDecoded = useRef<{ value: string; at: number }>({ value: "", at: 0 });
+
+  const selectInstitute = (id: string): void => {
+    setInstituteId(id);
+    setClassId("");
+    setSessionId("");
+    setSessions([]);
+    setRoster([]);
+    setResult(null);
+    setCameraOn(false);
+  };
 
   // Load sessions when a class is chosen (resets happen in selectClass).
   useEffect(() => {
@@ -114,14 +140,16 @@ export function StaffScanner({ classes }: Props) {
   const addToRoster = (rec: AttendanceRecord): void =>
     setRoster((prev) => [rec, ...prev.filter((r) => r.userId !== rec.userId)]);
 
-  const submitScan = async (raw: string): Promise<void> => {
+  const submitScan = async (raw: string, source: AttendanceSource): Promise<void> => {
     const barcode = raw.trim();
-    if (!barcode || !sessionId || busy) return;
+    if (!barcode || !instituteId || !sessionId || busy) return;
     setBusy(true);
     try {
       const res = await api.post<ApiSuccess<AttendanceRecord>>("/attendance/scan", {
         barcode,
         classSessionId: sessionId,
+        instituteId,
+        source,
       });
       addToRoster(res.data);
       setResult({
@@ -141,7 +169,7 @@ export function StaffScanner({ classes }: Props) {
     const now = Date.now();
     if (lastDecoded.current.value === text && now - lastDecoded.current.at < 2500) return;
     lastDecoded.current = { value: text, at: now };
-    void submitScan(text);
+    void submitScan(text, "QR");
   };
 
   const markManual = async (u: User): Promise<void> => {
@@ -165,22 +193,40 @@ export function StaffScanner({ classes }: Props) {
     setCameraOn((on) => !on);
   };
 
-  const ready = Boolean(sessionId);
+  const ready = Boolean(instituteId && sessionId);
 
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
       <div className="space-y-4">
         {/* Session picker */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Institute</span>
+            <select
+              value={instituteId}
+              onChange={(e) => selectInstitute(e.target.value)}
+              aria-label="Select institute"
+              className={`${inputClass} w-full`}
+            >
+              <option value="">Select an institute...</option>
+              {institutes.map((institute) => (
+                <option key={institute.id} value={institute.id}>
+                  {institute.name}
+                  {institute.city ? ` · ${institute.city}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Class</span>
             <select
               value={classId}
               onChange={(e) => selectClass(e.target.value)}
+              disabled={!instituteId}
               aria-label="Select class"
-              className={`${inputClass} w-full`}
+              className={`${inputClass} w-full disabled:opacity-50`}
             >
-              <option value="">Select a class…</option>
+              <option value="">{instituteId ? "Select a class..." : "Pick an institute first"}</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -231,7 +277,7 @@ export function StaffScanner({ classes }: Props) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    void submitScan(scanValue);
+                    void submitScan(scanValue, "BARCODE");
                   }
                 }}
                 disabled={!ready || busy}
@@ -344,6 +390,9 @@ export function StaffScanner({ classes }: Props) {
                     #{r.user?.indexNumber ?? "?"} · {timeFmt.format(new Date(r.lastSeenAt))}
                   </p>
                 </div>
+                <Badge variant="outline" className="shrink-0 font-normal">
+                  {attendanceSourceLabel(r.source)}
+                </Badge>
               </li>
             ))}
           </ul>

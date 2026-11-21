@@ -20,8 +20,12 @@ before login).
 ## Roles
 
 - **Slot writes** (`POST/PATCH/DELETE /slots`) — `SUPER_ADMIN`, the course's `TEACHER`, or `ADMIN` (front-desk scheduler). A TEACHER may only touch slots for **their own** courses (`403 FORBIDDEN_COURSE` otherwise).
-- **Reads** (`GET /slots`) — any authenticated user (the schedule).
-- **Generate** (`POST /generate`) — `SUPER_ADMIN`, `ADMIN`.
+- **Reads** (`GET /slots`, `/sessions`) — `SUPER_ADMIN`/`ADMIN` see all, an owning
+  `TEACHER` sees only owned courses, and a `STUDENT` sees active enrolled courses
+  matching their online/physical cohort. `MARKER` receives `403`.
+- **Preview/generate** — `SUPER_ADMIN`, `ADMIN`, and `TEACHER`; teacher operations are
+  server-scoped to owned courses. Slot create/update/disable and generation require
+  `Idempotency-Key`; preview is read-only and does not.
 - **Public read** (`GET /public/upcoming`) — no auth. Select list is
   deliberately narrow (`id`, `title`, `date`, `durationMinutes`, `classType`,
   `course.name`, `course.subject.name`) — **never** `zoomLink` /
@@ -42,12 +46,13 @@ before login).
   "startTime": "16:00",
   "durationMinutes": 120,
   "classType": "PHYSICAL",
-  "zoomLink": null,
   "isActive": true,
   "courseId": "uuid",
   "instituteId": "uuid",
   "createdAt": "…",
-  "updatedAt": "…"
+  "updatedAt": "…",
+  "course": { "name": "Physics 2026", "year": 2026 },
+  "institute": { "name": "Colombo" }
 }
 ```
 
@@ -64,9 +69,11 @@ before login).
 | POST | `/api/timetable/slots` | SUPER_ADMIN, TEACHER(own), ADMIN | Create a weekly slot |
 | GET | `/api/timetable/slots` | Any | List slots (the timetable) |
 | GET | `/api/timetable/slots/:id` | Any | Get a slot |
+| GET | `/api/timetable/sessions` | SUPER_ADMIN, TEACHER(own), ADMIN, STUDENT(enrolled cohort) | Dated upcoming sessions with `liveScheduled`, never meeting credentials |
 | PATCH | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Update a slot |
-| DELETE | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Delete a slot |
-| POST | `/api/timetable/generate` | SUPER_ADMIN, ADMIN | Materialize sessions for a date range |
+| DELETE | `/api/timetable/slots/:id` | SUPER_ADMIN, TEACHER(own), ADMIN | Soft-disable a slot |
+| POST | `/api/timetable/generate/preview` | SUPER_ADMIN, TEACHER(own), ADMIN | Preview `CREATE`/`EXISTS` occurrences |
+| POST | `/api/timetable/generate` | SUPER_ADMIN, TEACHER(own), ADMIN | Materialize sessions for a date range |
 
 ### GET `/api/timetable/public/upcoming`
 
@@ -103,26 +110,37 @@ Body:
   "startTime": "16:00",
   "durationMinutes": 120,
   "classType": "PHYSICAL",
-  "zoomLink": null,
   "isActive": true
 }
 ```
 - `courseId` — required. `dayOfWeek` (0–6) + `startTime` ("HH:mm") required.
-- `instituteId`, `title`, `durationMinutes` (default 60), `classType`, `zoomLink`, `isActive` — optional.
+- `instituteId`, `title`, `durationMinutes` (default 60), `classType`, `isActive` — optional.
+- Slots must finish on the same local calendar day. An active slot returns `409
+  TIMETABLE_CONFLICT` if it overlaps the same course, teacher, or non-null institute.
+- A recurring slot never accepts or returns a Zoom link. Each generated online occurrence
+  is scheduled separately through the embedded live-class endpoint.
 
 `201` → `{ status, data: TimetableSlot, message }`. Not the course's teacher → `403`. Bad `startTime` → `400`.
 
 ### GET `/api/timetable/slots`
 
-Query (all optional): `courseId`, `instituteId`, `dayOfWeek`. `200` → `{ status, data: TimetableSlot[], count }`, ordered by day then time. Non–SUPER_ADMIN see active slots only.
+Query (all optional): `courseId`, `instituteId`, `dayOfWeek`. `200` → `{ status,
+data: TimetableSlot[], count }`, ordered by day then time. SUPER_ADMIN/ADMIN see all;
+teachers see owned active/inactive slots; students see active enrolled-cohort slots.
 
 ### PATCH `/api/timetable/slots/:id`
 
-Body: any subset of the create fields. `200` → updated slot.
+Body: any subset of `instituteId`, `title`, `dayOfWeek`, `startTime`,
+`durationMinutes`, `classType`, and `isActive`. `courseId` is immutable; create a new
+slot to move a recurring schedule to another course. `200` → updated slot. Send
+`{ "isActive": true }` to restore a disabled slot; repeating the restore is safe.
 
 ### DELETE `/api/timetable/slots/:id`
 
-`200` → `{ status, data: null, message }`. Already-generated sessions are **kept** (their `timetableSlotId` is nulled).
+`200` → `{ status, data: null, message }`. The row is retained with
+`isActive: false`, so repeating the request is safe. Already-generated sessions
+and their `timetableSlotId` links are **kept**. Future generation ignores the
+disabled slot until it is restored through `PATCH`.
 
 ### POST `/api/timetable/generate`
 
@@ -133,6 +151,11 @@ Body:
 Creates a `ClassSession` for every occurrence of every active slot in the range.
 **Idempotent** — re-running does not duplicate (unique on `(timetableSlotId, date)`)
 and never clobbers a hand-edited session.
+
+The range is bounded to 90 days. Call `POST /generate/preview` with the same body
+first to receive `rows`, `createCount`, and `existingCount`. Generated online sessions
+contain no reusable raw link; authorized staff schedule the occurrence through
+`POST /classes/:classId/sessions/:sessionId/live/schedule`.
 
 `200` →
 ```json

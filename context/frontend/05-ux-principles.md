@@ -30,15 +30,29 @@
 - No animation blocks interaction or exceeds ~500ms for functional transitions (decorative loops excepted, and
   they must be低-contrast and pausable-by-preference).
 
-## 3. Responsiveness (mobile matters — no native app)
+## 3. Responsiveness — **mobile-first** (no native app)
 
-- Design works at **375px (mobile), 768px (tablet), 1280px (desktop)**. Test all three.
+**Build mobile-first: style the small screen as the base, then add `sm:`/`md:`/`lg:` for larger.**
+Unprefixed classes are the mobile design; prefixed utilities are progressive enhancement. Design and
+**test at 375px (mobile), 768px (tablet), 1280px (desktop)** — every screen, not just the marketing site.
+
 - Marketing: single-column stacking on mobile; the pill nav collapses to a hamburger/sheet under `lg`.
-- Dashboard shell: sidebar collapses to a hamburger/drawer under `lg`; consider a bottom nav bar with the 3–4 key
-  actions on mobile.
+- Dashboard shell: sidebar collapses to a hamburger/**drawer** under `lg` (the drawer **slides** in/out —
+  `transition-transform`, `motion-reduce:transition-none` — never pops). Consider a bottom nav on mobile.
 - Use fluid layout (flex/grid, `max-w-*`, `gap-*`), relative units, and `object-cover` images. **No horizontal
   page scroll** at any width — wide tables scroll inside their own `overflow-x-auto` container.
 - Tap targets ≥ 44×44px on touch. Don't rely on hover for essential info on mobile.
+- **Popovers / dropdowns must fit the viewport on mobile.** A fixed-width (`w-80`) anchored popover can run
+  off a 375px screen — make it a viewport-inset panel on mobile and only anchor on `sm+`, e.g.
+  `fixed inset-x-2 top-16 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80` (see `NotificationBell`).
+- **Stacking contexts bite on mobile.** A child's `z-index` can't escape its parent's stacking context, and
+  ties at equal `z-index` resolve by DOM order. If a menu renders *behind* later content, raise the
+  **container's** z-index, not just the panel's (the landing `Nav` sits at `z-[70]` above the `z-50` hero;
+  the app `TopBar` header is `z-40` with an explicit `z-50` on its dropdown for iOS Safari
+  `sticky`+`backdrop-blur` quirks).
+- **Camera/QR on mobile:** request the rear camera with `decodeFromConstraints({ facingMode: 'environment' })`
+  (not an undefined deviceId), give `<video>` `autoPlay muted playsInline`, and require a secure context
+  (HTTPS/localhost) for `getUserMedia`.
 
 ## 4. Every screen ships four states
 
@@ -97,5 +111,5 @@ For any data-driven view, implement all four — not just the happy path:
 - Never render tokens/secrets; session is cookie-based (Doc 04). Don't log PII (NIC, phone) to the console.
 - Video/exam content is access-gated server-side; the UI should **guide** (enroll/pay prompts) rather than expose
   content optimistically before the gate passes.
-- Respect the content-protection intent: don't add "download" affordances to protected streams; the stream token
-  is IP-bound and short-lived by design.
+- Respect the content-protection intent: don't add "download" affordances to protected streams; the signed
+  embed URL expires (4 hours) and is not IP-bound; the watermark identity is part of the response.

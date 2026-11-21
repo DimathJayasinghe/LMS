@@ -19,7 +19,7 @@ import { logger } from '@/config/logger';
 import { env } from '@/config/env';
 
 // ─── POST /api/attendance/scan ───────────────────────────────
-// Admin scans a student's barcode at the physical entrance
+// Admin scans a student's QR/barcode at a physical institute
 export const scanBarcode = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = scanBarcodeSchema.parse(req.body);
@@ -29,7 +29,12 @@ export const scanBarcode = asyncHandler(
       action: AUDIT_ACTION.ATTENDANCE_BARCODE,
       targetType: 'Attendance',
       targetId: attendance.id,
-      metadata: { barcode: input.barcode, classSessionId: input.classSessionId },
+      metadata: {
+        barcode: input.barcode,
+        classSessionId: input.classSessionId,
+        instituteId: input.instituteId,
+        source: input.source,
+      },
       context: extractAuditContext(req),
     });
 

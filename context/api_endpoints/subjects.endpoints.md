@@ -17,6 +17,8 @@ All endpoints require the `access_token` cookie.
 Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
 - **SUPER_ADMIN** — create / update subjects.
+- **SUPER_ADMIN** — list/replace the teachers approved for a subject.
+- **TEACHER** — list their own assigned active subjects.
 - Everyone authenticated — read. Non–SUPER_ADMIN see **active only**.
 
 ## Data Shape
@@ -42,6 +44,16 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | GET | `/api/subjects` | Any | List subjects (`?search=`) |
 | GET | `/api/subjects/:id` | Any | Get a subject |
 | PATCH | `/api/subjects/:id` | SUPER_ADMIN | Update a subject |
+| GET | `/api/subjects/mine` | TEACHER | List subjects assigned to the caller |
+| GET | `/api/subjects/:id/teachers` | SUPER_ADMIN | List approved teachers |
+| PUT | `/api/subjects/:id/teachers` | SUPER_ADMIN | Replace the exact teacher set (idempotent) |
+
+### Teacher assignment endpoints
+
+`PUT /api/subjects/:id/teachers` accepts `{ "teacherIds": ["uuid"] }` and requires an
+`Idempotency-Key`. IDs must belong to active TEACHER accounts. Removing a teacher who still owns a
+class in the subject returns `409 TEACHER_OWNS_SUBJECT_COURSE`; reassign the class first. Successful
+replacement emits `SUBJECT_TEACHERS_ASSIGNED`. `GET /mine` is the source for the teacher class form.
 
 ### POST `/api/subjects`
 

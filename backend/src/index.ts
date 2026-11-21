@@ -27,6 +27,9 @@ import { streamRoutes } from './routes/stream.routes';
 import { auditRoutes } from './routes/audit.routes';
 import { notificationRoutes } from './routes/notification.routes';
 import { notificationSettingRoutes } from './routes/notification-setting.routes';
+import { markerGroupRoutes } from './routes/marker-group.routes';
+import { examPaperRoutes } from './routes/exam-paper.routes';
+import { examAudienceRoutes } from './routes/exam-audience.routes';
 
 initSentry();
 
@@ -86,6 +89,9 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/videos/:id/stream', streamLimiter);
   app.use('/api/videos', videoRoutes);
   app.use('/api/exams', examRoutes);
+  app.use('/api/exam-papers', examPaperRoutes);
+  app.use('/api/exam-audiences', examAudienceRoutes);
+  app.use('/api/marker-groups', markerGroupRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/stream', streamRoutes);

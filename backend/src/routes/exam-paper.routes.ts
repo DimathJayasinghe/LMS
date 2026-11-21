@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { Role } from '@prisma/client';
+import { verifyToken } from '@/middleware/auth.middleware';
+import { requireRole } from '@/middleware/role.middleware';
+import { checkIdempotency } from '@/middleware/idempotency.middleware';
+import { validateBody, validateParams } from '@/middleware/validate.middleware';
+import * as Controller from '@/controllers/exam-paper.controller';
+import { createExamPaperSchema, paperIdParamSchema, paperRevisionSchema } from '@/schemas/exam-paper.schema';
+export const examPaperRoutes = Router();
+examPaperRoutes.post('/', verifyToken, requireRole(Role.SUPER_ADMIN, Role.TEACHER), validateBody(createExamPaperSchema), checkIdempotency, Controller.createExamPaper);
+examPaperRoutes.post('/:id/revisions', verifyToken, requireRole(Role.SUPER_ADMIN, Role.TEACHER), validateParams(paperIdParamSchema), validateBody(paperRevisionSchema), checkIdempotency, Controller.createRevision);

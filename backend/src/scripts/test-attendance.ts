@@ -4,6 +4,7 @@
  * The server must be running on port 5000.
  */
 
+import { randomUUID } from 'crypto';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -64,6 +65,7 @@ async function request(
     method,
     headers: {
       'Content-Type': 'application/json',
+      ...(method === 'PATCH' ? { 'Idempotency-Key': randomUUID() } : {}),
       ...(jar.values.size ? { Cookie: cookieHeader(jar) } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -88,6 +90,7 @@ let studentId = '';
 let adminId = '';
 let courseId = '';
 let classSessionId = '';
+let instituteId = '';
 
 const adminJar: CookieJar = { values: new Map() };
 const studentJar: CookieJar = { values: new Map() };
@@ -113,6 +116,16 @@ async function setup() {
     process.exit(1);
   }
   adminId = (adminRes.data as any).data.id;
+
+  const institutesRes = await request('GET', '/institutes', undefined, adminJar);
+  const activeInstitute = (institutesRes.data as any)?.data?.find(
+    (institute: { isActive?: boolean }) => institute.isActive !== false,
+  );
+  if (!activeInstitute?.id) {
+    console.error('\n❌ Attendance smoke test requires at least one active institute.');
+    process.exit(1);
+  }
+  instituteId = activeInstitute.id;
 
   // Add barcode via API (using Admin auth)
   const barcodeRes = await request('PATCH', `/users/${studentId}/barcode`, {
@@ -165,6 +178,8 @@ async function runTests(): Promise<void> {
     const scanRes = await request('POST', '/attendance/scan', {
       barcode,
       classSessionId,
+      instituteId,
+      source: 'BARCODE',
     }, adminJar);
     assert('POST /scan (admin) -> 200 OK', scanRes.status === 200, scanRes.data);
     assert('POST /scan returns correct source', (scanRes.data as any)?.data?.source === 'BARCODE');
@@ -173,6 +188,8 @@ async function runTests(): Promise<void> {
     const scanDupeRes = await request('POST', '/attendance/scan', {
       barcode,
       classSessionId,
+      instituteId,
+      source: 'BARCODE',
     }, adminJar);
     assert('POST /scan (duplicate) -> 200 OK (upserted)', scanDupeRes.status === 200);
 

@@ -221,6 +221,9 @@ export const listVideosByClass = async (
   // Students must be enrolled to see a course's video list.
   await assertStudentContentAccess(actor, courseId, { requirePaid: false });
 
+  // Teachers may only list videos for courses they teach.
+  await assertCourseAccess(courseId, actor);
+
   const where: Prisma.VideoRecordingWhereInput = {
     classSession: {
       courseId,
@@ -248,7 +251,10 @@ export const listVideosByClass = async (
 // ─── Get Single Video ─────────────────────────────────────────
 // Used before generating the stream URL to verify the video exists.
 
-export const getVideoById = async (videoId: string): Promise<VideoRecordWithSession> => {
+export const getVideoById = async (
+  videoId: string,
+  actor: AuthenticatedUser,
+): Promise<VideoRecordWithSession> => {
   const video = await prisma.videoRecording.findUnique({
     where: { id: videoId },
     select: videoWithSessionSelect,
@@ -257,6 +263,8 @@ export const getVideoById = async (videoId: string): Promise<VideoRecordWithSess
   if (!video) {
     throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
   }
+
+  await assertCourseAccess(video.classSession.courseId, actor);
 
   return video;
 };
@@ -279,7 +287,7 @@ export const generateStreamUrl = async (
   watermark: string;
   expiresAt: number;
 }> => {
-  const video = await getVideoById(videoId);
+  const video = await getVideoById(videoId, actor);
 
   // Gate: a student must be enrolled AND have paid the current month before we
   // ever mint a signed Bunny embed token (architecture §7.1 — content protection).

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Pencil, Plus, Search, X } from "lucide-react";
+import { Check, Loader2, Pencil, Plus, Search, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -318,6 +319,11 @@ export function SubjectManager({ subjects, search }: Props) {
                           </>
                         ) : (
                           <>
+                            <Button asChild size="icon" variant="ghost" className="size-8">
+                              <Link href={`/admin/subjects/${s.id}/teachers`} aria-label={`Assign teachers to ${s.name}`}>
+                                <Users className="size-4" aria-hidden />
+                              </Link>
+                            </Button>
                             <Button
                               size="icon"
                               variant="ghost"

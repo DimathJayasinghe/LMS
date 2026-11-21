@@ -44,10 +44,11 @@ export function VideoForm({ classId, sessions }: { classId: string; sessions: Cl
     try {
       // 1. Ask our server for a Bunny video + a signed TUS upload target. The
       //    file itself is never sent to us — only this metadata call is.
-      const res = await api.post<ApiSuccess<InitiateUploadResult>>("/videos/uploads", {
-        title: title.trim(),
-        classSessionId,
-      });
+      const res = await api.post<ApiSuccess<InitiateUploadResult>>(
+        "/videos/uploads",
+        { title: title.trim(), classSessionId },
+        { headers: { "Idempotency-Key": crypto.randomUUID() } },
+      );
       const { upload } = res.data;
 
       // 2. Upload the file directly to Bunny via TUS (resumable — survives

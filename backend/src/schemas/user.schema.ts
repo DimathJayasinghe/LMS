@@ -13,6 +13,12 @@ export const listUsersQuerySchema = z.object({
 
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 
+export const academicStaffQuerySchema = z.object({
+	role: z.enum([Role.TEACHER, Role.MARKER]),
+});
+
+export type AcademicStaffQuery = z.infer<typeof academicStaffQuerySchema>;
+
 // ─── Params ────────────────────────────────────────────────
 export const userIdParamSchema = z.object({
 	id: z.string().uuid(),
@@ -52,6 +58,15 @@ export const nicUploadUrlSchema = z.object({
 
 export type NicUploadUrlInput = z.infer<typeof nicUploadUrlSchema>;
 
+// Confirms a NIC photo actually landed in R2 (the client calls this after the
+// browser PUT). `key` is the value handed back by the presign endpoint.
+export const nicConfirmSchema = z.object({
+	side: z.enum(['FRONT', 'BACK']),
+	key: z.string().trim().min(1).max(300),
+});
+
+export type NicConfirmInput = z.infer<typeof nicConfirmSchema>;
+
 export const createStudentBarcodeSchema = z.object({
 	instituteId: z.string().uuid(),
 	barcode: z.string().trim().min(1).max(50),
@@ -62,3 +77,10 @@ export type CreateStudentBarcodeInput = z.infer<typeof createStudentBarcodeSchem
 export const studentBarcodeIdParamSchema = z.object({
 	barcodeId: z.string().uuid(),
 });
+
+// ─── Barcode Resolution (Admin/Staff) ───────────────────────
+export const resolveBarcodeQuerySchema = z.object({
+	code: z.string().trim().min(1).max(50),
+});
+
+export type ResolveBarcodeQuery = z.infer<typeof resolveBarcodeQuerySchema>;

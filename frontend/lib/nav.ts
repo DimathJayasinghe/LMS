@@ -7,6 +7,7 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  LineChart,
   LayoutDashboard,
   Library,
   ScanLine,
@@ -88,6 +89,12 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/admin/institutes",
         icon: Building2,
         roles: ["SUPER_ADMIN"],
+      },
+      {
+        label: "Reports",
+        href: "/admin/reports",
+        icon: LineChart,
+        roles: ["SUPER_ADMIN", "TEACHER"],
       },
       {
         label: "Audit log",

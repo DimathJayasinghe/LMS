@@ -78,7 +78,7 @@ export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
                     <select
                       value={u.role}
                       disabled={busy}
-                      onChange={(e) => mutate(u.id, () => api.patch(`/users/${u.id}/role`, { role: e.target.value }))}
+                      onChange={(e) => mutate(u.id, () => api.patch(`/users/${u.id}/role`, { role: e.target.value }, { headers: { "Idempotency-Key": crypto.randomUUID() } }))}
                       aria-label={`Role for ${u.name}`}
                       className="rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
                     >
@@ -108,7 +108,7 @@ export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
                         variant="ghost"
                         className="size-7"
                         disabled={busy || draft.trim().length < 3}
-                        onClick={() => mutate(u.id, () => api.patch(`/users/${u.id}/barcode`, { barcode: draft.trim() }))}
+                        onClick={() => mutate(u.id, () => api.patch(`/users/${u.id}/barcode`, { barcode: draft.trim() }, { headers: { "Idempotency-Key": crypto.randomUUID() } }))}
                         aria-label="Save code"
                       >
                         {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
@@ -150,7 +150,7 @@ export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
                         size="sm"
                         variant="ghost"
                         disabled={busy}
-                        onClick={() => mutate(u.id, () => api.patch(`/users/${u.id}/status`, { isActive: !active }))}
+                        onClick={() => mutate(u.id, () => api.patch(`/users/${u.id}/status`, { isActive: !active }, { headers: { "Idempotency-Key": crypto.randomUUID() } }))}
                       >
                         {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : active ? "Deactivate" : "Activate"}
                       </Button>

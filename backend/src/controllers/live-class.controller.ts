@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as LiveClassService from '@/services/live-class.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import { classSessionParamsSchema } from '@/schemas/class-session.schema';
 
 // ─── POST /api/classes/:classId/sessions/:sessionId/live/schedule ──
@@ -9,6 +12,13 @@ export const scheduleLiveClass = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { sessionId } = classSessionParamsSchema.parse(req.params);
     const result = await LiveClassService.scheduleLiveClass(sessionId, req.user!);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.LIVE_CLASS_SCHEDULED,
+      targetType: 'ClassSession',
+      targetId: sessionId,
+      context: extractAuditContext(req),
+    });
 
     res.status(201).json({
       status: 'success',

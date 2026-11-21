@@ -8,8 +8,6 @@ export const createClassSessionSchema = z.object({
   classType: z.nativeEnum(ClassType).nullable().optional(),
   date: z.coerce.date(),
   durationMinutes: z.coerce.number().int().positive().optional(),
-  zoomLink: z.string().url().optional(),
-  zoomMeetingId: z.string().trim().max(120).optional(),
 });
 
 export type CreateClassSessionInput = z.infer<typeof createClassSessionSchema>;

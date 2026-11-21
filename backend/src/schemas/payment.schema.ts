@@ -60,6 +60,15 @@ export const paymentsSummaryQuerySchema = z.object({
 
 export type PaymentsSummaryQuery = z.infer<typeof paymentsSummaryQuerySchema>;
 
+// ─── Financial Reports (Admin) ────────────────────────────
+export const financialReportQuerySchema = z.object({
+	month: paymentMonthSchema.optional(),
+	teacherId: z.string().uuid().optional(),
+	courseId: z.string().uuid().optional(),
+});
+
+export type FinancialReportQuery = z.infer<typeof financialReportQuerySchema>;
+
 // ─── Params ───────────────────────────────────────────────
 export const paymentIdParamSchema = z.object({
 	id: z.string().uuid(),
@@ -67,12 +76,21 @@ export const paymentIdParamSchema = z.object({
 
 // ─── Override ─────────────────────────────────────────────
 export const overridePaymentSchema = z.object({
-	status: z.nativeEnum(PaymentStatus),
+	status: z.enum([PaymentStatus.PENDING, PaymentStatus.SUCCESS, PaymentStatus.FAILED]),
 	amount: z.coerce.number().positive().optional(),
-	note: z.string().trim().max(500).optional(),
+	note: z.string().trim().min(3).max(500),
 });
 
 export type OverridePaymentInput = z.infer<typeof overridePaymentSchema>;
+
+// ─── Completed refund recording ───────────────────────────
+export const refundPaymentSchema = z.object({
+	amount: z.coerce.number().positive(),
+	reason: z.string().trim().min(3).max(500),
+	externalReference: z.string().trim().min(3).max(120),
+});
+
+export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
 
 // ─── Bulk Upload ──────────────────────────────────────────
 export const bulkPaymentRowSchema = z
@@ -95,3 +113,14 @@ export const bulkPaymentRowSchema = z
 	);
 
 export type BulkPaymentRow = z.infer<typeof bulkPaymentRowSchema>;
+
+// ─── Entrance Collection (Admin/Staff) ─────────────────────
+export const collectEntrancePaymentSchema = z.object({
+	enrollmentId: z.string().uuid(),
+	paymentMonth: paymentMonthSchema,
+	amount: z.coerce.number().positive().optional(),
+	collectedAtInstituteId: z.string().uuid().optional(),
+	collectedViaBarcode: z.string().trim().min(1).max(50).optional(),
+});
+
+export type CollectEntrancePaymentInput = z.infer<typeof collectEntrancePaymentSchema>;

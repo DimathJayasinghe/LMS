@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, CalendarDays, Clock, Lock, PlayCircle, Plus } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, Lock, Pencil, PlayCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
 import { LiveClassAction } from "./_components/LiveClassAction";
+import { CourseSeenTracker } from "./_components/CourseSeenTracker";
+import { CourseModules } from "./_components/CourseModules";
 import { api, ApiError } from "@/lib/api";
 import { formatDuration } from "@/lib/video";
 import type {
@@ -13,6 +15,7 @@ import type {
   ApiSuccess,
   ClassSession,
   Course,
+  CourseModule,
   Enrollment,
   Subject,
   User,
@@ -60,7 +63,7 @@ export default async function ClassDetailPage({
     throw e;
   }
 
-  const [subjectName, sessionsResult, videosResult, active] = await Promise.all([
+  const [subjectName, modulesResult, sessionsResult, videosResult, active] = await Promise.all([
     // Subject name (payload carries only subjectId).
     (async () => {
       try {
@@ -69,6 +72,15 @@ export default async function ClassDetailPage({
         ).data.name;
       } catch {
         return undefined;
+      }
+    })(),
+    (async (): Promise<{ modules: CourseModule[]; gated: boolean }> => {
+      try {
+        const res = await api.get<ApiList<CourseModule>>(`/classes/${classId}/modules`, { cookie });
+        return { modules: res.data, gated: false };
+      } catch (e) {
+        const gated = e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403);
+        return { modules: [], gated };
       }
     })(),
     // Sessions — students who aren't enrolled get 403 NOT_ENROLLED.
@@ -118,11 +130,13 @@ export default async function ClassDetailPage({
 
   const { sessions, gated } = sessionsResult;
   const { videos, gated: videosGated } = videosResult;
+  const { modules, gated: modulesGated } = modulesResult;
   const banner = course.backdropUrl ?? course.bannerUrl;
   const isStaff = user.role === "TEACHER" || user.role === "SUPER_ADMIN";
 
   return (
     <div className="mx-auto max-w-5xl">
+      {user.role === "STUDENT" && active && <CourseSeenTracker courseId={course.id} />}
       <Link
         href="/classes"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -158,6 +172,14 @@ export default async function ClassDetailPage({
         </div>
       </div>
 
+      {isStaff && (
+        <div className="mb-6 flex justify-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/classes/${classId}/edit`}><Pencil aria-hidden />Edit class</Link>
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           {course.description && (
@@ -169,6 +191,10 @@ export default async function ClassDetailPage({
                 {course.description}
               </p>
             </section>
+          )}
+
+          {!modulesGated && (
+            <CourseModules classId={classId} initialModules={modules} canManage={isStaff} />
           )}
 
           <section>
@@ -222,7 +248,7 @@ export default async function ClassDetailPage({
                         <LiveClassAction
                           classId={classId}
                           sessionId={session.id}
-                          scheduled={Boolean(session.zoomMeetingId)}
+                          scheduled={session.liveScheduled}
                           isStaff={isStaff}
                         />
                       )}

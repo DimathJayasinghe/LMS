@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: lms_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d lms_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/lms_ci
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret-not-for-production
+      JWT_REFRESH_SECRET: ci-refresh-secret-not-for-production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npm run prisma
+
+      - name: Apply migrations to a fresh PostgreSQL database
+        run: npx prisma migrate deploy
+
+      - name: Require zero migration drift
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Verify tenant integrity (every row has an organization matching its parent)
+        run: npx tsx src/scripts/check-tenant-integrity.ts
+
+      - name: Verify immutable marker-group membership events
+        run: npx prisma db execute --file prisma/verify-marker-group-membership-event-immutability.sql
+
+      - name: Verify immutable exam paper revisions
+        run: npx prisma db execute --file prisma/verify-exam-paper-revision-immutability.sql
+
+      - name: Verify immutable scoped marker-allocation revisions
+        run: npx prisma db execute --file prisma/verify-marker-allocation-revision-immutability.sql
+
+      - name: Create isolated legacy-adoption database
+        env:
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/postgres?schema=public
+        run: echo 'CREATE DATABASE lms_legacy_ci' | npx prisma db execute --stdin
+
+      - name: Verify adoption of a legacy db-push schema
+        env:
+          DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/lms_legacy_ci?schema=public
+        run: |
+          npx prisma db execute --file prisma/migrations/20260510075330_init/migration.sql
+          npx prisma db execute --file prisma/migrations/20260819150000_reconcile_schema_baseline/migration.sql
+          npx prisma migrate resolve --applied 20260510075330_init
+          npx prisma migrate resolve --applied 20260819150000_reconcile_schema_baseline
+          npx prisma db execute --file prisma/seed-legacy-exam-fixture.sql
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+          npx tsx src/scripts/check-tenant-integrity.ts
+          npx prisma db execute --file prisma/verify-legacy-exam-fixture.sql
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:5000/api
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  quality-gate:
+    name: Quality Gate
+    if: always()
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all jobs to pass
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+        run: |
+          if [[ "$BACKEND_RESULT" != "success" || "$FRONTEND_RESULT" != "success" ]]; then
+            echo "Backend: $BACKEND_RESULT"
+            echo "Frontend: $FRONTEND_RESULT"
+            exit 1
+          fi

@@ -1,9 +1,29 @@
 import { Prisma, Role } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/config/database';
+import { logger } from '@/config/logger';
 import { AppError } from '@/utils/app-error';
+import { readImageMetadata } from '@/utils/image-metadata';
+import {
+	createR2PresignedPutUrl,
+	deleteR2Object,
+	getPublicAssetConfig,
+	r2GetObjectBytes,
+	r2HeadObject,
+} from '@/utils/r2';
+import {
+	COURSE_ASSET_CONTENT_TYPES,
+	COURSE_ASSET_MAX_SIZE_BYTES,
+	COURSE_ASSET_REQUIREMENTS,
+	COURSE_ASSET_URL_TTL_SECONDS,
+} from '@/utils/constants';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type {
 	CreateClassInput,
+	CourseAssetConfirmInput,
+	CourseAssetAltInput,
+	CourseAssetKind,
+	CourseAssetUploadUrlInput,
 	ListClassesQuery,
 	ListPublicClassesQuery,
 	UpdateClassInput,
@@ -19,7 +39,9 @@ interface ClassSummary {
 	subjectId: string;
 	teacherId: string;
 	bannerUrl: string | null;
+	bannerAlt: string | null;
 	backdropUrl: string | null;
+	backdropAlt: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -34,7 +56,9 @@ const classSelect = {
 	subjectId: true,
 	teacherId: true,
 	bannerUrl: true,
+	bannerAlt: true,
 	backdropUrl: true,
+	backdropAlt: true,
 	createdAt: true,
 	updatedAt: true,
 } satisfies Prisma.CourseSelect;
@@ -59,8 +83,9 @@ const buildSearchFilter = (search: string): Prisma.CourseWhereInput => {
 export const assertCourseAccess = async (
 	courseId: string,
 	actor: AuthenticatedUser,
+	db: Pick<Prisma.TransactionClient, 'course'> = prisma,
 ): Promise<{ id: string; teacherId: string }> => {
-	const course = await prisma.course.findUnique({
+	const course = await db.course.findUnique({
 		where: { id: courseId },
 		select: { id: true, teacherId: true },
 	});
@@ -98,6 +123,23 @@ const assertSubjectExists = async (subjectId: string): Promise<void> => {
 	}
 };
 
+const assertTeacherAssignedToSubject = async (
+	subjectId: string,
+	teacherId: string,
+): Promise<void> => {
+	const assignment = await prisma.subjectTeacher.findUnique({
+		where: { subjectId_teacherId: { subjectId, teacherId } },
+		select: { id: true },
+	});
+	if (!assignment) {
+		throw new AppError(
+			'TEACHER_NOT_ASSIGNED_TO_SUBJECT',
+			403,
+			'The super admin must assign this teacher to the subject first.',
+		);
+	}
+};
+
 export const createClass = async (
 	input: CreateClassInput,
 	actor: AuthenticatedUser,
@@ -110,6 +152,7 @@ export const createClass = async (
 
 	await assertSubjectExists(input.subjectId);
 	await assertTeacherExists(teacherId);
+	await assertTeacherAssignedToSubject(input.subjectId, teacherId);
 
 	const existing = await prisma.course.findUnique({
 		where: {
@@ -138,8 +181,6 @@ export const createClass = async (
 			isActive: input.isActive ?? true,
 			subjectId: input.subjectId,
 			teacherId,
-			bannerUrl: input.bannerUrl ?? null,
-			backdropUrl: input.backdropUrl ?? null,
 		},
 		select: classSelect,
 	});
@@ -152,7 +193,9 @@ interface PublicClassSummary {
 	description: string | null;
 	monthlyFee: Prisma.Decimal;
 	bannerUrl: string | null;
+	bannerAlt: string | null;
 	backdropUrl: string | null;
+	backdropAlt: string | null;
 	subject: { name: string };
 	teacher: { name: string };
 }
@@ -164,7 +207,9 @@ const publicClassSelect = {
 	description: true,
 	monthlyFee: true,
 	bannerUrl: true,
+	bannerAlt: true,
 	backdropUrl: true,
+	backdropAlt: true,
 	subject: { select: { name: true } },
 	teacher: { select: { name: true } },
 } satisfies Prisma.CourseSelect;
@@ -199,6 +244,7 @@ export const listClasses = async (
 		...(query.year ? { year: query.year } : {}),
 		// Only the owner sees inactive courses; everyone else sees active only.
 		...(actor.role === Role.SUPER_ADMIN ? {} : { isActive: true }),
+		...(actor.role === Role.TEACHER ? { teacherId: actor.userId } : {}),
 	};
 
 	return prisma.course.findMany({
@@ -224,6 +270,9 @@ export const getClassById = async (
 
 	if (!course) {
 		throw new AppError('CLASS_NOT_FOUND', 404, 'Class not found.');
+	}
+	if (actor.role === Role.TEACHER && course.teacherId !== actor.userId) {
+		throw new AppError('FORBIDDEN_COURSE', 403, 'You can only view your own courses.');
 	}
 
 	return course;
@@ -259,6 +308,10 @@ export const updateClass = async (
 		}
 	}
 
+	if (nextTeacherId !== existing.teacherId || nextSubjectId !== existing.subjectId) {
+		await assertTeacherAssignedToSubject(nextSubjectId, nextTeacherId);
+	}
+
 	const nextName = input.name ?? existing.name;
 	const nextYear = input.year ?? existing.year;
 
@@ -290,9 +343,207 @@ export const updateClass = async (
 			isActive: input.isActive,
 			subjectId: nextSubjectId,
 			teacherId: nextTeacherId,
-			bannerUrl: input.bannerUrl ?? undefined,
-			backdropUrl: input.backdropUrl ?? undefined,
 		},
 		select: classSelect,
 	});
+};
+
+const assertCourseAssetManager = async (
+	classId: string,
+	actor: AuthenticatedUser,
+): Promise<void> => {
+	if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.TEACHER) {
+		throw new AppError('FORBIDDEN', 403, 'Only a teacher or super admin can manage class images.');
+	}
+	await assertCourseAccess(classId, actor);
+};
+
+const extensionByContentType: Record<(typeof COURSE_ASSET_CONTENT_TYPES)[number], string> = {
+	'image/jpeg': 'jpg',
+	'image/png': 'png',
+	'image/webp': 'webp',
+};
+
+const safeDeletePublicAsset = async (key: string): Promise<void> => {
+	try {
+		const { bucket } = getPublicAssetConfig();
+		await deleteR2Object(key, bucket);
+	} catch (error) {
+		logger.warn({ err: error, key }, 'Could not clean up a course display asset');
+	}
+};
+
+export const generateCourseAssetUploadUrl = async (
+	classId: string,
+	input: CourseAssetUploadUrlInput,
+	actor: AuthenticatedUser,
+) => {
+	await assertCourseAssetManager(classId, actor);
+	const requirement = COURSE_ASSET_REQUIREMENTS[input.kind];
+	const extension = extensionByContentType[input.contentType];
+	const key = `courses/${classId}/${requirement.path}/${randomUUID()}.${extension}`;
+	const { bucket } = getPublicAssetConfig();
+	const uploadUrl = await createR2PresignedPutUrl(
+		key,
+		input.contentType,
+		COURSE_ASSET_URL_TTL_SECONDS,
+		bucket,
+	);
+
+	return {
+		uploadUrl,
+		key,
+		expiresAt: new Date(Date.now() + COURSE_ASSET_URL_TTL_SECONDS * 1000).toISOString(),
+		requiredWidth: requirement.width,
+		requiredHeight: requirement.height,
+		maxSizeBytes: COURSE_ASSET_MAX_SIZE_BYTES,
+	};
+};
+
+const loadCourseAssetState = async (classId: string) => {
+	const course = await prisma.course.findUnique({
+		where: { id: classId },
+		select: {
+			id: true,
+			name: true,
+			bannerKey: true,
+			bannerUrl: true,
+			backdropKey: true,
+			backdropUrl: true,
+		},
+	});
+	if (!course) throw new AppError('CLASS_NOT_FOUND', 404, 'Class not found.');
+	return course;
+};
+
+const loadClassSummary = async (classId: string): Promise<ClassSummary> => {
+	const course = await prisma.course.findUnique({ where: { id: classId }, select: classSelect });
+	if (!course) throw new AppError('CLASS_NOT_FOUND', 404, 'Class not found.');
+	return course;
+};
+
+export const confirmCourseAsset = async (
+	classId: string,
+	input: CourseAssetConfirmInput,
+	actor: AuthenticatedUser,
+): Promise<ClassSummary> => {
+	await assertCourseAssetManager(classId, actor);
+	const requirement = COURSE_ASSET_REQUIREMENTS[input.kind];
+	const requiredPrefix = `courses/${classId}/${requirement.path}/`;
+	if (!input.key.startsWith(requiredPrefix)) {
+		throw new AppError('FORBIDDEN_KEY', 403, 'This upload key does not belong to this class.');
+	}
+
+	const { bucket, publicBaseUrl } = getPublicAssetConfig();
+	const head = await r2HeadObject(input.key, bucket);
+	if (!head.exists) {
+		throw new AppError('UPLOAD_NOT_FOUND', 409, 'The uploaded image was not found. Please re-upload.');
+	}
+	if (!head.size || head.size > COURSE_ASSET_MAX_SIZE_BYTES) {
+		await safeDeletePublicAsset(input.key);
+		throw new AppError('UPLOAD_TOO_LARGE', 413, 'The uploaded image is empty or exceeds the 8 MB limit.');
+	}
+	if (!head.contentType || !COURSE_ASSET_CONTENT_TYPES.includes(
+		head.contentType as (typeof COURSE_ASSET_CONTENT_TYPES)[number],
+	)) {
+		await safeDeletePublicAsset(input.key);
+		throw new AppError('INVALID_IMAGE_TYPE', 422, 'The stored object is not a JPG, PNG, or WebP image.');
+	}
+
+	let metadata;
+	try {
+		const bytes = await r2GetObjectBytes(input.key, COURSE_ASSET_MAX_SIZE_BYTES, bucket);
+		metadata = await readImageMetadata(bytes);
+	} catch (error) {
+		if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500) {
+			await safeDeletePublicAsset(input.key);
+		}
+		throw error;
+	}
+	if (metadata.mimeType !== head.contentType) {
+		await safeDeletePublicAsset(input.key);
+		throw new AppError('IMAGE_TYPE_MISMATCH', 422, 'The image content does not match its upload type.');
+	}
+	if (metadata.width !== requirement.width || metadata.height !== requirement.height) {
+		await safeDeletePublicAsset(input.key);
+		throw new AppError(
+			'INVALID_IMAGE_DIMENSIONS',
+			422,
+			`${input.kind === 'BANNER' ? 'Banner' : 'Backdrop'} must be exactly ${requirement.width}×${requirement.height} pixels; received ${metadata.width}×${metadata.height}.`,
+		);
+	}
+
+	const course = await loadCourseAssetState(classId);
+	const assetUrl = `${publicBaseUrl}/${input.key}`;
+	const altText = input.altText ?? `${course.name} ${requirement.path}`;
+	const oldKey = input.kind === 'BANNER' ? course.bannerKey : course.backdropKey;
+	const data = input.kind === 'BANNER'
+		? { bannerKey: input.key, bannerUrl: assetUrl, bannerAlt: altText }
+		: { backdropKey: input.key, backdropUrl: assetUrl, backdropAlt: altText };
+	const where: Prisma.CourseWhereInput = input.kind === 'BANNER'
+		? { id: classId, bannerKey: course.bannerKey, bannerUrl: course.bannerUrl }
+		: { id: classId, backdropKey: course.backdropKey, backdropUrl: course.backdropUrl };
+	const write = await prisma.course.updateMany({ where, data });
+	if (write.count !== 1) {
+		await safeDeletePublicAsset(input.key);
+		throw new AppError(
+			'COURSE_ASSET_CHANGED',
+			409,
+			'This class image changed while your upload was being confirmed. Refresh and try again.',
+		);
+	}
+	const updated = await loadClassSummary(classId);
+	if (oldKey && oldKey !== input.key) await safeDeletePublicAsset(oldKey);
+	return updated;
+};
+
+export const removeCourseAsset = async (
+	classId: string,
+	kind: CourseAssetKind,
+	actor: AuthenticatedUser,
+): Promise<{ course: ClassSummary; removed: boolean }> => {
+	await assertCourseAssetManager(classId, actor);
+	const current = await loadCourseAssetState(classId);
+	const oldKey = kind === 'BANNER' ? current.bannerKey : current.backdropKey;
+	const oldUrl = kind === 'BANNER' ? current.bannerUrl : current.backdropUrl;
+	if (!oldKey && !oldUrl) return { course: await loadClassSummary(classId), removed: false };
+	const data = kind === 'BANNER'
+		? { bannerKey: null, bannerUrl: null, bannerAlt: null }
+		: { backdropKey: null, backdropUrl: null, backdropAlt: null };
+	const where: Prisma.CourseWhereInput = kind === 'BANNER'
+		? { id: classId, bannerKey: oldKey, bannerUrl: oldUrl }
+		: { id: classId, backdropKey: oldKey, backdropUrl: oldUrl };
+	const write = await prisma.course.updateMany({ where, data });
+	if (write.count !== 1) {
+		throw new AppError('COURSE_ASSET_CHANGED', 409, 'This class image changed. Refresh and try again.');
+	}
+	const course = await loadClassSummary(classId);
+	if (oldKey) await safeDeletePublicAsset(oldKey);
+	return { course, removed: Boolean(oldKey || oldUrl) };
+};
+
+export const updateCourseAssetAlt = async (
+	classId: string,
+	kind: CourseAssetKind,
+	input: CourseAssetAltInput,
+	actor: AuthenticatedUser,
+): Promise<ClassSummary> => {
+	await assertCourseAssetManager(classId, actor);
+	const current = await loadCourseAssetState(classId);
+	const currentUrl = kind === 'BANNER' ? current.bannerUrl : current.backdropUrl;
+	if (!currentUrl) {
+		throw new AppError('COURSE_ASSET_NOT_FOUND', 409, 'Upload the class image before describing it.');
+	}
+	const currentKey = kind === 'BANNER' ? current.bannerKey : current.backdropKey;
+	const data = kind === 'BANNER'
+		? { bannerAlt: input.altText }
+		: { backdropAlt: input.altText };
+	const where: Prisma.CourseWhereInput = kind === 'BANNER'
+		? { id: classId, bannerKey: currentKey, bannerUrl: currentUrl }
+		: { id: classId, backdropKey: currentKey, backdropUrl: currentUrl };
+	const write = await prisma.course.updateMany({ where, data });
+	if (write.count !== 1) {
+		throw new AppError('COURSE_ASSET_CHANGED', 409, 'This class image changed. Refresh and try again.');
+	}
+	return loadClassSummary(classId);
 };

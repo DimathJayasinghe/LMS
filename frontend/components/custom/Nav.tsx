@@ -18,7 +18,8 @@ const LINKS = [
 export default function Nav() {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
-  const [open, setOpen] = useState(false);
+  const [openedPath, setOpenedPath] = useState<string | null>(null);
+  const open = openedPath === pathname;
 
   // Below `md` the link list collapses into this menu — close it if a
   // resize (e.g. rotating a tablet) crosses back over the breakpoint,
@@ -26,18 +27,13 @@ export default function Nav() {
   useEffect(() => {
     if (!open) return;
     const mql = window.matchMedia("(min-width: 48rem)");
-    const handleChange = () => setOpen(false);
+    const handleChange = () => setOpenedPath(null);
     mql.addEventListener("change", handleChange);
     return () => mql.removeEventListener("change", handleChange);
   }, [open]);
 
-  // Route changes (a link was followed) should also close it.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
   return (
-    <nav className="relative z-50 mx-4 mb-8 mt-8 w-auto min-w-fit max-w-[50rem] sm:mx-auto sm:mt-14 sm:w-full">
+    <nav className="relative z-[70] mx-4 mb-8 mt-8 w-auto min-w-fit max-w-[50rem] sm:mx-auto sm:mt-14 sm:w-full">
       <div className="flex items-center justify-between rounded-full border border-foreground bg-background p-1.5">
         <Link
           href="/home"
@@ -86,7 +82,7 @@ export default function Nav() {
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           aria-controls="mobile-nav-menu"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpenedPath(open ? null : pathname)}
           className="flex size-12 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-muted md:hidden"
         >
           {open ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
@@ -101,9 +97,10 @@ export default function Nav() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: reduceMotion ? 0.1 : 0.18, ease: "easeOut" }}
-            // z-[60], not z-50 — StudentReviews/Header are later-DOM siblings
-            // also at z-50, so at equal z-index they'd paint over this panel
-            // (ties resolve by DOM order, not who's "on top" visually).
+            // The parent <nav> is z-[70] (above the z-50 StudentReviews/Header
+            // hero sections), so this panel — inside the nav's stacking context —
+            // paints over them. (A child z-index can't escape its parent context,
+            // which is why lifting the nav itself, not just this panel, is the fix.)
             className="absolute inset-x-0 top-full z-[60] mt-2 overflow-hidden rounded-3xl border border-foreground bg-background p-2 md:hidden"
           >
             <ul className="flex flex-col text-base text-muted-foreground">

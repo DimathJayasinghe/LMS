@@ -7,12 +7,15 @@ import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import {
+	collectEntrancePaymentSchema,
 	initiatePaymentSchema,
 	listMyPaymentsQuerySchema,
 	listPaymentsQuerySchema,
 	overridePaymentSchema,
+	refundPaymentSchema,
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
+	financialReportQuerySchema,
 } from '@/schemas/payment.schema';
 import { PAYMENTS_BULK_UPLOAD_MAX_BYTES } from '@/utils/constants';
 
@@ -40,6 +43,16 @@ paymentRoutes.post(
 	validateBody(initiatePaymentSchema),
 	checkIdempotency,
 	PaymentController.initiatePayherePayment,
+);
+
+// ─── Entrance Collection (Admin/Staff) ─────────────────────
+paymentRoutes.post(
+	'/collect-entrance',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateBody(collectEntrancePaymentSchema),
+	checkIdempotency,
+	PaymentController.collectEntrancePayment,
 );
 
 // ─── PayHere Notify (Webhook) ─────────────────────────────
@@ -82,7 +95,35 @@ paymentRoutes.get(
 	PaymentController.getPaymentsSummary,
 );
 
+// ─── Financial Reports (Super Admin / scoped Teacher) ─────
+// Registered BEFORE '/:id' so "reports" isn't captured as an id param.
+paymentRoutes.get(
+	'/reports',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
+	validateQuery(financialReportQuerySchema),
+	PaymentController.getFinancialReport,
+);
+
 // ─── Get Payment by Id (Owner/Admin/Staff) ────────────────
+paymentRoutes.get(
+	'/:id/adjustments',
+	verifyToken,
+	requireRole(Role.STUDENT, Role.SUPER_ADMIN, Role.ADMIN),
+	validateParams(paymentIdParamSchema),
+	PaymentController.listPaymentAdjustments,
+);
+
+paymentRoutes.post(
+	'/:id/refunds',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN),
+	validateParams(paymentIdParamSchema),
+	validateBody(refundPaymentSchema),
+	checkIdempotency,
+	PaymentController.refundPayment,
+);
+
 paymentRoutes.get(
 	'/:id',
 	verifyToken,
@@ -98,6 +139,7 @@ paymentRoutes.patch(
 	requireRole(Role.SUPER_ADMIN),
 	validateParams(paymentIdParamSchema),
 	validateBody(overridePaymentSchema),
+	checkIdempotency,
 	PaymentController.overridePayment,
 );
 
@@ -106,6 +148,7 @@ paymentRoutes.post(
 	'/bulk-upload',
 	verifyToken,
 	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	checkIdempotency,
 	upload.single('file'),
 	PaymentController.bulkUploadPayments,
 );

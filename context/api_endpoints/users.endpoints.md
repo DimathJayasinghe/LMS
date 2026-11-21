@@ -117,6 +117,12 @@ Returned in list and detail endpoints:
 | PATCH | `/:id/role` | ADMIN | Update user role. |
 | PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
+| GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
+| GET | `/academic-staff?role=TEACHER|MARKER` | SUPER_ADMIN; TEACHER for MARKER only | Minimal active staff directory (id/name/role only). |
+
+`GET /academic-staff` intentionally excludes email, phone, NIC, account status metadata, and other
+PII. SUPER_ADMIN uses it for subject/course ownership; an owning TEACHER may request only MARKER
+rows for exam assignment.
 
 ## Endpoint Details
 
@@ -186,9 +192,47 @@ Returns the user profile by id.
 - 403 forbidden (role guard)
 - 404 `USER_NOT_FOUND` (service error shape)
 
+### GET `/resolve-barcode`
+
+Resolves a scanned/typed barcode to a student, for staff-facing flows (entrance payment
+collection today). Roles: `SUPER_ADMIN`, `ADMIN`.
+
+Resolution order: tries the institute-scoped `StudentBarcode` table first (barcode uniqueness
+is enforced **per institute**, not globally); if exactly one institute match is found, returns
+it with that `instituteId`. Otherwise (zero or more-than-one institute matches — ambiguous
+matches are treated as unresolved rather than guessed) falls back to the global `User.barcode`
+field, returning `instituteId: null`.
+
+**Query params**
+
+- `code`: string, required, 1–50 chars — the scanned/typed barcode value.
+
+**Success (200)**
+
+```json
+{
+	"status": "success",
+	"data": {
+		"user": { "id": "...", "name": "...", "indexNumber": 123 },
+		"instituteId": "uuid | null",
+		"matchedBarcode": "NUG-00123"
+	}
+}
+```
+
+**Errors**
+
+- 400 validation error
+- 401 auth middleware error
+- 403 forbidden (role guard)
+- 404 `BARCODE_NOT_FOUND` — no `StudentBarcode` or `User.barcode` matches the code.
+
 ### PATCH `/:id/role`
 
 Updates the user's role. ADMIN only.
+
+**Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
+keys return 400; replaying the same key returns the original stored response.
 
 **Request body**
 
@@ -218,6 +262,9 @@ Updates the user's role. ADMIN only.
 ### PATCH `/:id/status`
 
 Activates or deactivates a user.
+
+**Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
+keys return 400; replaying the same key returns the original stored response.
 
 > **Privileged-target guard (fixed 2026-07-10):** an `ADMIN` (front-desk) actor can no longer
 > change the status of an `ADMIN` or `SUPER_ADMIN` target — only `SUPER_ADMIN` can. Previously
@@ -255,6 +302,9 @@ Activates or deactivates a user.
 ### PATCH `/:id/barcode`
 
 Assigns a barcode to a user.
+
+**Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
+keys return 400; replaying the same key returns the original stored response.
 
 **Request body**
 

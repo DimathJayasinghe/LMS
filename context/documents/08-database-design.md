@@ -4,6 +4,8 @@
 > Every table, relation, index, and constraint is here with the **why** behind each decision.
 >
 > **This document is the schema source of truth.** Where the current `backend/prisma/schema.prisma` differs, the code must be migrated to match (see [§12 Code Drift](#12-code-drift--required-migrations)). No production data exists yet, so these are safe pre-launch changes.
+>
+> **Tenancy (decided 2026-11-19; step M1 migrated):** every model now carries a nullable `organizationId` (default: the `default` organization) with an `Organization` relation and index; `NOT NULL`, the scoped client and the per-organization uniques are M2–M3. Several global uniques will become per-organization. The model blocks in §4 show the schema **without** these tenancy columns (and some predate later columns, noted where known — `backend/prisma/schema.prisma` is authoritative for what exists today); the exact additions and constraint changes are listed once in [14-multi-tenancy-readiness.md](./14-multi-tenancy-readiness.md) §3 and in [§12 Code Drift](#12-code-drift--required-migrations) rather than repeated on every model. Planned models below are marked **(planned)**.
 
 ---
 
@@ -21,6 +23,7 @@
 | **Enums for fixed states** | Roles, statuses, sources use Postgres enums — type-safe and self-documenting. |
 | **Money is `Decimal`** | `@db.Decimal(10,2)` — never `Float`. |
 | **Normalized (3NF)** | With documented pragmatic denormalizations (MCQ JSONB, address on User). See §11. |
+| **Tenant-owned by default** | Once the organization migration lands, a new table without `organizationId` must be justified in review and listed in the non-tenant allowlist; a registry test enforces it. |
 
 ---
 
@@ -30,9 +33,12 @@
 erDiagram
     %% ─── IDENTITY ───
     USER ||--o{ REFRESH_TOKEN : "owns"
-    USER ||--o| PERMISSION : "may have overrides"
     USER ||--o{ ENROLLMENT : "enrolls in"
     USER ||--o{ COURSE : "teaches (as TEACHER)"
+    USER ||--o{ SUBJECT_TEACHER : "approved for subject"
+    SUBJECT ||--o{ SUBJECT_TEACHER : "has approved teachers"
+    USER ||--o{ COURSE_CONTENT_PROGRESS : "tracks seen content"
+    COURSE ||--o{ COURSE_CONTENT_PROGRESS : "tracks learner progress"
     USER ||--o{ AUDIT_LOG : "acts in"
     USER |o--o{ SMS_LOG : "receives"
 
@@ -69,17 +75,19 @@ erDiagram
         datetime deletedAt "nullable - soft delete"
     }
 
-    PERMISSION {
-        uuid id PK
-        uuid userId FK,UK "one row per user"
-        json permissions "fine-grained overrides on top of role"
-    }
 
     SUBJECT {
         uuid id PK
         string name UK "e.g. Physics, Chemistry"
         string description "nullable"
         boolean isActive "default true"
+    }
+
+    SUBJECT_TEACHER {
+        uuid id PK
+        uuid subjectId FK
+        uuid teacherId FK
+        datetime assignedAt
     }
 
     COURSE {
@@ -99,6 +107,14 @@ erDiagram
         uuid courseId FK
         enum classType "ONLINE PHYSICAL"
         boolean isActive "default true"
+    }
+
+    COURSE_CONTENT_PROGRESS {
+        uuid id PK
+        uuid userId FK
+        uuid courseId FK
+        datetime lastSeenAt
+        datetime updatedAt
     }
 
     PAYMENT {
@@ -208,9 +224,10 @@ erDiagram
 | Enum | Values | Used By |
 | --- | --- | --- |
 | `Role` | `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT` | User |
-| `ClassType` | `ONLINE`, `PHYSICAL` | Enrollment, ClassSession |
-| `PaymentStatus` | `PENDING`, `SUCCESS`, `FAILED` | Payment |
-| `PaymentMethod` | `ONLINE`, `ENTRANCE`, `BULK`, `MANUAL` | Payment |
+| `ClassType` | `ONLINE`, `PHYSICAL`; **`HYBRID` planned** (enrollment only) | Enrollment, ClassSession, TimetableSlot |
+| `PaymentStatus` | `PENDING`, `SUCCESS`, `FAILED`, `REFUNDED` | Payment |
+| `PaymentMethod` | `ONLINE`, `ENTRANCE`, `BULK`, `MANUAL`; **`BANK_TRANSFER` planned** | Payment |
+| `PaymentSlipStatus` **(planned)** | `PENDING_UPLOAD`, `SUBMITTED`, `APPROVED`, `REJECTED`, `EXPIRED`, `SUPERSEDED` | PaymentSlip |
 | `SubmissionStatus` | `UPLOADING`, `COMPLETED` | Submission |
 | `AttendanceSource` | `QR`, `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL` | Attendance |
 | `SmsStatus` | `PENDING`, `SENT`, `FAILED` | SmsLog |
@@ -218,9 +235,9 @@ erDiagram
 
 ### Design notes on enums
 
-- **`Role`** — `SUPER_ADMIN` is the single institution owner; `TEACHER` (many) teaches courses; `ADMIN` (many) is front-desk staff; `MARKER` grades assigned exams; `STUDENT`. This replaces the legacy `ADMIN/STAFF` mapping in the current code (§12).
-- **`ClassType`** — `ONLINE` vs `PHYSICAL`. A student enrols per delivery mode. On `ClassSession`, `classType` is **nullable**: `null` means the session is for all cohorts (e.g. a physical class that is also streamed to online students).
-- **`PaymentMethod`** — how a payment was collected: `ONLINE` (PayHere), `ENTRANCE` (paid in person at the front desk), `BULK` (Excel import), `MANUAL` (admin/owner adjustment). Enables channel-based reporting.
+- **`Role`** — `SUPER_ADMIN` is the owner of one organization (one per organization by default, up to two with `identity.maxOwners`; today there is one organization). `PLATFORM_ADMIN` is a reserved name for the future SaaS operator and is **not** in the enum; `TEACHER` (many) teaches courses; `ADMIN` (many) is front-desk staff; `MARKER` grades assigned exams; `STUDENT`. This replaces the legacy `ADMIN/STAFF` mapping in the current code (§12).
+- **`ClassType`** — `ONLINE` vs `PHYSICAL` today; **`HYBRID` is planned for enrollments** and means one enrollment, one fee, physical attendance plus online access. On `ClassSession` and `TimetableSlot`, `classType` is **nullable**: `null` means the session is for all cohorts (e.g. a physical class that is also streamed to online students); a session is never itself `HYBRID`. Eligibility rules are in the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §4.3.
+- **`PaymentMethod`** — how a payment was collected: `ONLINE` (PayHere, on the platform), `ENTRANCE` (paid in person at the front desk or a branch), `BULK` (Excel import), `MANUAL` (admin/owner adjustment), and planned `BANK_TRANSFER` (student uploads a slip; staff approve). Enables channel-based reporting.
 - **`AttendanceSource`** — `QR` (student shows their QR at the entrance, staff scans) or `BARCODE` (physical barcode card) — both are entrance scans; `ZOOM_WEBHOOK` (live-streamed class join); `MANUAL` (admin entry). A record existing = present; no record = absent.
 - **`ExamType`** — a coarse label for the paper: `MCQ` (only an MCQ section), `WRITTEN` (only structured/essay), `HYBRID` (a mixed paper: MCQ + structured/essay), `INCLASS` (pure paper exam with no LMS submission — marker enters marks). The exam's `allowTypedAnswers` / `allowPdfUpload` flags decide which submission channels students may use; the same paper serves both online and physical cohorts.
 
@@ -251,7 +268,6 @@ model User {
   nicBackUrl     String?                       // R2 key — NIC back photo (private)
 
   // Relations
-  permission        Permission?        @relation("UserPermission")
   enrollments       Enrollment[]
   taughtCourses     Course[]           @relation("CourseTeacher")   // courses this TEACHER teaches
   studentBarcodes   StudentBarcode[]                                // per-institute barcodes
@@ -277,23 +293,9 @@ model User {
 - **`taughtCourses`** — a TEACHER owns the courses they teach (`Course.teacherId`).
 - **`deletedAt`** is the universal "active" filter: `WHERE deletedAt IS NULL`.
 
-### 4.2 Permission (per-user overrides)
+### 4.2 Permission — removed (D-IDENTITY-4)
 
-```prisma
-model Permission {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation("UserPermission", fields: [userId], references: [id], onDelete: Restrict)
-  permissions Json                              // e.g. { "createExam": true, "manageUsers": false }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([userId])
-}
-```
-
-- **Role first, permissions second.** The `role` decides the default capability set; `Permission.permissions` is an **optional** JSON map that grants or revokes specific abilities for one user (e.g. a trusted teacher allowed to manage markers). Keep it small — most users have no `Permission` row at all.
-- Enforced in the service layer alongside the role check. Do **not** spread core access rules across many permission keys; use it only for genuine exceptions.
+Never read or written by code; the `Permission` model is dropped in Wave 1b Task 7 (the migration refuses to run if any row exists). Authorization is the role plus resource and target guards.
 
 ### 4.3 RefreshToken
 
@@ -361,8 +363,12 @@ model Course {
   description String?
   monthlyFee  Decimal  @db.Decimal(10, 2)      // default fee for this course
   isActive    Boolean  @default(true)
-  bannerUrl   String?                          // wide banner image URL
-  backdropUrl String?                          // background/backdrop image URL
+  bannerUrl   String?                          // server-controlled public CDN URL
+  bannerKey   String?                          // public R2 key for replace/remove cleanup
+  bannerAlt   String?                          // accessible image description
+  backdropUrl String?                          // server-controlled public CDN URL
+  backdropKey String?                          // public R2 key for replace/remove cleanup
+  backdropAlt String?                          // accessible image description
 
   subjectId   String
   subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
@@ -373,6 +379,7 @@ model Course {
   enrollments   Enrollment[]
   classSessions ClassSession[]
   exams         Exam[]
+  modules       CourseModule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -388,6 +395,19 @@ model Course {
 - **`subjectId`** — belongs to exactly one Subject.
 - **`teacherId`** — taught by exactly one Teacher (role `TEACHER`, enforced at service layer). A teacher teaching two subjects simply owns two courses.
 - **`isActive`** (not `deletedAt`) — courses are retired, not deleted; they stop accepting new enrollments.
+- Generic course create/update cannot write display URLs. Only the owning TEACHER or SUPER_ADMIN can
+  confirm a server-issued course key after size, MIME, full-decode, and exact-dimension validation
+  (banner 1600×600; backdrop 1920×1080).
+
+### 4.6.1 CourseModule and CourseMaterial
+
+`CourseModule` is an ordered, soft-removable learning unit with `DRAFT`/`PUBLISHED` state and an
+optional `releaseAt`. `CourseMaterial` is an ordered, version-ready, soft-removable private file
+record. It stores the verified MIME/size, server-normalized filename, download policy, and private
+R2 key. List responses deliberately omit `objectKey`; download URLs are minted only after the
+service repeats role, ownership, release, enrollment, and current-payment checks. Restrictive
+foreign keys preserve academic history, while service-level removal hides rows and cleans tracked
+objects best-effort.
 
 ### 4.7 Enrollment
 
@@ -416,7 +436,8 @@ model Enrollment {
 ```
 
 - A student can enroll in **multiple courses** across subjects; each enrollment is paid independently.
-- **Access control**: a student sees a course's sessions/videos only via an **active enrollment**, with video access gated on the **current month being paid**.
+- **Access control**: a student sees a course's sessions/videos only via an **active enrollment**, with video access gated on the **current month being paid**. The gate does not currently look at `classType`.
+- **Planned (HYBRID design §4.2):** add `HYBRID`; replace `@@unique([userId, courseId, classType])` with one **active** enrollment per `(userId, courseId)` (a nullable `activeKey` with a plain `@unique`, set only while `isActive`; Prisma cannot express partial unique indexes) so a student cannot be billed twice for one course; a mode change becomes an audited in-place update so existing payments stay linked. The migration merges existing duplicate active enrollments into one `HYBRID` row and refuses to run if a merge is ambiguous, including when both enrollments already have a payment for the same month (a double-billing case that needs a refund first).
 
 ### 4.8 Payment
 
@@ -429,12 +450,15 @@ model Payment {
   payhereId    String?       @unique
   paymentMonth String                          // "2026-05"
   note         String?
+  refundedAmount Decimal       @default(0) @db.Decimal(10, 2)
 
   enrollmentId String
   enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
 
   collectedById String?                        // staff who took an ENTRANCE/MANUAL payment
   collectedBy   User?         @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
+
+  adjustments PaymentAdjustment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -449,7 +473,29 @@ model Payment {
 
 - **`enrollmentId`, not `userId`** — payment is tied to a specific enrollment (student + course + mode).
 - **`method`** — records the channel. `ENTRANCE` payments are taken at the front desk; `collectedById` records which staff member took the cash. `ONLINE` = PayHere; `BULK` = Excel import; `MANUAL` = owner/admin adjustment.
-- **`@@unique([enrollmentId, paymentMonth])`** — prevents double-paying the same month for the same enrollment (whether online or at the entrance).
+- **`@@unique([enrollmentId, paymentMonth])`** — prevents double-paying the same month for the same enrollment (whether online, at the entrance or by bank transfer). It deliberately stays one row per month; slip attempts live in `PaymentSlip` (below) so reject → re-upload does not need to break it.
+- **`collectedAtInstituteId` / `collectedViaBarcode`** — for `ENTRANCE` payments, the branch that took the cash and the barcode that identified the student (a snapshot, not a foreign key). These are present in the schema; the model block above predates them.
+- **Tenancy:** `payhereId` becomes `@@unique([organizationId, payhereId])` (ADR 14 §3.3).
+- **`amount` stays gross; `refundedAmount` is the net-reporting projection.** Partial refunds keep
+  `SUCCESS`; a full refund sets `REFUNDED`, so content gates stop accepting the payment.
+
+### 4.8.1 PaymentAdjustment
+
+`PaymentAdjustment` is an append-only financial ledger for `OVERRIDE` and `REFUND` events. It stores
+before/after payment status and gross-amount snapshots, refund amount where applicable, a required
+reason, optional external reference, actor, and creation time. It intentionally has no `updatedAt` or
+soft-delete field; the migration installs a PostgreSQL trigger rejecting `UPDATE` and `DELETE`.
+`PaymentAdjustment → Payment` and `PaymentAdjustment → User` both use `onDelete: Restrict`.
+
+### 4.8.2 PaymentSlip (planned)
+
+Append-only evidence for bank-transfer payments. One `Payment` can have several slips (reject, then
+re-upload). Statuses: `PENDING_UPLOAD → SUBMITTED → APPROVED | REJECTED`, or `EXPIRED` when an upload is
+never confirmed. Approval is the only way a `BANK_TRANSFER` payment becomes `SUCCESS`; a pending slip
+never unlocks content. Fields, constraints, API and edge cases are specified in the
+[payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)
+§3. `PaymentSlip → Payment` uses `onDelete: Restrict`; objects are stored under a private,
+organization-prefixed R2 key that is never exposed to clients.
 
 ### 4.9 ClassSession
 
@@ -762,7 +808,8 @@ model Institute {
 }
 ```
 
-- A Super-Admin-managed **allowlist** of physical centers. Students may only register barcodes for institutes on this list. Not a tenant boundary — there is one LMS.
+- A Super-Admin-managed **allowlist** of physical centers (branches). Students may only register barcodes for institutes on this list. **Not a tenant boundary**: the tenant is the `Organization` (ADR 14), and an institute belongs to exactly one organization. `name` and `code` become unique per organization.
+- The model block above predates later relations; the schema now also relates `Institute` to `TimetableSlot`, `Payment`, `MarkerGroup` and `ExamAudience`.
 
 ### 4.19 StudentBarcode (per-institute barcode)
 
@@ -835,7 +882,7 @@ model TimetableSlot {
 | User(Teacher) → Course | Restrict | Cannot delete a teacher who owns courses (reassign first) |
 | Course → Enrollment / ClassSession / Exam | Restrict | Cannot delete a course with academic records |
 | User(Student) → Enrollment / Attendance / Submission | Restrict | History must survive |
-| User → RefreshToken / MarkerAssignment / Permission | Restrict | Managed/assignment history |
+| User → RefreshToken / MarkerAssignment | Restrict | Managed/assignment history |
 | User → AuditLog (actor) | Restrict | Audit trail is sacrosanct |
 | User → SmsLog | SetNull | SMS history survives, FK nulled |
 | User → Payment (collectedBy) | SetNull | Payment record survives if staff removed |
@@ -908,19 +955,20 @@ model TimetableSlot {
 
 ## 10. Role-Based Access Control (service layer)
 
-Controllers never import Prisma. Services scope every query by the authenticated user's role, plus optional `Permission` overrides.
+Controllers never import Prisma. Services scope every query by the authenticated user's role and resource ownership.
 
 ### Access Matrix
 
 | Table | SUPER_ADMIN | TEACHER | ADMIN | MARKER | STUDENT |
 | --- | :--: | :--: | :--: | :--: | :--: |
 | **User** | CRUD + roles | Read (own students) | Read all, activate/deactivate | Read own | Read own |
-| **Permission** | CRUD | ❌ | ❌ | ❌ | ❌ |
 | **Subject** | CRUD | Read | Read | Read | Read active |
 | **Course** | CRUD | CRUD **own** | Read all | Read assigned | Read enrolled |
 | **Enrollment** | CRUD | Read (own courses) | Create + Read all | ❌ | Read own |
-| **Payment** | CRUD + override | ❌ | Read all, bulk/entrance collect | ❌ | Read own |
+| **Payment** | CRUD + override | Aggregates for own courses only | Read all, bulk/entrance collect | ❌ | Read own |
+| **PaymentSlip** (planned) | Read all, approve/reject | ❌ | Read all, approve/reject | ❌ | Create/read own |
 | **ClassSession** | CRUD | CRUD **own courses** | Read all | Read | Read enrolled (non-deleted) |
+| **CourseModule / CourseMaterial** | CRUD | CRUD **own courses** | ❌ | ❌ | Read released when enrolled; download when current fee paid |
 | **Attendance** | Read all | Read own courses | Read all, scan QR/barcode | Read own | Read own |
 | **VideoRecording** | CRUD | CRUD **own courses** | Read all | Read | Read enrolled + paid |
 | **Exam** | CRUD | CRUD **own courses** | Read all | Read assigned | Read enrolled (non-deleted) |
@@ -933,7 +981,7 @@ Controllers never import Prisma. Services scope every query by the authenticated
 | **TimetableSlot** | CRUD | CRUD **own courses** | CRUD (scheduler) | Read | Read |
 | **ClassSession** (schedule) | CRUD | CRUD own | **CRUD (edit timetable)** | Read | Read enrolled |
 
-> "**own**" = scoped to courses where `Course.teacherId = user.id`. A Teacher cannot touch another teacher's courses unless granted via `Permission`.
+> "**own**" = scoped to courses where `Course.teacherId = user.id`. A Teacher cannot touch another teacher's courses.
 
 ### Key restrictions
 
@@ -955,7 +1003,8 @@ Third Normal Form (3NF) with documented pragmatic denormalizations.
 
 | Denormalization | Why acceptable |
 | --- | --- |
-| `address` + `city` on User | Single-institution, ~1,200 users; a separate Address table adds a JOIN for zero benefit |
+| `address` + `city` on User | ~1,200 users per organization; a separate Address table adds a JOIN for zero benefit |
+| `organizationId` copied onto child tables (planned) | Lets the scoped Prisma client filter without joins and keeps future row-level security uniform; integrity is checked by the tenant integrity script (ADR 14 §3.2) |
 | `Exam.mcqPayload` JSONB | Avoids 200 rows/exam; validated by Zod |
 | `Submission.answers` JSONB | Avoids 60,000 rows/exam; one row per submission |
 | `AuditLog.metadata` JSONB | Before/after snapshots are inherently unstructured |
@@ -982,5 +1031,19 @@ The current `backend/prisma/schema.prisma` predates this design. Before launch, 
 | 9 | `resend` dependency, email jobs referenced | Remove or defer | Email is out of scope for v1 (§01) |
 | 10 | No `Institute` / `StudentBarcode`; no onboarding fields | Add `Institute`, `StudentBarcode`, `User.setupCompleted`/`nicFrontUrl`/`nicBackUrl` | Physical-center allowlist + per-institute barcodes + NIC onboarding |
 | 11 | No `TimetableSlot`; no `Course.bannerUrl`/`backdropUrl`; no `ClassSession.timetableSlotId` | Add all three | Recurring timetable + generated sessions + course display assets |
+
+Rows 1–11 above are historical and have been applied. The rows below are the **current** pending alignment, decided 2026-11-19; none is migrated yet.
+
+| # | Current code | Target | Notes |
+| --- | --- | --- | --- |
+| 12 | ~~No `Organization`; no `organizationId` anywhere~~ **M1 done 2026-11-19** (table, default row, nullable `organizationId` + index + `Restrict` FK on all 35 models); M2 scoped client and M3 `NOT NULL`/per-organization uniques remain | `Organization` table, default row, `organizationId` on every tenant-owned table | ADR 14 steps M1–M3 |
+| 13 | Global uniques: `User.email/nic/barcode`, `Subject.name`, `Institute.name/code`, `Payment.payhereId`, `IdempotencyRecord.key`, `NotificationSetting(type, channel)` | Per-organization composites | ADR 14 §3.3; `User.indexNumber` stays global |
+| 14 | `ClassType { ONLINE, PHYSICAL }`; `Enrollment` unique on `(userId, courseId, classType)`; no per-session online flag | Add `HYBRID`; one active enrollment per `(userId, courseId)` via a nullable `activeKey @unique`; add `ClassSession.onlineForPhysical Boolean @default(false)` | HYBRID design §4 |
+| 15 | `PaymentMethod` lacks bank transfer; no slip table | `BANK_TRANSFER` + `PaymentSlip` + `PaymentSlipStatus` | Payment channels design §3 |
+| 16 | Provider credentials only in `env.ts` | `OrganizationIntegration` with encrypted secrets and env fallback for the default organization | ADR 14 §4 |
+| 17 | `Role` has no guardian role; no guardian-student link | `GuardianLink` and a read-only guardian role | Roadmap P1; not yet designed in detail |
+| 18 | `User` has no school, A/L batch, stream or medium; `Course` has no capacity or medium | Add optional profile and class attributes | [15](./15-requirements-traceability.md) R-STU-01, R-STU-04 |
+| 19 | `NotificationType` has three values | Add slip submitted/rejected, fee reminder, absence alert | Payment channels design §3.5 |
+| 20 | ~~`generateBunnyStreamUrl` (IP-bound HLS token) still exported but unused~~ | Done 2026-11-19 | Deleted; the `hls.js` frontend dependency was removed in the same change |
 
 > After changing the schema, run `npx prisma migrate dev --name align_to_design_doc`, review the SQL, and update the affected services/guards in the same PR.

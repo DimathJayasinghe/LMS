@@ -6,10 +6,13 @@ import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import {
 	listUsersQuerySchema,
+	academicStaffQuerySchema,
 	userIdParamSchema,
 	nicUploadUrlSchema,
+	nicConfirmSchema,
 	createStudentBarcodeSchema,
 	studentBarcodeIdParamSchema,
+	resolveBarcodeQuerySchema,
 	type AssignBarcodeInput,
 	type UpdateRoleInput,
 	type UpdateStatusInput,
@@ -24,6 +27,13 @@ export const listUsers = asyncHandler(async (req: Request, res: Response): Promi
 		data,
 		count,
 	});
+});
+
+export const listAcademicStaff = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const query = academicStaffQuerySchema.parse(req.query);
+	const staff = await UserService.listAcademicStaff(query, req.user!.role);
+
+	res.status(200).json({ status: 'success', data: staff, count: staff.length });
 });
 
 export const getUserById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -132,6 +142,16 @@ export const getNicUploadUrl = asyncHandler(async (req: Request, res: Response):
 	});
 });
 
+export const confirmNicUpload = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const input = nicConfirmSchema.parse(req.body);
+	const result = await UserService.confirmNicUpload(req.user!.userId, input);
+
+	res.status(200).json({
+		status: 'success',
+		data: result,
+	});
+});
+
 export const listMyInstituteBarcodes = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const barcodes = await UserService.listMyInstituteBarcodes(req.user!.userId);
 
@@ -179,3 +199,12 @@ export const deleteMyInstituteBarcode = asyncHandler(async (req: Request, res: R
 	});
 });
 
+export const resolveBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { code } = resolveBarcodeQuerySchema.parse(req.query);
+	const data = await UserService.resolveStudentByBarcode(code);
+
+	res.status(200).json({
+		status: 'success',
+		data,
+	});
+});

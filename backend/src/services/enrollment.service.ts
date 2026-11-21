@@ -129,6 +129,80 @@ export const listMyEnrollments = async (
 	});
 };
 
+export const listMyLearningCourses = async (userId: string) => {
+	const enrollments = await prisma.enrollment.findMany({
+		where: { userId, isActive: true, course: { isActive: true } },
+		select: enrollmentSelect,
+		orderBy: { createdAt: 'desc' },
+		take: 50,
+	});
+
+	if (enrollments.length === 0) return [];
+
+	const courseIds = Array.from(new Set(enrollments.map((enrollment) => enrollment.courseId)));
+	const [progressRows, sessions] = await Promise.all([
+		prisma.courseContentProgress.findMany({
+			where: { userId, courseId: { in: courseIds } },
+			select: { courseId: true, lastSeenAt: true },
+		}),
+		prisma.classSession.findMany({
+			where: { courseId: { in: courseIds }, deletedAt: null },
+			select: {
+				courseId: true,
+				date: true,
+				videoRecordings: {
+					where: { status: 'READY' },
+					select: { createdAt: true },
+				},
+			},
+		}),
+	]);
+
+	const lastSeenByCourse = new Map(progressRows.map((row) => [row.courseId, row.lastSeenAt]));
+	const now = new Date();
+
+	return enrollments.map((enrollment) => {
+		const lastSeenAt = lastSeenByCourse.get(enrollment.courseId) ?? enrollment.createdAt;
+		const courseSessions = sessions.filter((session) => session.courseId === enrollment.courseId);
+		const recordings = courseSessions.flatMap((session) => session.videoRecordings);
+		const upcoming = courseSessions
+			.map((session) => session.date)
+			.filter((date) => date >= now)
+			.sort((a, b) => a.getTime() - b.getTime());
+		const newestRecording = recordings
+			.map((recording) => recording.createdAt)
+			.sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+		return {
+			...enrollment,
+			learning: {
+				newLessonCount: recordings.filter((recording) => recording.createdAt > lastSeenAt).length,
+				latestLessonAt: newestRecording,
+				upcomingSessionCount: upcoming.length,
+				nextSessionAt: upcoming[0] ?? null,
+				lastSeenAt,
+			},
+		};
+	});
+};
+
+export const markCourseContentSeen = async (userId: string, courseId: string) => {
+	const enrollment = await prisma.enrollment.findFirst({
+		where: { userId, courseId, isActive: true, course: { isActive: true } },
+		select: { id: true },
+	});
+	if (!enrollment) {
+		throw new AppError('ENROLLMENT_NOT_FOUND', 404, 'Active enrollment not found.');
+	}
+
+	return prisma.courseContentProgress.upsert({
+		where: { userId_courseId: { userId, courseId } },
+		create: { userId, courseId },
+		update: { lastSeenAt: new Date() },
+		select: { courseId: true, lastSeenAt: true },
+	});
+};
+
 export const listEnrollments = async (query: ListEnrollmentsQuery) => {
 	const where: Prisma.EnrollmentWhereInput = {
 		...(query.userId ? { userId: query.userId } : {}),

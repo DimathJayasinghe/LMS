@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Learning Management System for a single tuition institute (~1,200 students). Two independent apps —
+A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not; delivery order is audit Wave 0, Wave 1 (two plans), then M2–M3 as one one-to-two-week stretch where only hotfixes merge, then Wave 2 (2a enrollment migration with HYBRID, 2b money core and single gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money), with M4–M7 waiting for a second organization**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
 `frontend/` (Next.js) and `backend/` (Express) — no npm workspace, no root `package.json`; `cd` into
 each separately. Designed to run on **one small VPS** via Docker Compose: no Kubernetes, no
 auto-scaling, no multi-instance anything. The backend API is deliberately kept **stateless** anyway
-(all shared state in Redis) so a second instance stays a config change, not a rewrite.
+(all shared state in Redis) so a second instance stays a config change, not a rewrite. Production serves the page and `/api` from one host (nginx routes `/` and `/api`, or a Vercel rewrite of `/api` to the VPS with `NEXT_PUBLIC_API_URL=/api`): auth cookies are host-only and the server-rendered layout reads them, so a frontend at `<domain>` with the API at `api.<domain>` is unsupported (doc 19 §6).
 
 ## Commands
 
@@ -41,9 +41,9 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}"
 `backend/src/config/env.ts` validates all env vars via Zod at boot and **crashes immediately** if
 anything required is missing — check there before assuming an env var exists.
 
-`npm run lint` is wired in `package.json` for both apps but the backend currently has no
-`eslint.config.js` (ESLint v9 flat-config migration never happened) — it will error, not just warn.
-Don't assume it runs clean without checking first.
+`npm run lint` is wired and enforced in CI for both apps. The backend uses an ESLint flat config
+with typescript-eslint; legacy live-stack diagnostic scripts excluded from `tsconfig.json` are also
+excluded from this initial lint baseline, while application code and unit tests are linted.
 
 ## Architecture
 
@@ -77,6 +77,17 @@ needs an explicit actor-vs-target check inside the service — see
 `SUPER_ADMIN` can). This exact gap caused a real incident (front-desk deactivated the super-admin
 account) — when adding a new admin-on-user mutation, check whether it needs the same guard.
 
+A related but distinct gap: `requireRole(...)` also doesn't know whether a `TEACHER` caller
+actually **teaches** the course a request is about — it only checks the caller's role, not
+ownership of the specific resource. `assertCourseAccess` (`backend/src/services/class.service.ts`)
+is the fix for this class of gap: it throws `403 FORBIDDEN_COURSE` when a `TEACHER` isn't the
+course's `teacherId` (and passes `ADMIN`/`SUPER_ADMIN` through unconditionally). It's wired into
+every course-scoped **mutation** by convention, but as of 2026-07-15 it had been missed on 8
+**read** paths (`exam`/`video`/`submission`/`class-session` list-and-get functions) — any `TEACHER`
+could view another teacher's exam content, recordings, submissions, and session schedule. When
+adding a new course-scoped read (not just a mutation), call `assertCourseAccess` too — reads are
+easy to forget since they don't "feel" as dangerous as a mutation, but they leak the same content.
+
 Role enum: `SUPER_ADMIN, TEACHER, ADMIN, MARKER, STUDENT`. Several older `context/api_endpoints/*.md`
 docs were written against an earlier naming scheme and explicitly call out the remap: their `ADMIN`
 means today's `SUPER_ADMIN`, their `STAFF` means today's `ADMIN` (front-desk). Read those notes before
@@ -108,11 +119,34 @@ collected; don't rely on prior Zoom SDK knowledge here.
 
 ### Content protection
 
-Recorded video and live-class access both require: authenticated, an active `Enrollment`, and the
-current month's `Payment.status = SUCCESS` — checked in the service layer before any token/signature
-is issued. VOD playback uses short-lived IP-bound Bunny tokens + a per-student watermark; live
+For a `STUDENT`, recorded video and live-class access both require: authenticated, an active `Enrollment`,
+and the current month's `Payment.status = SUCCESS` — checked in the service layer before any
+token/signature is issued. **Known gaps (audit 2026-11-19, `context/documents/18-flow-audit-findings-register.md` F-04, F-05, F-23):** the gate is not yet applied uniformly across roles and content types, it looks only at the current month, and it ignores `classType` (planned fix). VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
 classes get the same watermark treatment but the Web Meeting SDK has no OS-level capture-blocking
 (that's a documented, accepted limitation, not a bug to fix).
+
+### Terminology and tenancy (decided 2026-11-19)
+
+- **Organization** is the tenant (a tuition institute as a customer). **Institute** means a *physical
+  branch* inside an organization and is not a tenant. `SUPER_ADMIN` owns one organization; the name
+  `PLATFORM_ADMIN` is reserved for a future SaaS operator and is not in the `Role` enum.
+- The `Organization` table and a nullable `organizationId` (default: the one `default`/`DEF` organization) exist
+  on every model since M1; the scoped Prisma client, JWT context and `NOT NULL` constraints (M2–M3) do not yet.
+  Until M3 lands (per-organization uniques), do not add new global uniques on user-visible values; until M5 do not add hand-built R2/Redis keys; until M4 do not add new provider-credential reads from `env` (M4–M7 wait for a second organization; `14-multi-tenancy-readiness.md §11`). Every new model must declare
+  `organizationId` + the `Organization` relation + `@@index([organizationId])` (the registry test in
+  `backend/src/utils/tenant-integrity.test.ts` fails otherwise), and CI runs the tenant integrity check.
+- **Stack decision:** stay on Express + Next.js. A NestJS rewrite was considered and rejected.
+- **Planned, not built:** `HYBRID` enrollment and a bank-slip payment channel
+  (`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`). Today the
+  content gate ignores `Enrollment.classType`.
+- Requirement-by-requirement status lives in `context/documents/15-requirements-traceability.md`. The role, scope and
+  flow audit of 2026-11-19 (what each role can and cannot actually do, with a fix for each finding) is
+  `context/documents/17-roles-permissions-and-flows.md` and `18-flow-audit-findings-register.md`; read them
+  before changing any access rule, because several flows there are dead ends rather than missing features.
+  The open owner decisions from that audit were settled on 2026-11-20 (57 decisions, configurable and reversible):
+  `context/documents/19-owner-decisions-2026-11-20.md`; the fix-wave plans are `docs/superpowers/plans/2026-11-20-wave-*.md`.
+  Where a rule in doc 17 or 18 differs from doc 19 or a plan, doc 19 and the plan win.
+- Offline local development uses provider **drivers** (`STORAGE_DRIVER`, `SMS_DRIVER`, more planned) that default to the real providers and are refused when `NODE_ENV=production`; run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. See `context/documents/16-local-development.md`. A local video driver is planned and will have no DRM.
 
 ### Invariants (see `context/documents/02-architecture.md §5` for the full list)
 
@@ -128,7 +162,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 
 ## Working with `context/`
 
-`context/documents/` (numbered `01`–`12`) is the source of truth for architecture, code standards,
+`context/documents/` (numbered `01`-`19`) is the source of truth for architecture, code standards,
 DB design, and AI workflow rules — read the relevant one before a non-trivial change.
 `context/api_endpoints/*.md` documents the actual current API surface per domain.
 `context/plan/` is historical brainstorming only; where it conflicts with `documents/`, `documents/`
@@ -146,8 +180,10 @@ target matrix, not-found cases, check-ordering when two validations could both f
 a Vitest unit test in addition to live-stack verification — this was added after the
 privileged-account incident above and is a standing requirement, not a suggestion.
 
-`context/documents/11-git-and-naming.md`: branch off `dev` as `type/kebab-scope`
-(`feature/`, `fix/`, `chore/`, `docs/`, `refactor/`); commits are Conventional Commits
-(`type(scope): summary`); squash-merge into `dev` with green CI + one review; **never delete a
-branch after merge** — this repo's owner continues work on branches post-merge, which overrides the
-doc's own "delete merged branches" line.
+`context/documents/11-git-and-naming.md` is the full git guide (rewritten 2026-11-19). Essentials: branch off
+fresh `origin/dev` as `type/kebab-scope` (`feature/`, `fix/`, `hotfix/`, `chore/`, `docs/`, `refactor/`, `test/`;
+no personal prefixes, no long-lived lanes); never commit straight to `dev` or `main`; Conventional Commits
+(`type(scope): summary`, PR title too); squash-merge into `dev` with green `Quality Gate` plus review;
+**delete the branch after merge** (this reverses the 2026-07-10 "never delete" rule; start a new branch for
+follow-up work); releases are merge-commit `dev` -> `main` PRs tagged `vX.Y.Z`, hotfixes are back-merged;
+work in the main checkout, not a worktree, and use tagged stashes only.

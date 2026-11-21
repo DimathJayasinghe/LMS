@@ -18,8 +18,8 @@ interface ClassSessionSummary {
   classType: ClassType | null;
   date: Date;
   durationMinutes: number;
-  zoomLink: string | null;
   zoomMeetingId: string | null;
+  liveScheduled: boolean;
   courseId: string;
   deletedAt: Date | null;
   createdAt: Date;
@@ -33,13 +33,29 @@ const classSessionSelect = {
   classType: true,
   date: true,
   durationMinutes: true,
-  zoomLink: true,
   zoomMeetingId: true,
   courseId: true,
   deletedAt: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.ClassSessionSelect;
+
+type ClassSessionRow = Prisma.ClassSessionGetPayload<{ select: typeof classSessionSelect }>;
+
+const presentSession = (session: ClassSessionRow, actor: AuthenticatedUser): ClassSessionSummary => ({
+  ...session,
+  liveScheduled: Boolean(session.zoomMeetingId),
+  // Operational staff need the provider meeting number for attendance reconciliation.
+  // Students only need the boolean state; the token endpoint supplies credentials after
+  // its enrolled + paid check. Markers are denied session reads below.
+  zoomMeetingId: actor.role === Role.STUDENT ? null : session.zoomMeetingId,
+});
+
+const assertSessionViewer = (actor: AuthenticatedUser): void => {
+  if (actor.role === Role.MARKER) {
+    throw new AppError('FORBIDDEN', 403, 'Markers can access only their assigned exam work.');
+  }
+};
 
 const ensureClassExists = async (classId: string): Promise<void> => {
   const course = await prisma.course.findUnique({ where: { id: classId } });
@@ -62,8 +78,6 @@ export const createClassSession = async (
       classType: input.classType ?? null,
       date: input.date,
       durationMinutes: input.durationMinutes,
-      zoomLink: input.zoomLink ?? null,
-      zoomMeetingId: input.zoomMeetingId ?? null,
       courseId: classId,
     },
     select: classSessionSelect,
@@ -75,7 +89,7 @@ export const createClassSession = async (
     action: 'created',
   });
 
-  return session;
+  return presentSession(session, actor);
 };
 
 export const listClassSessions = async (
@@ -84,9 +98,13 @@ export const listClassSessions = async (
   actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary[]> => {
   const role = actor.role;
+  assertSessionViewer(actor);
   await ensureClassExists(classId);
   // Students may only see the schedule of courses they are enrolled in.
   await assertStudentContentAccess(actor, classId, { requirePaid: false });
+
+  // Teachers may only see the schedule of courses they teach.
+  await assertCourseAccess(classId, actor);
 
   const where: Prisma.ClassSessionWhereInput = {
     courseId: classId,
@@ -94,11 +112,12 @@ export const listClassSessions = async (
     ...(role === Role.SUPER_ADMIN ? {} : { deletedAt: null }),
   };
 
-  return prisma.classSession.findMany({
+  const sessions = await prisma.classSession.findMany({
     where,
     select: classSessionSelect,
     orderBy: { date: 'asc' },
   });
+  return sessions.map((session) => presentSession(session, actor));
 };
 
 export const getClassSessionById = async (
@@ -107,8 +126,12 @@ export const getClassSessionById = async (
   actor: AuthenticatedUser,
 ): Promise<ClassSessionSummary> => {
   const role = actor.role;
+  assertSessionViewer(actor);
   await ensureClassExists(classId);
   await assertStudentContentAccess(actor, classId, { requirePaid: false });
+
+  // Teachers may only see the schedule of courses they teach.
+  await assertCourseAccess(classId, actor);
 
   const session = await prisma.classSession.findUnique({
     where: { id: sessionId },
@@ -119,7 +142,7 @@ export const getClassSessionById = async (
     throw new AppError('CLASS_SESSION_NOT_FOUND', 404, 'Class session not found.');
   }
 
-  return session;
+  return presentSession(session, actor);
 };
 
 export const updateClassSession = async (
@@ -144,8 +167,6 @@ export const updateClassSession = async (
       classType: input.classType === undefined ? undefined : input.classType,
       date: input.date,
       durationMinutes: input.durationMinutes,
-      zoomLink: input.zoomLink ?? undefined,
-      zoomMeetingId: input.zoomMeetingId ?? undefined,
     },
     select: classSessionSelect,
   });
@@ -156,7 +177,7 @@ export const updateClassSession = async (
     action: 'updated',
   });
 
-  return updated;
+  return presentSession(updated, actor);
 };
 
 export const deleteClassSession = async (
@@ -173,10 +194,11 @@ export const deleteClassSession = async (
   }
 
   if (session.deletedAt) {
-    return prisma.classSession.findUniqueOrThrow({
+    const existing = await prisma.classSession.findUniqueOrThrow({
       where: { id: sessionId },
       select: classSessionSelect,
     });
+    return presentSession(existing, actor);
   }
 
   const deleted = await prisma.classSession.update({
@@ -191,5 +213,5 @@ export const deleteClassSession = async (
     action: 'deleted',
   });
 
-  return deleted;
+  return presentSession(deleted, actor);
 };

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COURSE_ASSET_CONTENT_TYPES, COURSE_ASSET_MAX_SIZE_BYTES } from '@/utils/constants';
 
 // ─── Classes (Courses) ──────────────────────────────────────
 export const createClassSchema = z.object({
@@ -11,10 +12,7 @@ export const createClassSchema = z.object({
   subjectId: z.string().uuid(),
   // Optional: a TEACHER omits this (they own the course); a SUPER_ADMIN sets it.
   teacherId: z.string().uuid().optional(),
-  // Display assets (image URLs)
-  bannerUrl: z.string().url().max(1000).optional(),
-  backdropUrl: z.string().url().max(1000).optional(),
-});
+}).strict();
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;
 
@@ -24,6 +22,33 @@ export type UpdateClassInput = z.infer<typeof updateClassSchema>;
 
 export const classIdParamSchema = z.object({
   classId: z.string().uuid(),
+});
+
+export const courseAssetKindSchema = z.enum(['BANNER', 'BACKDROP']);
+export type CourseAssetKind = z.infer<typeof courseAssetKindSchema>;
+
+export const courseAssetUploadUrlSchema = z.object({
+  kind: courseAssetKindSchema,
+  fileName: z.string().trim().min(1).max(255),
+  contentType: z.enum(COURSE_ASSET_CONTENT_TYPES),
+  fileSizeBytes: z.coerce.number().int().positive().max(COURSE_ASSET_MAX_SIZE_BYTES),
+}).strict();
+export type CourseAssetUploadUrlInput = z.infer<typeof courseAssetUploadUrlSchema>;
+
+export const courseAssetConfirmSchema = z.object({
+  kind: courseAssetKindSchema,
+  key: z.string().min(1).max(500),
+  altText: z.string().trim().min(1).max(200).optional(),
+}).strict();
+export type CourseAssetConfirmInput = z.infer<typeof courseAssetConfirmSchema>;
+
+export const courseAssetAltSchema = z.object({
+  altText: z.string().trim().min(1).max(200),
+}).strict();
+export type CourseAssetAltInput = z.infer<typeof courseAssetAltSchema>;
+
+export const courseAssetParamsSchema = classIdParamSchema.extend({
+  kind: z.enum(['banner', 'backdrop']),
 });
 
 export const listClassesQuerySchema = z.object({

@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { logger } from '@/config/logger';
+import { extractAuditContext } from '@/utils/audit-context';
 import * as VideoService from '@/services/video.service';
+import * as AuditService from '@/services/audit.service';
+import { AUDIT_ACTION } from '@/utils/constants';
 import { verifyBunnyWebhookSignature } from '@/utils/bunny';
 import {
   createVideoSchema,
@@ -20,6 +23,15 @@ export const initiateUpload = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = initiateVideoUploadSchema.parse(req.body);
     const { video, upload } = await VideoService.initiateVideoUpload(input, req.user!);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.VIDEO_UPLOAD_INITIATED,
+      description: `Recording upload initiated for "${video.title}"`,
+      targetType: 'VideoRecording',
+      targetId: video.id,
+      metadata: { classSessionId: video.classSessionId },
+      context: extractAuditContext(req),
+    });
 
     res.status(201).json({
       status: 'success',
@@ -65,6 +77,15 @@ export const createVideo = asyncHandler(
     const input = createVideoSchema.parse(req.body);
     const video = await VideoService.createVideoRecording(input, req.user!);
 
+    void AuditService.log({
+      action: AUDIT_ACTION.VIDEO_ATTACHED,
+      description: `Recording "${video.title}" attached`,
+      targetType: 'VideoRecording',
+      targetId: video.id,
+      metadata: { classSessionId: video.classSessionId },
+      context: extractAuditContext(req),
+    });
+
     res.status(201).json({
       status: 'success',
       data: video,
@@ -81,6 +102,14 @@ export const updateVideo = asyncHandler(
     const input = updateVideoSchema.parse(req.body);
     const video = await VideoService.updateVideoRecording(id, input, req.user!);
 
+    void AuditService.log({
+      action: AUDIT_ACTION.VIDEO_UPDATED,
+      targetType: 'VideoRecording',
+      targetId: id,
+      metadata: { changedFields: Object.keys(input) },
+      context: extractAuditContext(req),
+    });
+
     res.status(200).json({
       status: 'success',
       data: video,
@@ -95,6 +124,13 @@ export const deleteVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
     await VideoService.deleteVideoRecording(id, req.user!);
+
+    void AuditService.log({
+      action: AUDIT_ACTION.VIDEO_DELETED,
+      targetType: 'VideoRecording',
+      targetId: id,
+      context: extractAuditContext(req),
+    });
 
     res.status(200).json({
       status: 'success',
@@ -127,7 +163,7 @@ export const listVideosForClass = asyncHandler(
 export const getVideo = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = videoIdParamSchema.parse(req.params);
-    const video = await VideoService.getVideoById(id);
+    const video = await VideoService.getVideoById(id, req.user!);
 
     res.status(200).json({
       status: 'success',

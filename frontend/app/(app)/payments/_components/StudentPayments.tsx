@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BadgeCheck, CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -156,6 +157,7 @@ export function StudentPayments({ enrollments, payments, currentMonth }: Props) 
                   <th className="px-4 py-3 font-medium">Course</th>
                   <th className="px-4 py-3 font-medium">Amount</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Receipt</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -166,6 +168,13 @@ export function StudentPayments({ enrollments, payments, currentMonth }: Props) 
                     <td className="px-4 py-3 tabular-nums">{formatCurrency(p.amount)}</td>
                     <td className="px-4 py-3">
                       <PaymentStatusBadge status={p.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.status === "SUCCESS" && (
+                        <Link href={`/payments/${p.id}`} target="_blank" className="text-xs text-primary hover:underline">
+                          View
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -1,5 +1,5 @@
-import { ClassType, NotificationType, PaymentStatus, Prisma, Role } from '@prisma/client';
-import xlsx from 'xlsx';
+import { ClassType, NotificationType, PaymentAdjustmentType, PaymentMethod, PaymentStatus, Prisma, Role } from '@prisma/client';
+import { readSheet, type SheetData } from 'read-excel-file/node';
 import { prisma } from '@/config/database';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
@@ -15,16 +15,25 @@ import {
 	PAYHERE_STATUS_PENDING,
 	PAYHERE_STATUS_SUCCESS,
 } from '@/utils/constants';
-import { formatPayhereAmount, generatePayhereHash, generatePayhereSignature } from '@/utils/payhere';
+import {
+	formatPayhereAmount,
+	generatePayhereHash,
+	generatePayhereSignature,
+	isPayhereSignatureValid,
+} from '@/utils/payhere';
+import { getCurrentPaymentMonth } from '@/services/access.service';
 import {
 	bulkPaymentRowSchema,
 	type BulkPaymentRow,
+	type CollectEntrancePaymentInput,
 	type InitiatePaymentInput,
 	type ListMyPaymentsQuery,
 	type ListPaymentsQuery,
 	type OverridePaymentInput,
 	type PayhereNotifyInput,
+	type FinancialReportQuery,
 } from '@/schemas/payment.schema';
+import type { AuthenticatedUser } from '@/types/auth.types';
 
 interface PayhereCheckoutPayload {
 	merchant_id: string;
@@ -64,12 +73,17 @@ interface PaginatedResult<T> {
 interface PaymentSummary {
 	id: string;
 	amount: Prisma.Decimal;
+	refundedAmount: Prisma.Decimal;
 	status: PaymentStatus;
+	method: PaymentMethod;
 	payhereId: string | null;
 	paymentMonth: string;
 	note: string | null;
 	createdAt: Date;
 	updatedAt: Date;
+	collectedBy: { id: string; name: string } | null;
+	collectedAtInstitute: { id: string; name: string; code: string } | null;
+	collectedViaBarcode: string | null;
 	enrollment: {
 		id: string;
 		classType: ClassType;
@@ -109,12 +123,21 @@ interface BulkUploadResult {
 const paymentSelect = {
 	id: true,
 	amount: true,
+	refundedAmount: true,
 	status: true,
+	method: true,
 	payhereId: true,
 	paymentMonth: true,
 	note: true,
 	createdAt: true,
 	updatedAt: true,
+	collectedBy: {
+		select: { id: true, name: true },
+	},
+	collectedAtInstitute: {
+		select: { id: true, name: true, code: true },
+	},
+	collectedViaBarcode: true,
 	enrollment: {
 		select: {
 			id: true,
@@ -251,6 +274,9 @@ export const initiatePayherePayment = async (
 	if (existing?.status === PaymentStatus.SUCCESS) {
 		throw new AppError('PAYMENT_ALREADY_PAID', 409, 'Payment already completed.');
 	}
+	if (existing?.status === PaymentStatus.REFUNDED) {
+		throw new AppError('PAYMENT_REFUNDED_IMMUTABLE', 409, 'This payment was fully refunded and cannot be reused. Contact support.');
+	}
 
 	const payment = await prisma.payment.upsert({
 		where: {
@@ -328,7 +354,7 @@ export const handlePayhereNotify = async (
 		merchantSecret: config.merchantSecret,
 	});
 
-	if (expectedSignature !== input.md5sig.toUpperCase()) {
+	if (!isPayhereSignatureValid(expectedSignature, input.md5sig)) {
 		throw new AppError('PAYHERE_SIGNATURE_INVALID', 400, 'Invalid PayHere signature.');
 	}
 
@@ -340,6 +366,8 @@ export const handlePayhereNotify = async (
 	if (!payment) {
 		throw new AppError('PAYMENT_NOT_FOUND', 404, 'Payment not found.');
 	}
+	// Provider retries must never turn a completed refund back into paid access.
+	if (payment.status === PaymentStatus.REFUNDED) return payment;
 
 	const expectedAmount = formatPayhereAmount(payment.amount);
 	const payhereAmount = formatPayhereAmount(input.payhere_amount);
@@ -425,6 +453,7 @@ export interface MonthPaymentSummary {
 	paidCount: number;
 	pendingCount: number;
 	failedCount: number;
+	refundedCount: number;
 }
 
 /**
@@ -433,23 +462,163 @@ export interface MonthPaymentSummary {
  * the route.
  */
 export const getPaymentsSummary = async (month: string): Promise<MonthPaymentSummary> => {
-	const [sum, paidCount, pendingCount, failedCount] = await Promise.all([
+	const [sum, paidCount, pendingCount, failedCount, refundedCount] = await Promise.all([
 		prisma.payment.aggregate({
-			_sum: { amount: true },
+			_sum: { amount: true, refundedAmount: true },
 			where: { paymentMonth: month, status: PaymentStatus.SUCCESS },
 		}),
 		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.SUCCESS } }),
 		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.PENDING } }),
 		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.FAILED } }),
+		prisma.payment.count({ where: { paymentMonth: month, status: PaymentStatus.REFUNDED } }),
 	]);
+	const gross = sum._sum.amount ?? new Prisma.Decimal(0);
+	const refunded = sum._sum.refundedAmount ?? new Prisma.Decimal(0);
 
 	return {
 		month,
-		collectedTotal: (sum._sum.amount ?? new Prisma.Decimal(0)).toFixed(2),
+		collectedTotal: gross.minus(refunded).toFixed(2),
 		paidCount,
 		pendingCount,
 		failedCount,
+		refundedCount,
 	};
+};
+
+// ─── Financial Reports (Super Admin / scoped Teacher) ─────
+
+export interface FinancialReport {
+	month: string;
+	/** 12 months ending at `month`, zero-filled. */
+	trend: { month: string; collected: string; paidCount: number }[];
+	byCourse: { courseId: string; name: string; year: number | null; collected: string; paidCount: number }[];
+	byTeacher: { teacherId: string; name: string; collected: string; paidCount: number }[];
+	byMethod: { method: PaymentMethod; collected: string; paidCount: number }[];
+	/** Active enrollments with no SUCCESS payment this month. */
+	outstanding: { count: number; expected: string };
+}
+
+/** The N `YYYY-MM` labels ending at (and including) `month`, oldest first. */
+const monthsEndingAt = (month: string, n: number): string[] => {
+	const [y, m] = month.split('-').map(Number) as [number, number];
+	const labels: string[] = [];
+	for (let i = n - 1; i >= 0; i -= 1) {
+		const d = new Date(Date.UTC(y, m - 1 - i, 1));
+		labels.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+	}
+	return labels;
+};
+
+const money = (v: unknown): string => new Prisma.Decimal((v as Prisma.Decimal | number | string) ?? 0).toFixed(2);
+
+/**
+ * Financial report for a month. SUPER_ADMIN may filter across teachers/classes;
+ * TEACHER is always forced to their own courses, regardless of supplied query.
+ * Only aggregate values are returned—never individual student payment records.
+ */
+export const getFinancialReport = async (
+	month: string,
+	query: FinancialReportQuery,
+	actor: AuthenticatedUser,
+): Promise<FinancialReport> => {
+	if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.TEACHER) {
+		throw new AppError('FORBIDDEN', 403, 'You do not have permission to view financial reports.');
+	}
+	const trendMonths = monthsEndingAt(month, 12);
+	const teacherId = actor.role === Role.TEACHER ? actor.userId : query.teacherId;
+	const courseId = query.courseId;
+	const courseWhere: Prisma.CourseWhereInput = {
+		...(teacherId ? { teacherId } : {}),
+		...(courseId ? { id: courseId } : {}),
+	};
+	const hasCourseScope = Boolean(teacherId || courseId);
+	const paymentScope: Prisma.PaymentWhereInput = hasCourseScope
+		? { enrollment: { course: courseWhere } }
+		: {};
+	const sqlScope = Prisma.sql`
+		${teacherId ? Prisma.sql`AND c."teacherId" = ${teacherId}` : Prisma.empty}
+		${courseId ? Prisma.sql`AND c.id = ${courseId}` : Prisma.empty}
+	`;
+
+	const [trendRows, byCourseRows, byTeacherRows, methodRows, outstandingRows] = await Promise.all([
+		prisma.payment.groupBy({
+			by: ['paymentMonth'],
+			where: { status: PaymentStatus.SUCCESS, paymentMonth: { in: trendMonths }, ...paymentScope },
+			_sum: { amount: true, refundedAmount: true },
+			_count: { _all: true },
+		}),
+		prisma.$queryRaw<Array<{ id: string; name: string; year: number | null; total: unknown; cnt: bigint }>>`
+			SELECT c.id, c.name, c.year, SUM(p.amount - p."refundedAmount") AS total, COUNT(*) AS cnt
+			FROM "Payment" p
+			JOIN "Enrollment" e ON e.id = p."enrollmentId"
+			JOIN "Course" c ON c.id = e."courseId"
+			WHERE p.status = 'SUCCESS' AND p."paymentMonth" = ${month}
+			${sqlScope}
+			GROUP BY c.id, c.name, c.year
+			ORDER BY total DESC
+		`,
+		prisma.$queryRaw<Array<{ id: string; name: string; total: unknown; cnt: bigint }>>`
+			SELECT u.id, u.name, SUM(p.amount - p."refundedAmount") AS total, COUNT(*) AS cnt
+			FROM "Payment" p
+			JOIN "Enrollment" e ON e.id = p."enrollmentId"
+			JOIN "Course" c ON c.id = e."courseId"
+			JOIN "User" u ON u.id = c."teacherId"
+			WHERE p.status = 'SUCCESS' AND p."paymentMonth" = ${month}
+			${sqlScope}
+			GROUP BY u.id, u.name
+			ORDER BY total DESC
+		`,
+		prisma.payment.groupBy({
+			by: ['method'],
+			where: { status: PaymentStatus.SUCCESS, paymentMonth: month, ...paymentScope },
+			_sum: { amount: true, refundedAmount: true },
+			_count: { _all: true },
+		}),
+		prisma.$queryRaw<Array<{ cnt: bigint; expected: unknown }>>`
+			SELECT COUNT(*) AS cnt, COALESCE(SUM(c."monthlyFee"), 0) AS expected
+			FROM "Enrollment" e
+			JOIN "Course" c ON c.id = e."courseId"
+			WHERE e."isActive" = true
+			${sqlScope}
+			AND NOT EXISTS (
+				SELECT 1 FROM "Payment" p
+				WHERE p."enrollmentId" = e.id AND p."paymentMonth" = ${month} AND p.status = 'SUCCESS'
+			)
+		`,
+	]);
+
+	const trendMap = new Map(trendRows.map((r) => [r.paymentMonth, r]));
+	const trend = trendMonths.map((m) => {
+		const r = trendMap.get(m);
+		const gross = new Prisma.Decimal(r?._sum.amount ?? 0);
+		const refunded = new Prisma.Decimal(r?._sum.refundedAmount ?? 0);
+		return { month: m, collected: gross.minus(refunded).toFixed(2), paidCount: r?._count._all ?? 0 };
+	});
+
+	const byCourse = byCourseRows.map((r) => ({
+		courseId: r.id,
+		name: r.name,
+		year: r.year,
+		collected: money(r.total),
+		paidCount: Number(r.cnt),
+	}));
+	const byTeacher = byTeacherRows.map((r) => ({
+		teacherId: r.id,
+		name: r.name,
+		collected: money(r.total),
+		paidCount: Number(r.cnt),
+	}));
+
+	const byMethod = methodRows.map((r) => ({
+		method: r.method,
+		collected: new Prisma.Decimal(r._sum.amount ?? 0).minus(r._sum.refundedAmount ?? 0).toFixed(2),
+		paidCount: r._count._all,
+	}));
+
+	const out = outstandingRows[0];
+	const outstanding = { count: Number(out?.cnt ?? 0), expected: money(out?.expected) };
+
+	return { month, trend, byCourse, byTeacher, byMethod, outstanding };
 };
 
 export const listMyPayments = async (
@@ -494,21 +663,47 @@ export const getPaymentById = async (
 export const overridePayment = async (
 	paymentId: string,
 	input: OverridePaymentInput,
+	actingAdminId: string,
 ): Promise<PaymentSummary> => {
-	const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+	const updated = await prisma.$transaction(async (tx) => {
+		const payment = await tx.payment.findUnique({
+			where: { id: paymentId },
+			select: { id: true, amount: true, refundedAmount: true, status: true },
+		});
+		if (!payment) throw new AppError('PAYMENT_NOT_FOUND', 404, 'Payment not found.');
+		if (payment.status === PaymentStatus.REFUNDED) {
+			throw new AppError('PAYMENT_REFUNDED_IMMUTABLE', 409, 'A fully refunded payment cannot be overridden.');
+		}
 
-	if (!payment) {
-		throw new AppError('PAYMENT_NOT_FOUND', 404, 'Payment not found.');
-	}
+		const nextAmount = input.amount === undefined ? payment.amount : new Prisma.Decimal(input.amount);
+		if (nextAmount.lessThan(payment.refundedAmount)) {
+			throw new AppError('PAYMENT_AMOUNT_BELOW_REFUNDED', 409, 'Payment amount cannot be lower than completed refunds.');
+		}
 
-	const updated = await prisma.payment.update({
-		where: { id: paymentId },
-		data: {
-			status: input.status,
-			amount: input.amount,
-			note: input.note,
-		},
-		select: paymentSelect,
+		const result = await tx.payment.update({
+			where: { id: paymentId },
+			data: {
+				status: input.status,
+				amount: nextAmount,
+				note: input.note,
+				method: PaymentMethod.MANUAL,
+				collectedById: actingAdminId,
+			},
+			select: paymentSelect,
+		});
+		await tx.paymentAdjustment.create({
+			data: {
+				paymentId,
+				createdById: actingAdminId,
+				type: PaymentAdjustmentType.OVERRIDE,
+				statusBefore: payment.status,
+				statusAfter: input.status,
+				paymentAmountBefore: payment.amount,
+				paymentAmountAfter: nextAmount,
+				reason: input.note,
+			},
+		});
+		return result;
 	});
 
 	void NotificationService.dispatch({
@@ -523,6 +718,79 @@ export const overridePayment = async (
 	});
 
 	return updated;
+};
+
+export const collectEntrancePayment = async (
+	collectedById: string,
+	input: CollectEntrancePaymentInput,
+): Promise<PaymentSummary> => {
+	const enrollment = await prisma.enrollment.findUnique({
+		where: { id: input.enrollmentId },
+		include: { course: true },
+	});
+
+	if (!enrollment) {
+		throw new AppError('ENROLLMENT_NOT_FOUND', 404, 'Enrollment not found.');
+	}
+
+	if (!enrollment.isActive) {
+		throw new AppError('ENROLLMENT_NOT_ACTIVE', 400, 'This enrollment is not active.');
+	}
+
+	if (input.paymentMonth > getCurrentPaymentMonth()) {
+		throw new AppError('FUTURE_MONTH', 400, 'Cannot collect a payment for a future month.');
+	}
+
+	const resolvedAmount = input.amount ?? Number(enrollment.course.monthlyFee);
+
+	const existing = await prisma.payment.findUnique({
+		where: {
+			enrollmentId_paymentMonth: {
+				enrollmentId: input.enrollmentId,
+				paymentMonth: input.paymentMonth,
+			},
+		},
+	});
+
+	if (existing?.status === PaymentStatus.SUCCESS && existing.payhereId) {
+		throw new AppError('ALREADY_PAID_ONLINE', 409, 'This month is already paid online.');
+	}
+	if (existing?.status === PaymentStatus.REFUNDED) {
+		throw new AppError('PAYMENT_REFUNDED_IMMUTABLE', 409, 'This payment was fully refunded and cannot be overwritten.');
+	}
+
+	const fields = {
+		status: PaymentStatus.SUCCESS,
+		method: PaymentMethod.ENTRANCE,
+		amount: resolvedAmount,
+		collectedById,
+		collectedAtInstituteId: input.collectedAtInstituteId ?? null,
+		collectedViaBarcode: input.collectedViaBarcode ?? null,
+		note: 'Collected at entrance',
+	};
+
+	const payment = existing
+		? await prisma.payment.update({
+				where: { id: existing.id },
+				data: fields,
+				select: paymentSelect,
+			})
+		: await prisma.payment.create({
+				data: { enrollmentId: input.enrollmentId, paymentMonth: input.paymentMonth, ...fields },
+				select: paymentSelect,
+			});
+
+	void NotificationService.dispatch({
+		type: NotificationType.PAYMENT_CONFIRMED,
+		userId: enrollment.userId,
+		link: '/payments',
+		params: {
+			courseName: enrollment.course.name,
+			paymentMonth: input.paymentMonth,
+		},
+	});
+
+	return payment;
 };
 
 const normalizeHeader = (header: string): string => {
@@ -550,8 +818,8 @@ const normalizePaymentMonth = (raw: unknown): string | null => {
 	return null;
 };
 
-const normalizeBulkRow = (raw: Record<string, any>): BulkPaymentRow | null => {
-	const resolveValue = (value: any): any => {
+const normalizeBulkRow = (raw: Record<string, unknown>): BulkPaymentRow | null => {
+	const resolveValue = (value: unknown): unknown => {
 		if (value === null || value === undefined) {
 			return undefined;
 		}
@@ -561,7 +829,7 @@ const normalizeBulkRow = (raw: Record<string, any>): BulkPaymentRow | null => {
 		return value;
 	};
 
-	const normalized: Record<string, any> = {};
+	const normalized: Record<string, unknown> = {};
 	Object.entries(raw).forEach(([key, value]) => {
 		if (!key) {
 			return;
@@ -578,14 +846,19 @@ const normalizeBulkRow = (raw: Record<string, any>): BulkPaymentRow | null => {
 		? classTypeRaw.trim().toUpperCase()
 		: undefined;
 
+	const toTrimmedString = (value: unknown): string | undefined => {
+		if (value === null || value === undefined) return undefined;
+		return String(value).trim() || undefined;
+	};
+
 	const payload = {
-		enrollmentId: normalized.enrollmentid?.toString().trim() || undefined,
+		enrollmentId: toTrimmedString(normalized.enrollmentid),
 		indexNumber: normalized.indexnumber ?? normalized.studentindex ?? normalized.index,
-		courseId: normalized.courseid?.toString().trim() || undefined,
+		courseId: toTrimmedString(normalized.courseid),
 		classType: classType as ClassType | undefined,
 		paymentMonth: paymentMonth ?? '',
 		amount: normalized.amount ?? normalized.paidamount ?? normalized.paid,
-		note: normalized.note?.toString().trim() || normalized.remarks?.toString().trim() || undefined,
+		note: toTrimmedString(normalized.note) ?? toTrimmedString(normalized.remarks),
 	};
 
 	const parsed = bulkPaymentRowSchema.safeParse(payload);
@@ -633,21 +906,37 @@ const resolveEnrollmentForBulkRow = async (
 export const bulkUploadPayments = async (
 	file: Express.Multer.File,
 ): Promise<BulkUploadResult> => {
-	const workbook = xlsx.read(file.buffer, { type: 'buffer' });
-	const sheetName = workbook.SheetNames[0];
-
-	if (!sheetName) {
-		throw new AppError('BULK_UPLOAD_EMPTY', 400, 'No worksheet found in upload.');
+	if (!file.originalname.toLowerCase().endsWith('.xlsx') || file.buffer.subarray(0, 2).toString() !== 'PK') {
+		throw new AppError(
+			'BULK_UPLOAD_INVALID_FILE',
+			400,
+			'Upload a valid .xlsx workbook. Legacy .xls files are not accepted.',
+		);
 	}
 
-	const sheet = workbook.Sheets[sheetName];
-	if (!sheet) {
-		throw new AppError('BULK_UPLOAD_EMPTY', 400, 'Sheet not found.');
+	let workbookRows: SheetData;
+	try {
+		workbookRows = await readSheet(file.buffer);
+	} catch {
+		throw new AppError('BULK_UPLOAD_INVALID_FILE', 400, 'The uploaded .xlsx workbook could not be read.');
 	}
-	const rows = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+
+	const [headerRow, ...dataRows] = workbookRows;
+	if (!headerRow) {
+		throw new AppError('BULK_UPLOAD_EMPTY', 400, 'No worksheet rows found in upload.');
+	}
+	const headers = headerRow.map((value) => String(value ?? '').trim());
+	const rows = dataRows
+		.filter((row) => row.some((value) => value !== null && String(value).trim() !== ''))
+		.map((row) => Object.fromEntries(
+			headers.map((header, index) => [header, row[index] ?? '']),
+		) as Record<string, unknown>);
 
 	if (!rows.length) {
 		throw new AppError('BULK_UPLOAD_EMPTY', 400, 'No rows found in upload.');
+	}
+	if (rows.length > 5000) {
+		throw new AppError('BULK_UPLOAD_TOO_MANY_ROWS', 400, 'A bulk upload may contain at most 5,000 rows.');
 	}
 
 	const result: BulkUploadResult = {
@@ -684,6 +973,9 @@ export const bulkUploadPayments = async (
 				result.skipped += 1;
 				continue;
 			}
+			if (existing?.status === PaymentStatus.REFUNDED) {
+				throw new AppError('PAYMENT_REFUNDED_IMMUTABLE', 409, 'Fully refunded payment cannot be overwritten.');
+			}
 
 			if (existing) {
 				await prisma.payment.update({
@@ -691,6 +983,7 @@ export const bulkUploadPayments = async (
 					data: {
 						amount,
 						status: PaymentStatus.SUCCESS,
+						method: PaymentMethod.BULK,
 						note: normalized.note ?? existing.note,
 					},
 				});
@@ -704,6 +997,7 @@ export const bulkUploadPayments = async (
 					paymentMonth: normalized.paymentMonth,
 					amount,
 					status: PaymentStatus.SUCCESS,
+					method: PaymentMethod.BULK,
 					note: normalized.note ?? 'Bulk upload',
 				},
 			});

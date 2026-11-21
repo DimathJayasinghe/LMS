@@ -1,10 +1,12 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Video } from "lucide-react";
+import Link from "next/link";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
-import type { ApiList, Course, TimetableSlot } from "@/lib/types";
+import type { ApiList, ApiSuccess, Course, Institute, TimetableSlot, UpcomingTimetableSession, User } from "@/lib/types";
+import { TimetableManager } from "./_components/TimetableManager";
+import { LiveClassAction } from "../classes/[classId]/_components/LiveClassAction";
 
 // Render Monday-first; API dayOfWeek is 0=Sun … 6=Sat.
 const WEEK: { day: number; label: string }[] = [
@@ -42,18 +44,30 @@ export default async function TimetablePage() {
 
   let slots: TimetableSlot[];
   let courses: Course[];
+  let institutes: Institute[];
+  let upcoming: UpcomingTimetableSession[];
+  let user: User;
   try {
-    const [slotList, classList] = await Promise.all([
+    const now = new Date();
+    const to = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const [slotList, classList, instituteList, upcomingList, me] = await Promise.all([
       api.get<ApiList<TimetableSlot>>("/timetable/slots", { cookie }),
       api.get<ApiList<Course>>("/classes", { cookie }),
+      api.get<ApiList<Institute>>("/institutes", { cookie }),
+      api.get<ApiList<UpcomingTimetableSession>>(`/timetable/sessions?from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, { cookie }),
+      api.get<ApiSuccess<User>>("/auth/me", { cookie }),
     ]);
     slots = slotList.data;
     courses = classList.data;
+    institutes = instituteList.data;
+    upcoming = upcomingList.data;
+    user = me.data;
   } catch {
     redirect("/auth/login");
   }
 
   const courseName = new Map(courses.map((c) => [c.id, c.name]));
+  const canManage = ["SUPER_ADMIN", "TEACHER", "ADMIN"].includes(user.role);
 
   // Group slots by day, sorted by start time within each day.
   const byDay = new Map<number, TimetableSlot[]>();
@@ -69,6 +83,8 @@ export default async function TimetablePage() {
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader title="Timetable" description="Your weekly class schedule." />
+
+      {canManage && <TimetableManager courses={courses} institutes={institutes} slots={slots} />}
 
       {slots.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-10 text-center text-sm text-muted-foreground">
@@ -96,7 +112,9 @@ export default async function TimetablePage() {
                       {daySlots.map((slot) => (
                         <li
                           key={slot.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3"
+                          className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 ${
+                            slot.isActive ? "" : "opacity-60"
+                          }`}
                         >
                           <div>
                             <p className="text-sm font-medium text-foreground">
@@ -107,21 +125,11 @@ export default async function TimetablePage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
+                            {!slot.isActive && <Badge variant="secondary">Inactive</Badge>}
                             {slot.classType && (
                               <Badge variant="outline">
                                 {slot.classType === "ONLINE" ? "Online" : "Physical"}
                               </Badge>
-                            )}
-                            {slot.zoomLink && (
-                              <a
-                                href={slot.zoomLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                              >
-                                <Video className="size-4" aria-hidden />
-                                Join
-                              </a>
                             )}
                           </div>
                         </li>
@@ -134,6 +142,32 @@ export default async function TimetablePage() {
           })}
         </div>
       )}
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold">Upcoming class sessions</h2>
+        {upcoming.length === 0 ? (
+          <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No sessions in the next 30 days.</p>
+        ) : (
+          <ul className="space-y-2">
+            {upcoming.map((session) => (
+              <li key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
+                <div>
+                  <Link href={`/classes/${session.courseId}`} className="font-medium hover:underline">{session.title}</Link>
+                  <p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en-LK", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Colombo" }).format(new Date(session.date))}</p>
+                </div>
+                {session.classType === "ONLINE" && (
+                  <LiveClassAction
+                    classId={session.courseId}
+                    sessionId={session.id}
+                    scheduled={session.liveScheduled}
+                    isStaff={user.role === "SUPER_ADMIN" || user.role === "TEACHER"}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

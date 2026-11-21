@@ -8,31 +8,6 @@ import {
   BUNNY_UPLOAD_AUTH_TTL_SECONDS,
 } from '@/utils/constants';
 
-/**
- * Generates an IP-bound Bunny.net authentication token for a video stream.
- *
- * Implementation follows Bunny's official Node.js reference:
- * https://github.com/BunnyWay/BunnyCDN.TokenAuthentication/blob/master/nodejs/token.js
- *
- * Security model (plan §13 — The Telegram Pirate):
- *  - Token is HMAC-SHA256 signed with the pull-zone security key.
- *  - Token is bound to the requesting student's IP address.
- *  - If the link is shared externally, Bunny rejects it with 403 Forbidden
- *    because the viewer's IP won't match the IP in the token signature.
- *  - Token expires after BUNNY_TOKEN_TTL_SECONDS to limit replay window.
- *
- * Official Bunny token formula:
- *   message   = signaturePath + expires + signingData + userIp
- *   digest    = HMAC-SHA256(securityKey, message)
- *   token     = "HS256-" + base64url(digest)
- */
-export interface BunnyStreamUrl {
-  /** The signed, IP-bound stream URL to return to the client */
-  streamUrl: string;
-  /** Token expiry as Unix timestamp (for client-side countdown if needed) */
-  expiresAt: number;
-}
-
 /** Fails fast with a clear error if Bunny is not configured. Server boots without these vars — they are only required when a video is actually created/streamed. */
 const assertBunnyConfigured = (): void => {
   if (!env.BUNNY_API_KEY || !env.BUNNY_LIBRARY_ID || !env.BUNNY_CDN_HOSTNAME) {
@@ -42,48 +17,6 @@ const assertBunnyConfigured = (): void => {
       'Video is not configured. Please set BUNNY_API_KEY, BUNNY_LIBRARY_ID, and BUNNY_CDN_HOSTNAME in the server environment.',
     );
   }
-};
-
-export const generateBunnyStreamUrl = (
-  bunnyVideoId: string,
-  clientIp: string,
-): BunnyStreamUrl => {
-  assertBunnyConfigured();
-
-  const expires = String(Math.floor(Date.now() / 1000) + BUNNY_TOKEN_TTL_SECONDS);
-
-  // Bunny Stream path format: /{libraryId}/{videoId}/playlist.m3u8
-  const signaturePath = `/${env.BUNNY_LIBRARY_ID}/${bunnyVideoId}/playlist.m3u8`;
-
-  // Build message exactly as Bunny's official reference:
-  //   message = signaturePath + expires + signingData + userIp
-  // signingData is empty because we don't add custom query params (no country filters, etc.)
-  const signingData = '';
-  const message = `${signaturePath}${expires}${signingData}${clientIp}`;
-
-  // HMAC-SHA256 with security key, then Base64 URL-safe encoding with HS256- prefix
-  const digest = createHmac('sha256', env.BUNNY_API_KEY)
-    .update(message)
-    .digest();
-
-  const token = 'HS256-' + digest
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-
-  // Build the full CDN URL — query-string format (not directory-based)
-  // Normalize: ensure the hostname always has an https:// protocol prefix.
-  const cdnBase = env.BUNNY_CDN_HOSTNAME.startsWith('http')
-    ? env.BUNNY_CDN_HOSTNAME
-    : `https://${env.BUNNY_CDN_HOSTNAME}`;
-
-  const streamUrl =
-    `${cdnBase}${signaturePath}` +
-    `?token=${token}` +
-    `&expires=${expires}`;
-
-  return { streamUrl, expiresAt: Number(expires) };
 };
 
 /** Fails fast if the playback token key isn't configured (needed to sign embeds). */

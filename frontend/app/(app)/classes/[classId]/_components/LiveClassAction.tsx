@@ -44,7 +44,9 @@ export function LiveClassAction({ classId, sessionId, scheduled, isStaff }: Live
     setBusy(true);
     setError(null);
     try {
-      await api.post(`/classes/${classId}/sessions/${sessionId}/live/schedule`);
+      await api.post(`/classes/${classId}/sessions/${sessionId}/live/schedule`, undefined, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
       router.refresh();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not schedule the live class.");

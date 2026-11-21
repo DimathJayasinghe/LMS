@@ -1,0 +1,72 @@
+# LOCAL, fully offline stack: no Cloudflare, Bunny, Notify.lk or other paid accounts needed.
+# Layer it on the base compose file, which supplies postgres, redis, nginx, backend, worker, frontend:
+#
+#   cp backend/.env.local.example backend/.env
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# What this overlay swaps (see context/documents/16-local-development.md):
+#   - NODE_ENV=development, because the backend refuses local drivers in production
+#   - STORAGE_DRIVER=local : an S3-compatible server (RustFS) instead of Cloudflare R2
+#   - SMS_DRIVER=log       : SMS is written to the worker log instead of Notify.lk
+# Never use this file on the production VPS.
+
+services:
+  storage:
+    image: rustfs/rustfs:1.0.6
+    environment:
+      RUSTFS_ACCESS_KEY: lmsdev
+      RUSTFS_SECRET_KEY: lmsdev-secret-key
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "false"
+    ports:
+      # Published (loopback only: the credentials are committed dev values) because browsers
+      # upload straight to storage with presigned URLs.
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - storage-data:/data
+    networks:
+      - lms
+    restart: unless-stopped
+
+  storage-init:
+    image: amazon/aws-cli:2.27.50
+    entrypoint: ["/bin/sh", "/init/storage-init.sh"]
+    environment:
+      S3_ENDPOINT: http://storage:9000
+      AWS_ACCESS_KEY_ID: lmsdev
+      AWS_SECRET_ACCESS_KEY: lmsdev-secret-key
+      AWS_DEFAULT_REGION: us-east-1
+      R2_BUCKET_NAME: lms-private
+      R2_PUBLIC_BUCKET_NAME: lms-public
+    volumes:
+      - ./docker/local/storage-init.sh:/init/storage-init.sh:ro
+    depends_on:
+      - storage
+    networks:
+      - lms
+    restart: "no"
+
+  backend:
+    environment: &local-drivers
+      NODE_ENV: development
+      STORAGE_DRIVER: local
+      SMS_DRIVER: log
+      R2_ENDPOINT: http://storage:9000
+      R2_PRESIGN_ENDPOINT: http://localhost:9000
+      R2_ACCESS_KEY_ID: lmsdev
+      R2_SECRET_ACCESS_KEY: lmsdev-secret-key
+      R2_BUCKET_NAME: lms-private
+      R2_PUBLIC_BUCKET_NAME: lms-public
+      R2_PUBLIC_URL: http://localhost:9000/lms-public
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+
+  worker:
+    environment: *local-drivers
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+
+volumes:
+  storage-data:

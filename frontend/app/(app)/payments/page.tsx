@@ -18,7 +18,7 @@ import type {
 export const metadata = { title: "Payments · LMS" };
 
 const PAGE_SIZE = 20;
-const STATUSES: PaymentStatus[] = ["PENDING", "SUCCESS", "FAILED"];
+const STATUSES: PaymentStatus[] = ["PENDING", "SUCCESS", "FAILED", "REFUNDED"];
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
 export default async function PaymentsPage({
@@ -96,6 +96,7 @@ export default async function PaymentsPage({
         status={status ?? "all"}
         statuses={STATUSES}
         summary={summary}
+        canOverride={viewer.role === "SUPER_ADMIN"}
       />
     </div>
   );

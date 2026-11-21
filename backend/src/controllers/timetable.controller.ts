@@ -7,6 +7,7 @@ import { AUDIT_ACTION } from '@/utils/constants';
 import {
   createTimetableSlotSchema,
   generateSessionsSchema,
+  listUpcomingSessionsQuerySchema,
   listTimetableQuerySchema,
   publicUpcomingQuerySchema,
   timetableSlotIdParamSchema,
@@ -43,7 +44,7 @@ export const listPublicUpcoming = asyncHandler(async (req: Request, res: Respons
 
 export const getSlotById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { id } = timetableSlotIdParamSchema.parse(req.params);
-  const slot = await TimetableService.getSlotById(id);
+  const slot = await TimetableService.getSlotById(id, req.user!);
 
   res.status(200).json({ status: 'success', data: slot });
 });
@@ -74,12 +75,12 @@ export const deleteSlot = asyncHandler(async (req: Request, res: Response): Prom
     context: extractAuditContext(req),
   });
 
-  res.status(200).json({ status: 'success', data: null, message: 'Timetable slot deleted.' });
+  res.status(200).json({ status: 'success', data: null, message: 'Timetable slot disabled.' });
 });
 
 export const generateSessions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const input = generateSessionsSchema.parse(req.body);
-  const result = await TimetableService.generateSessions(input.from, input.to);
+  const result = await TimetableService.generateSessions(input.from, input.to, req.user!);
 
   void AuditService.log({
     action: AUDIT_ACTION.TIMETABLE_GENERATED,
@@ -89,4 +90,16 @@ export const generateSessions = asyncHandler(async (req: Request, res: Response)
   });
 
   res.status(200).json({ status: 'success', data: result, message: 'Sessions generated from timetable.' });
+});
+
+export const previewGeneration = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const input = generateSessionsSchema.parse(req.body);
+  const result = await TimetableService.previewGeneration(input.from, input.to, req.user!);
+  res.status(200).json({ status: 'success', data: result });
+});
+
+export const listUpcomingSessions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const query = listUpcomingSessionsQuerySchema.parse(req.query);
+  const sessions = await TimetableService.listUpcomingSessions(query, req.user!);
+  res.status(200).json({ status: 'success', data: sessions, count: sessions.length });
 });

@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { Search } from "lucide-react";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import ClassCard from "./_components/ClassCard";
 import { api } from "@/lib/api";
 import type {
   ApiList,
   ApiSuccess,
   Course,
-  Enrollment,
+  LearningEnrollment,
   Subject,
   User,
 } from "@/lib/types";
@@ -43,24 +45,53 @@ export default async function ClassesPage({
   const subjectName = new Map(subjects.map((s) => [s.id, s.name]));
 
   // A student's active enrollments drive the "Enrolled" badges (non-fatal).
-  let enrolledCourseIds = new Set<string>();
+  let learningByCourse = new Map<string, LearningEnrollment["learning"]>();
   if (user.role === "STUDENT") {
     try {
-      const mine = await api.get<ApiList<Enrollment>>(
-        "/enrollments/my?isActive=true",
-        { cookie },
-      );
-      enrolledCourseIds = new Set(mine.data.map((e) => e.courseId));
+      const mine = await api.get<ApiList<LearningEnrollment>>("/enrollments/learning", { cookie });
+      learningByCourse = new Map(mine.data.map((e) => [e.courseId, e.learning]));
     } catch {
       // Leave badges off if enrollments can't be loaded.
     }
   }
 
+  const enrolledCourseIds = new Set(learningByCourse.keys());
+  const currentCourses = courses.filter((course) => enrolledCourseIds.has(course.id));
+  const availableCourses = user.role === "STUDENT"
+    ? courses.filter((course) => !enrolledCourseIds.has(course.id))
+    : courses;
+  const isTeacherStaff = user.role === "TEACHER" || user.role === "SUPER_ADMIN";
+
+  const cards = (items: Course[]) => (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((course) => {
+        const learning = learningByCourse.get(course.id);
+        return (
+          <ClassCard
+            key={course.id}
+            course={course}
+            subjectName={subjectName.get(course.subjectId)}
+            enrolled={enrolledCourseIds.has(course.id)}
+            newLessonCount={learning?.newLessonCount}
+            nextSessionAt={learning?.nextSessionAt}
+          />
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
-        title="Classes"
-        description="Browse available classes and enroll."
+        title={user.role === "TEACHER" ? "My classes" : "Classes"}
+        description={
+          user.role === "TEACHER"
+            ? "Create and manage only the classes assigned to you."
+            : user.role === "STUDENT"
+              ? "Continue enrolled classes, see new lessons, or explore more."
+              : "Manage classes across the institution."
+        }
+        action={isTeacherStaff ? <Button asChild><Link href="/classes/new">New class</Link></Button> : undefined}
       />
 
       <form method="GET" className="mb-6 flex max-w-md items-center gap-2">
@@ -80,23 +111,31 @@ export default async function ClassesPage({
         </div>
       </form>
 
-      {courses.length === 0 ? (
+      {user.role === "STUDENT" && (
+        <section className="mb-8" aria-labelledby="current-classes-title">
+          <h2 id="current-classes-title" className="mb-3 text-lg font-semibold text-foreground">My current classes</h2>
+          {currentCourses.length > 0 ? cards(currentCourses) : (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
+              You are not currently enrolled in any classes.
+            </div>
+          )}
+        </section>
+      )}
+
+      {user.role === "STUDENT" && (
+        <h2 className="mb-3 text-lg font-semibold text-foreground">Explore more classes</h2>
+      )}
+
+      {availableCourses.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-10 text-center text-sm text-muted-foreground">
           {search
             ? `No classes match “${search}”.`
-            : "No classes are available yet."}
+            : user.role === "STUDENT" && currentCourses.length > 0
+              ? "You are enrolled in every available class."
+              : "No classes are available yet."}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((course) => (
-            <ClassCard
-              key={course.id}
-              course={course}
-              subjectName={subjectName.get(course.subjectId)}
-              enrolled={enrolledCourseIds.has(course.id)}
-            />
-          ))}
-        </div>
+        cards(availableCourses)
       )}
     </div>
   );

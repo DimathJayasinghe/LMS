@@ -9,6 +9,7 @@ import {
 	enrollmentIdParamSchema,
 	listEnrollmentsQuerySchema,
 	listMyEnrollmentsQuerySchema,
+	learningCourseParamSchema,
 } from '@/schemas/enrollment.schema';
 
 export const createEnrollment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -40,6 +41,21 @@ export const listMyEnrollments = asyncHandler(async (req: Request, res: Response
 		count: enrollments.length,
 	});
 });
+
+export const listMyLearningCourses = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const courses = await EnrollmentService.listMyLearningCourses(req.user!.userId);
+		res.status(200).json({ status: 'success', data: courses, count: courses.length });
+	},
+);
+
+export const markCourseContentSeen = asyncHandler(
+	async (req: Request, res: Response): Promise<void> => {
+		const { courseId } = learningCourseParamSchema.parse(req.params);
+		const progress = await EnrollmentService.markCourseContentSeen(req.user!.userId, courseId);
+		res.status(200).json({ status: 'success', data: progress });
+	},
+);
 
 export const listEnrollments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const query = listEnrollmentsQuerySchema.parse(req.query);

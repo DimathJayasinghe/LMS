@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StaffScanner } from "./StaffScanner";
 import { ApiError } from "@/lib/api";
-import type { AttendanceRecord, ClassSession, Course, User } from "@/lib/types";
+import type { AttendanceRecord, ClassSession, Course, Institute, User } from "@/lib/types";
 
 const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 
@@ -12,7 +12,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...actual, api: { get, post, patch: vi.fn(), upload: vi.fn(), del: vi.fn() } };
 });
 // Isolate the webcam (getUserMedia/zxing can't run in jsdom).
-vi.mock("./QrCamera", () => ({ QrCamera: () => null }));
+vi.mock("@/components/custom/QrCamera", () => ({
+  QrCamera: ({ onDecode }: { onDecode: (value: string) => void }) => (
+    <button type="button" onClick={() => onDecode("LMS-QR-042")}>Decode QR</button>
+  ),
+}));
 
 const classes: Course[] = [
   {
@@ -28,6 +32,18 @@ const classes: Course[] = [
   },
 ];
 
+const institutes: Institute[] = [
+  {
+    id: "22222222-2222-4222-8222-222222222222",
+    name: "Nugegoda Centre",
+    code: "NUG",
+    city: "Nugegoda",
+    isActive: true,
+    createdAt: "",
+    updatedAt: "",
+  },
+];
+
 const sessions: ClassSession[] = [
   {
     id: "s1",
@@ -35,6 +51,7 @@ const sessions: ClassSession[] = [
     classType: "PHYSICAL",
     date: new Date().toISOString(),
     durationMinutes: 60,
+    liveScheduled: false,
     courseId: "c1",
     createdAt: "",
     updatedAt: "",
@@ -69,6 +86,7 @@ beforeEach(() => {
 });
 
 async function pickSession(user: ReturnType<typeof userEvent.setup>) {
+  await user.selectOptions(screen.getByLabelText("Select institute"), institutes[0]!.id);
   await user.selectOptions(screen.getByLabelText("Select class"), "c1");
   await screen.findByRole("option", { name: /Lecture 1/ });
   await user.selectOptions(screen.getByLabelText("Select session"), "s1");
@@ -77,8 +95,9 @@ async function pickSession(user: ReturnType<typeof userEvent.setup>) {
 describe("StaffScanner — session gating", () => {
   it("disables the scan field until a session is picked, then enables it", async () => {
     const user = userEvent.setup();
-    render(<StaffScanner classes={classes} />);
+    render(<StaffScanner classes={classes} institutes={institutes} />);
     expect(screen.getByLabelText("Scan code")).toBeDisabled();
+    expect(screen.getByLabelText("Select class")).toBeDisabled();
     await pickSession(user);
     expect(screen.getByLabelText("Scan code")).toBeEnabled();
   });
@@ -88,7 +107,7 @@ describe("StaffScanner — wedge scan", () => {
   it("POSTs the scan on Enter and adds the student to the roster", async () => {
     post.mockResolvedValue({ data: rec("a1", "u1", "Nimal", 42) });
     const user = userEvent.setup();
-    render(<StaffScanner classes={classes} />);
+    render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);
 
     await user.type(screen.getByLabelText("Scan code"), "LMS-042{Enter}");
@@ -96,6 +115,8 @@ describe("StaffScanner — wedge scan", () => {
     expect(post).toHaveBeenCalledWith("/attendance/scan", {
       barcode: "LMS-042",
       classSessionId: "s1",
+      instituteId: institutes[0]!.id,
+      source: "BARCODE",
     });
     expect(await screen.findByText("Nimal")).toBeInTheDocument();
     expect(screen.getByText(/checked in/)).toBeInTheDocument();
@@ -104,7 +125,7 @@ describe("StaffScanner — wedge scan", () => {
   it("maps BARCODE_NOT_FOUND to an inline error and leaves the roster empty", async () => {
     post.mockRejectedValueOnce(new ApiError(404, "nope", "BARCODE_NOT_FOUND"));
     const user = userEvent.setup();
-    render(<StaffScanner classes={classes} />);
+    render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);
 
     await user.type(screen.getByLabelText("Scan code"), "BAD{Enter}");
@@ -114,7 +135,7 @@ describe("StaffScanner — wedge scan", () => {
   it("dedupes the roster when the same student is scanned twice", async () => {
     post.mockResolvedValue({ data: rec("a1", "u1", "Nimal", 42) });
     const user = userEvent.setup();
-    render(<StaffScanner classes={classes} />);
+    render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);
 
     const scan = screen.getByLabelText("Scan code");
@@ -127,11 +148,46 @@ describe("StaffScanner — wedge scan", () => {
   });
 });
 
+describe("StaffScanner - camera scan", () => {
+  it("tags a camera decode as QR", async () => {
+    post.mockResolvedValue({ data: { ...rec("a1", "u1", "Nimal", 42), source: "QR" } });
+    const user = userEvent.setup();
+    render(<StaffScanner classes={classes} institutes={institutes} />);
+    await pickSession(user);
+
+    await user.click(screen.getByRole("button", { name: "Turn camera on" }));
+    await user.click(screen.getByRole("button", { name: "Decode QR" }));
+
+    expect(post).toHaveBeenCalledWith("/attendance/scan", {
+      barcode: "LMS-QR-042",
+      classSessionId: "s1",
+      instituteId: institutes[0]!.id,
+      source: "QR",
+    });
+    expect(await screen.findByText("QR scan")).toBeInTheDocument();
+  });
+
+  it("shows a session/institute mismatch as an actionable error", async () => {
+    post.mockRejectedValueOnce(
+      new ApiError(409, "mismatch", "SESSION_INSTITUTE_MISMATCH"),
+    );
+    const user = userEvent.setup();
+    render(<StaffScanner classes={classes} institutes={institutes} />);
+    await pickSession(user);
+
+    await user.type(screen.getByLabelText("Scan code"), "INST-001{Enter}");
+
+    expect(
+      await screen.findByText("This session is scheduled at a different institute."),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("StaffScanner — manual mark", () => {
   it("searches students and marks the chosen one via /attendance/manual", async () => {
     post.mockResolvedValue({ data: rec("a2", "u9", "Kamal", 99) });
     const user = userEvent.setup();
-    render(<StaffScanner classes={classes} />);
+    render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);
 
     await user.type(screen.getByLabelText("Search student"), "Kamal");

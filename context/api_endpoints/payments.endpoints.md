@@ -4,7 +4,11 @@
 
 > **Roles (2026-07-09)**: enum is `SUPER_ADMIN/TEACHER/ADMIN/MARKER/STUDENT`. Below, `ADMIN` = **`SUPER_ADMIN`** and `STAFF` = **`ADMIN`** (front-desk). `PATCH /:id/override` is `SUPER_ADMIN` only.
 >
-> **New**: `Payment.method` (`ONLINE` | `ENTRANCE` | `BULK` | `MANUAL`) + `collectedById` (staff who took an `ENTRANCE`/`MANUAL` payment). A dedicated pay-at-entrance endpoint is a follow-up.
+> `Payment.status` is `PENDING | SUCCESS | FAILED | REFUNDED`. `amount` is the original gross
+> amount; `refundedAmount` is the sum of completed refunds. Financial totals report the net retained
+> amount. A fully refunded row is terminal and cannot be reused by PayHere, entrance, bulk, or override flows.
+
+> **Channels.** Implemented: `ONLINE` (PayHere, endpoints 1–2), `ENTRANCE` (front desk or branch, endpoint 8), `BULK` (endpoint 7), `MANUAL` (override, endpoint 6). **Planned, not implemented (2026-11-19):** `BANK_TRANSFER` — a student uploads a bank-transfer slip, `ADMIN`/`SUPER_ADMIN` approve or reject it, and approval settles the month. The routes (`/api/payments/slips…`), states and edge cases are specified in [`docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md`](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §3. Do not call them yet.
 
 ### 1. Initiate Payment (PayHere Checkout)
 Generates the payload required to redirect a student to PayHere checkout.
@@ -56,7 +60,7 @@ Callback endpoint for PayHere to notify the system of payment status changes.
 
 - **URL:** `/payhere/notify`
 - **Method:** `POST`
-- **Auth:** None (Public, verified via PayHere MD5 signature)
+- **Auth:** None (Public, verified via PayHere MD5 signature using a constant-time comparison)
 - **Body:** (PayHere Notification POST Data)
   ```json
   {
@@ -84,7 +88,7 @@ Allows a student to view their own payment history.
 - **Method:** `GET`
 - **Auth:** Required (Role: `STUDENT`)
 - **Query Params:**
-  - `status`: `PENDING` | `SUCCESS` | `FAILED` (optional)
+  - `status`: `PENDING` | `SUCCESS` | `FAILED` | `REFUNDED` (optional)
   - `paymentMonth`: `YYYY-MM` (optional)
   - `enrollmentId`: `uuid` (optional)
 - **Success Response (200 OK):**
@@ -132,12 +136,58 @@ Aggregate one month's payments for the admin dashboard.
       "collectedTotal": "22000.00",
       "paidCount": 7,
       "pendingCount": 1,
-      "failedCount": 0
+      "failedCount": 0,
+      "refundedCount": 1
     }
   }
   ```
-  > `collectedTotal` sums `amount` over `status = SUCCESS` for the month. Route is registered
+  > `collectedTotal` sums `amount - refundedAmount` over `status = SUCCESS` for the month. Fully
+  > refunded rows are excluded and reported by `refundedCount`. Route is registered
   > **before** `GET /:id` so `summary` isn't parsed as a payment id.
+
+### 4c. Financial Report (Super Admin / Teacher)
+Aggregate financial analytics powering the `/admin/reports` page. Teachers are always restricted to
+their own classes; super admins may inspect institution, teacher, or class totals.
+
+- **URL:** `/reports`
+- **Method:** `GET`
+- **Auth:** Required (Role: `SUPER_ADMIN`, `TEACHER`; front-desk `ADMIN` is bounced with 403)
+- **Query Params:**
+  - `month` (optional, `YYYY-MM`; defaults to the current payment month)
+  - `teacherId` (optional UUID; `SUPER_ADMIN` only in effect)
+  - `courseId` (optional UUID; combined with the authenticated teacher's ownership for `TEACHER`)
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "month": "2026-07",
+      "trend": [
+        { "month": "2025-08", "collected": "0.00", "paidCount": 0 },
+        { "month": "2026-07", "collected": "39500.00", "paidCount": 13 }
+      ],
+      "byCourse": [
+        { "courseId": "…", "name": "Chemistry", "year": 2026, "collected": "7000.00", "paidCount": 2 }
+      ],
+      "byTeacher": [
+        { "teacherId": "…", "name": "Ms Perera", "collected": "18000.00", "paidCount": 6 }
+      ],
+      "byMethod": [
+        { "method": "ONLINE", "collected": "26000.00", "paidCount": 8 }
+      ],
+      "outstanding": { "count": 9, "expected": "28000.00" }
+    }
+  }
+  ```
+  > `trend` is always exactly **12 entries**, oldest→newest, ending at `month`, zero-filled where a
+  > month has no `SUCCESS` payments. `trend`/`byCourse`/`byTeacher`/`byMethod` subtract completed partial refunds
+  > from `SUCCESS` payments for `month`
+  > (byCourse sorted by collected desc). `outstanding` counts **active** enrolments with no `SUCCESS`
+  > payment for `month`, and sums their course `monthlyFee` as `expected`. All money values are
+  > decimal strings (`"N.NN"`). Route is registered **before** `GET /:id` so `reports` isn't parsed
+  > as a payment id. The endpoint deliberately returns aggregates only, never individual student
+  > payment histories. A teacher-supplied `teacherId` is ignored and replaced by the authenticated
+  > teacher ID server-side, so query manipulation cannot expand ownership scope.
 
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.
@@ -164,10 +214,14 @@ Allows admins to list and filter all payments in the system.
 
 ### 6. Override Payment (Admin)
 Allows an admin to manually update a payment status or amount (e.g., for physical payments).
+Sets `method: MANUAL` and `collectedById` to the acting admin's id.
 
 - **URL:** `/:id/override`
 - **Method:** `PATCH`
 - **Auth:** Required (Role: `ADMIN`)
+- **Headers:** `Idempotency-Key: <uuid>` **required** — a fresh v4 UUID per request. Missing or
+  malformed keys return 400; replaying the same key returns the original stored response. The
+  SUPER_ADMIN payment-record UI sends one key per reviewed override action.
 - **Body:**
   ```json
   {
@@ -176,14 +230,79 @@ Allows an admin to manually update a payment status or amount (e.g., for physica
     "note": "Paid cash at center"
   }
   ```
+  `note` is required (3–500 characters) because it becomes the immutable ledger reason. `REFUNDED`
+  cannot be selected through override; only the completed-refund endpoint can produce that status.
+  The `/payments` record table exposes this action only to `SUPER_ADMIN`. The review form starts
+  from the current status and amount, requires a fresh reason, validates positive amounts and the 500-character note
+  limit, preserves values on failure, and refreshes the server-rendered record after success.
+
+### 6b. List Payment Adjustments
+
+- **URL:** `/:id/adjustments`
+- **Method:** `GET`
+- **Auth:** `SUPER_ADMIN`, `ADMIN`, or owning `STUDENT`
+- **Response:** append-only `OVERRIDE`/`REFUND` events with before/after status and amount snapshots,
+  reason, optional external reference, actor, and creation time. Students are self-scoped.
+
+### 6c. Record a Completed Refund
+
+Records money that a SUPER_ADMIN has **already returned outside the LMS**. It does not call PayHere,
+a bank, or a cash-payment provider.
+
+- **URL:** `/:id/refunds`
+- **Method:** `POST`
+- **Auth:** `SUPER_ADMIN` only
+- **Headers:** `Idempotency-Key: <uuid>` required
+- **Body:**
+  ```json
+  {
+    "amount": 500,
+    "reason": "Duplicate collection",
+    "externalReference": "PAYHERE-REF-123"
+  }
+  ```
+- A partial refund keeps `SUCCESS`; refunding the exact remaining balance changes the payment to
+  `REFUNDED`, which removes paid-content access. Total refunds cannot exceed the gross amount.
+- Errors: `PAYMENT_NOT_FOUND` (404), `PAYMENT_NOT_REFUNDABLE` (409),
+  `REFUND_EXCEEDS_REMAINING` (409), `REFUND_CONFLICT` (409).
 
 ### 7. Bulk Upload Payments (Admin)
-Upload an Excel file to process multiple payments at once.
+Upload an Excel file to process multiple payments at once. Sets `method: BULK` on every row
+written or updated.
 
 - **URL:** `/bulk-upload`
 - **Method:** `POST`
 - **Auth:** Required (Role: `ADMIN`, `STAFF`)
+- **Headers:** `Idempotency-Key: <uuid>` **required** — a fresh v4 UUID per request. Missing or
+  malformed keys return 400; replaying the same key returns the original stored response.
 - **Body:** `multipart/form-data` with `file` field.
+
+### 8. Collect Entrance Payment (Admin/Staff)
+Records a cash/in-person payment collected at the physical center, without going through
+PayHere. Upserts: a missing or PENDING/FAILED row is written to `SUCCESS`/`ENTRANCE`; a
+confirmed **online** `SUCCESS` (has a `payhereId`) is refused rather than overwritten — use
+`/override` to correct an online payment.
+
+- **URL:** `/collect-entrance`
+- **Method:** `POST`
+- **Auth:** Required (Role: `SUPER_ADMIN`, `ADMIN`)
+- **Headers:** `Idempotency-Key: <uuid>` **required**.
+- **Body:**
+  ```json
+  {
+    "enrollmentId": "uuid",
+    "paymentMonth": "YYYY-MM",
+    "amount": 2500,
+    "collectedAtInstituteId": "uuid",
+    "collectedViaBarcode": "NUG-00123"
+  }
+  ```
+  `amount` optional (defaults to the course's `monthlyFee`). `collectedAtInstituteId`/
+  `collectedViaBarcode` optional — present only when the student was identified via
+  `GET /users/resolve-barcode` (see `users.endpoints.md`) rather than a name/index search.
+- **Success Response (200 OK):** the `Payment` (same shape as `/override`'s response).
+- **Errors:** `404 ENROLLMENT_NOT_FOUND`, `400 ENROLLMENT_NOT_ACTIVE`, `400 FUTURE_MONTH`
+  (cannot collect for a month after the current payment month), `409 ALREADY_PAID_ONLINE`.
 
 ---
 

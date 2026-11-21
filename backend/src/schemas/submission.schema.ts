@@ -28,6 +28,8 @@ export type WrittenAnswersInput = z.infer<typeof writtenAnswersSchema>;
 
 export const startSubmissionSchema = z.object({
   examId: z.string().uuid(),
+  // Required by scoped instances; ignored for legacy course-wide exams.
+  audienceId: z.string().uuid().optional(),
   // For WRITTEN/HYBRID — client provides file metadata to get a presigned upload URL
   fileName: z
     .string()
@@ -50,6 +52,15 @@ export const startSubmissionSchema = z.object({
 });
 
 export type StartSubmissionInput = z.infer<typeof startSubmissionSchema>;
+
+// Body for completing a submission. `key` (the presigned answer-PDF key) is
+// present for the PDF channel — the server HeadObject-verifies it landed in R2
+// before persisting `answerPdfUrl`. Absent for MCQ/typed-only completions.
+export const completeSubmissionBodySchema = z.object({
+  key: z.string().trim().min(1).max(300).optional(),
+});
+
+export type CompleteSubmissionInput = z.infer<typeof completeSubmissionBodySchema>;
 
 // ─── List My Submissions (Student) ─────────────────────────
 
@@ -94,6 +105,14 @@ export const submitMarksSchema = z.object({
 });
 
 export type SubmitMarksInput = z.infer<typeof submitMarksSchema>;
+
+export const correctPublishedResultSchema = z.object({
+  marks: z.coerce.number().int().min(0),
+  feedback: z.string().trim().max(2000).nullable().optional(),
+  reason: z.string().trim().min(5).max(500),
+});
+
+export type CorrectPublishedResultInput = z.infer<typeof correctPublishedResultSchema>;
 
 // ─── Publish Results ────────────────────────────────────────
 
