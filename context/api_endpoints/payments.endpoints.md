@@ -182,12 +182,75 @@ their own classes; super admins may inspect institution, teacher, or class total
   > `trend` is always exactly **12 entries**, oldest→newest, ending at `month`, zero-filled where a
   > month has no `SUCCESS` payments. `trend`/`byCourse`/`byTeacher`/`byMethod` subtract completed partial refunds
   > from `SUCCESS` payments for `month`
-  > (byCourse sorted by collected desc). `outstanding` counts **active** enrolments with no `SUCCESS`
-  > payment for `month`, and sums their course `monthlyFee` as `expected`. All money values are
+  > (byCourse sorted by collected desc). `outstanding` counts the same enrolments as `GET /outstanding`
+  > (section 4d: active, active course, student not deactivated, enrolled in or before `month`, no `SUCCESS`
+  > payment for `month`) and sums their month fee as `expected`; for a teacher it covers their own courses. All money values are
   > decimal strings (`"N.NN"`). Route is registered **before** `GET /:id` so `reports` isn't parsed
   > as a payment id. The endpoint deliberately returns aggregates only, never individual student
   > payment histories. A teacher-supplied `teacherId` is ignored and replaced by the authenticated
   > teacher ID server-side, so query manipulation cannot expand ownership scope.
+
+### 4d. Who Owes (Admin / Super Admin)
+
+Active enrolments that have no paid fee for a month, for the front desk to chase and the owner to review (finding F-10; F-78 fixed here too).
+Registered **before** `GET /:id`, with the two routes below.
+
+- **URL:** `/outstanding`
+- **Method:** `GET`
+- **Auth:** Required (Role: `SUPER_ADMIN`, `ADMIN`; `TEACHER`, `MARKER`, `STUDENT` get 403)
+- **Query Params:** `month` (optional `YYYY-MM`, default the current month in the organization time zone; a month that has not started is `400 MONTH_IN_FUTURE`), `courseId` (optional UUID), `page` (default 1), `limit` (default 50, max 200)
+- **Success Response (200 OK), `Cache-Control: no-store`:**
+  ```json
+  {
+    "status": "success",
+    "month": "2026-11",
+    "count": 5,
+    "data": [
+      {
+        "enrollmentId": "uuid", "studentId": "uuid", "studentName": "Nimal Perera", "indexNumber": 1001,
+        "phone": "0771234567", "courseId": "uuid", "courseName": "Physics", "classType": "PHYSICAL",
+        "monthsOwed": 3, "amount": "1500.00", "totalOwed": "4500.00",
+        "inGrace": false, "graceUntil": "2026-11-10"
+      }
+    ]
+  }
+  ```
+  > **Who counts as owing:** an active enrolment of an active course, for a student who is not deactivated, created in or before
+  > `month` (in the organization time zone), with no `SUCCESS` payment for `month`. A `PENDING`, `FAILED` or `REFUNDED` row is not a payment.
+  > The same filter feeds the `outstanding` figure of the financial report (4c), so the two always agree. `monthsOwed` counts unpaid months
+  > inside the last `fees.arrearsReportMonths` months (default 3, at least the requested month) that fall on or after the month the student enrolled.
+  > `amount` is the fee for `month` and `totalOwed` the fee of every owed month, both from the single fee function (`month-fee.service.ts`, today the
+  > course `monthlyFee`; D-MONEY-2 swaps that one call). `inGrace` follows the content-gate rule: only for the current month, inside the first
+  > `fees.graceDays` days, with the previous month paid when `fees.graceRequiresPreviousMonthPaid` is on, and never after a refund of the current month;
+  > `graceUntil` is the last grace day (null for past months or when grace is off). `phone` is the student's own mobile until guardians exist (D-IDENTITY-2).
+  > Rows are ordered by course name then index number and carry no email, NIC or address. The branch filter waits for `Course.instituteId` (Wave 2).
+
+#### GET `/outstanding/export` (Super Admin only)
+
+CSV of the same list for one month and optionally one course (`month`, `courseId`). `ADMIN` gets 403. Columns: index number, student, mobile, course,
+mode, months owed, fee per month, total owed, in grace. Text that starts with `=`, `+`, `-`, `@`, tab or CR gets a leading apostrophe so a spreadsheet
+cannot run it. `Content-Disposition: attachment; filename="outstanding-<month>.csv"`, `Cache-Control: no-store`. One audit row `OUTSTANDING_EXPORTED`
+(month, course, row count; no student data) is written before the file is returned. More than 20,000 rows is `409 EXPORT_TOO_LARGE` (choose a course).
+
+#### POST `/outstanding/reminders` (Admin / Super Admin)
+
+Manual fee reminders. **Required header:** `Idempotency-Key: <uuid>`.
+
+```json
+{ "month": "2026-11", "courseId": "uuid", "enrollmentIds": ["uuid"] }
+```
+
+Send `courseId` (everyone owing in that course), `enrollmentIds` (up to 500; with `courseId` each must belong to it) or both; neither is a 400, unknown fields are a 400.
+Success `200`: `{ "data": { "sent": 2, "skipped": [{ "enrollmentId": "uuid", "reason": "IN_GRACE" }] } }`. `sent` counts reminders, one per student however many courses owe
+(the message names the first course and "and N more"). Skip reasons: `NOT_OWING` (a chosen enrolment that no longer owes), `IN_GRACE`, `REMINDER_LIMIT_REACHED`.
+
+- Sent through `NotificationService.dispatch` as `FEE_DUE`. The in-app row is always created (it is the record the limit is counted from); the SMS goes only if the `FEE_DUE` SMS
+  setting is on (seeded **off**, see `notifications.endpoints.md`) and the student has a mobile.
+- Only from day `fees.reminderFromDay` (default 11) of the month, counted in Colombo: earlier is `409 REMINDER_TOO_EARLY`. `fees.reminderMaxPerStudentPerMonth` (default 1, 0 switches reminders off with
+  `409 REMINDERS_DISABLED`) caps reminders per student per Colombo month, counted from the `Notification` rows under a per-month advisory lock, so two desks pressing together cannot both pass the cap.
+- A student in the grace days is never reminded. SMS quiet hours (21:00-07:00) are **not enforced yet** (they arrive with the SMS settings in a later wave); keep the SMS setting off outside a trial.
+- One audit row `FEE_REMINDER_SENT` per request: month, course, `sent` and skip counts only.
+- Errors: 400 validation or `MONTH_IN_FUTURE`; 403; 404 `ENROLLMENT_NOT_FOUND` (an id that does not exist or is not in the given course; nothing is sent); 409 `REMINDER_TOO_EARLY`, `REMINDERS_DISABLED`.
 
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.

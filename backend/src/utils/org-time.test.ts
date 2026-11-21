@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billingMonthOf, colomboDayOf, dayOfMonthInTz, dayRangeInTz } from './org-time';
+import { billingMonthOf, colomboDayOf, dayOfMonthInTz, dayRangeInTz, monthStartInTz, monthsEndingAt, shiftMonth } from './org-time';
 
 const tz = 'Asia/Colombo';
 
@@ -17,5 +17,22 @@ describe('organization time', () => {
     const range = dayRangeInTz('2026-02-28', tz);
     expect(range.start.toISOString()).toBe('2026-02-27T18:30:00.000Z');
     expect(range.end.toISOString()).toBe('2026-02-28T18:30:00.000Z');
+  });
+
+  it('shifts a billing month across year boundaries', () => {
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12');
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01');
+    expect(shiftMonth('2026-05', 0)).toBe('2026-05');
+    expect(shiftMonth('2026-03', -14)).toBe('2025-01');
+  });
+
+  it('lists the months ending at a month, oldest first', () => {
+    expect(monthsEndingAt('2026-02', 3)).toEqual(['2025-12', '2026-01', '2026-02']);
+    expect(monthsEndingAt('2026-02', 1)).toEqual(['2026-02']);
+  });
+
+  it('returns the first instant of a billing month in the organization zone', () => {
+    expect(monthStartInTz('2026-02', tz).toISOString()).toBe('2026-01-31T18:30:00.000Z');
+    expect(monthStartInTz('2026-12', tz).toISOString()).toBe('2026-11-30T18:30:00.000Z');
   });
 });

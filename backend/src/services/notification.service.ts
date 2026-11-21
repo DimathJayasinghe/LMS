@@ -36,6 +36,8 @@ interface DispatchParams {
 	userId: string;
 	link?: string;
 	params: Record<string, string>;
+	/** Create the in-app row whatever the IN_APP setting says; used where a durable row is the record (fee reminders). */
+	forceInApp?: boolean;
 }
 
 /**
@@ -51,10 +53,9 @@ export const dispatch = async (input: DispatchParams): Promise<void> => {
 	const template = NOTIFICATION_TEMPLATES[input.type];
 
 	try {
-		const inAppEnabled = await NotificationSettingService.isChannelEnabled(
-			input.type,
-			NotificationChannel.IN_APP,
-		);
+		const inAppEnabled =
+			input.forceInApp ||
+			(await NotificationSettingService.isChannelEnabled(input.type, NotificationChannel.IN_APP));
 
 		if (inAppEnabled) {
 			const notification = await prisma.notification.create({

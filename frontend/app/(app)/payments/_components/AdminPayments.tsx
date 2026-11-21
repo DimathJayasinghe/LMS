@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,12 @@ export function AdminPayments({
             </option>
           ))}
         </select>
+        <Link
+          href={`/payments/owing?month=${month}`}
+          className="ml-auto inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
+        >
+          Who owes
+        </Link>
       </div>
 
       {/* Records */}

@@ -28,6 +28,8 @@ const ALL_ROWS = [
 	{ type: NotificationType.PAYMENT_CONFIRMED, channel: NotificationChannel.SMS },
 	{ type: NotificationType.PAYMENT_OVERRIDDEN, channel: NotificationChannel.IN_APP },
 	{ type: NotificationType.PAYMENT_OVERRIDDEN, channel: NotificationChannel.SMS },
+	{ type: NotificationType.FEE_DUE, channel: NotificationChannel.IN_APP },
+	{ type: NotificationType.FEE_DUE, channel: NotificationChannel.SMS },
 ];
 
 beforeEach(() => {
@@ -43,14 +45,41 @@ describe('listSettings — seeds missing combinations', () => {
 		expect(createManySettings).not.toHaveBeenCalled();
 	});
 
-	it('seeds exactly the missing combinations, defaulting to enabled=true', async () => {
+	it('seeds exactly the missing combinations', async () => {
 		findManySettings.mockResolvedValueOnce([ALL_ROWS[0]]); // only one row exists
 		await listSettings();
 
 		expect(createManySettings).toHaveBeenCalledTimes(1);
 		const { data } = createManySettings.mock.calls[0]![0];
-		expect(data).toHaveLength(5);
-		expect(data.every((row: { enabled: boolean }) => row.enabled === true)).toBe(true);
+		expect(data).toHaveLength(ALL_ROWS.length - 1);
+		expect(data).not.toContainEqual(expect.objectContaining({ type: NotificationType.RESULTS_PUBLISHED, channel: NotificationChannel.IN_APP }));
+	});
+
+	it('seeds the three launch types enabled on both channels', async () => {
+		findManySettings.mockResolvedValueOnce([]);
+		await listSettings();
+
+		const { data } = createManySettings.mock.calls[0]![0] as { data: { type: NotificationType; channel: NotificationChannel; enabled: boolean }[] };
+		for (const type of [NotificationType.RESULTS_PUBLISHED, NotificationType.PAYMENT_CONFIRMED, NotificationType.PAYMENT_OVERRIDDEN]) {
+			expect(data.filter((row) => row.type === type).every((row) => row.enabled)).toBe(true);
+		}
+	});
+
+	it('seeds the fee reminder with the in-app row on and SMS off until the owner turns it on', async () => {
+		findManySettings.mockResolvedValueOnce([]);
+		await listSettings();
+
+		const { data } = createManySettings.mock.calls[0]![0] as { data: { type: NotificationType; channel: NotificationChannel; enabled: boolean }[] };
+		expect(data).toContainEqual({ type: NotificationType.FEE_DUE, channel: NotificationChannel.IN_APP, enabled: true });
+		expect(data).toContainEqual({ type: NotificationType.FEE_DUE, channel: NotificationChannel.SMS, enabled: false });
+	});
+
+	it('leaves a row the owner already changed untouched', async () => {
+		findManySettings.mockResolvedValueOnce(ALL_ROWS.filter((row) => !(row.type === NotificationType.FEE_DUE && row.channel === NotificationChannel.SMS)));
+		await listSettings();
+
+		const { data } = createManySettings.mock.calls[0]![0];
+		expect(data).toEqual([{ type: NotificationType.FEE_DUE, channel: NotificationChannel.SMS, enabled: false }]);
 	});
 });
 

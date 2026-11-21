@@ -80,7 +80,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-PAY-06 | Other local wallets (LankaQR, FriMi, Genie) | Gap | Only via whatever PayHere exposes |
 | R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | The `access.service.ts` coverage gate uses the organization billing month and configurable grace (`fees.graceDays`=10); full coverage function and `AccessException` in Wave 2b T6 (D-MONEY-1) |
 | R-PAY-08 | Refunds and adjustments with an audit trail | Done | `PaymentAdjustment` immutable ledger; provider-executed refunds planned |
-| R-PAY-09 | Defaulter list and automatic reminders | Planned | D-OPS-1 who-owes and manual reminders, Wave 1 Task 5 |
+| R-PAY-09 | Defaulter list and automatic reminders | Partial | Who-owes list, owner CSV export and manual fee reminders are built (D-OPS-1, F-10, F-78, #111, unreleased); automatic reminders (`fees.autoReminderEnabled`), the guardian number and the branch filter are planned |
 | R-PAY-10 | Teacher/institute revenue share or commission | Planned | D-MONEY-8, Wave 2f T31. Audit 2026-11-19: F-91. |
 | R-PAY-11 | Advance payment, multi-month, installments | Planned | Phase G; explicitly out of the slip spec |
 | R-PAY-12 | Per-mode fees (online / physical / hybrid) | Planned | Decided 2026-11-20 (D-MONEY-2): effective-dated `CourseFee`; `onlineFee` and `hybridFee` nullable and fall back to `monthlyFee`; Wave 2b T4 |

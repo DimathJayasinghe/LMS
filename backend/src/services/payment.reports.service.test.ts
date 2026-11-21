@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma, Role } from '@prisma/client';
 
-const { paymentGroupBy, queryRaw } = vi.hoisted(() => ({
+const { paymentGroupBy, queryRaw, countOutstanding, organizationClockForUser } = vi.hoisted(() => ({
 	paymentGroupBy: vi.fn(),
 	queryRaw: vi.fn(),
+	countOutstanding: vi.fn(),
+	organizationClockForUser: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
@@ -13,6 +15,8 @@ vi.mock('@/config/database', () => ({
 	},
 }));
 vi.mock('@/services/notification.service', () => ({ dispatch: vi.fn() }));
+vi.mock('@/services/outstanding.service', () => ({ countOutstanding }));
+vi.mock('@/services/organization-clock.service', () => ({ organizationClockForUser }));
 
 import { getFinancialReport } from './payment.service';
 
@@ -23,6 +27,8 @@ const teacher = { userId: 'teacher-1', role: Role.TEACHER };
 beforeEach(() => {
 	paymentGroupBy.mockReset();
 	queryRaw.mockReset();
+	countOutstanding.mockReset().mockResolvedValue({ count: 0, expected: '0.00' });
+	organizationClockForUser.mockReset().mockResolvedValue({ organizationId: 'org', timezone: 'Asia/Colombo' });
 });
 
 describe('getFinancialReport', () => {
@@ -48,8 +54,8 @@ describe('getFinancialReport', () => {
 			]);
 		queryRaw
 			.mockResolvedValueOnce([{ id: 'c1', name: 'Physics', year: 2026, total: '5000', cnt: 3n }])
-			.mockResolvedValueOnce([{ id: 't1', name: 'Dr Silva', total: '5000', cnt: 3n }])
-			.mockResolvedValueOnce([{ cnt: 4n, expected: '12000' }]);
+			.mockResolvedValueOnce([{ id: 't1', name: 'Dr Silva', total: '5000', cnt: 3n }]);
+		countOutstanding.mockResolvedValue({ count: 4, expected: '12000.00' });
 
 		const r = await getFinancialReport('2026-07', {}, superAdmin);
 
@@ -83,10 +89,7 @@ describe('getFinancialReport', () => {
 
 	it('handles an empty month (no payments, nothing outstanding)', async () => {
 		paymentGroupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-		queryRaw
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([{ cnt: 0n, expected: 0 }]);
+		queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
 		const r = await getFinancialReport('2026-01', {}, superAdmin);
 		expect(r.trend).toHaveLength(12);
@@ -99,7 +102,7 @@ describe('getFinancialReport', () => {
 
 	it('forces teacher reports to the authenticated teacher even when another teacher is requested', async () => {
 		paymentGroupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-		queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+		queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
 		await getFinancialReport(
 			'2026-07',
@@ -120,5 +123,29 @@ describe('getFinancialReport', () => {
 				}),
 			}),
 		);
+	});
+
+	it('hands the outstanding count the organization, its time zone, the month and the same course scope', async () => {
+		paymentGroupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+		queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+		await getFinancialReport('2026-07', {}, teacher);
+
+		expect(countOutstanding).toHaveBeenCalledWith({
+			organizationId: 'org', timezone: 'Asia/Colombo', month: '2026-07', courseWhere: { teacherId: teacher.userId },
+		});
+	});
+
+	it('defaults the month to the current organization month', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-07-31T19:00:00Z')); // already 1 August in Colombo
+		paymentGroupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+		queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+		const r = await getFinancialReport(undefined, {}, superAdmin);
+		vi.useRealTimers();
+
+		expect(r.month).toBe('2026-08');
+		expect(countOutstanding).toHaveBeenCalledWith(expect.objectContaining({ month: '2026-08' }));
 	});
 });

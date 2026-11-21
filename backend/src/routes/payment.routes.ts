@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { Role } from '@prisma/client';
 import * as PaymentController from '@/controllers/payment.controller';
+import * as OutstandingController from '@/controllers/outstanding.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
@@ -17,6 +18,7 @@ import {
 	paymentsSummaryQuerySchema,
 	financialReportQuerySchema,
 } from '@/schemas/payment.schema';
+import { outstandingExportQuerySchema, outstandingQuerySchema, sendFeeRemindersSchema } from '@/schemas/outstanding.schema';
 import { PAYMENTS_BULK_UPLOAD_MAX_BYTES } from '@/utils/constants';
 
 export const paymentRoutes = Router();
@@ -103,6 +105,33 @@ paymentRoutes.get(
 	requireRole(Role.SUPER_ADMIN, Role.TEACHER),
 	validateQuery(financialReportQuerySchema),
 	PaymentController.getFinancialReport,
+);
+
+// ─── Who owes (Admin/Super Admin; export Super Admin only) ─
+// Registered BEFORE '/:id' so "outstanding" isn't captured as an id param.
+paymentRoutes.get(
+	'/outstanding',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateQuery(outstandingQuerySchema),
+	OutstandingController.listOutstanding,
+);
+
+paymentRoutes.get(
+	'/outstanding/export',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN),
+	validateQuery(outstandingExportQuerySchema),
+	OutstandingController.exportOutstanding,
+);
+
+paymentRoutes.post(
+	'/outstanding/reminders',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateBody(sendFeeRemindersSchema),
+	checkIdempotency,
+	OutstandingController.sendFeeReminders,
 );
 
 // ─── Get Payment by Id (Owner/Admin/Staff) ────────────────

@@ -30,7 +30,9 @@ is the single entry point for every notification-worthy event. It:
 Current triggers: `RESULTS_PUBLISHED` (one per student who submitted, fired from
 `submission.service.ts::publishResults`), `PAYMENT_CONFIRMED` (fired from
 `payment.service.ts::handlePayhereNotify` when status becomes `SUCCESS`), `PAYMENT_OVERRIDDEN`
-(fired from `payment.service.ts::overridePayment`).
+(fired from `payment.service.ts::overridePayment`), `FEE_DUE` (manual fee reminders from
+`fee-reminder.service.ts`, see `payments.endpoints.md` 4d; dispatched with `forceInApp: true`, so the in-app row exists whatever the
+`IN_APP` setting says and the monthly reminder limit can be counted from it).
 
 > **Refactor note:** `payment.controller.ts` previously had its own `sendPaymentConfirmationSms`/
 > `sendPaymentOverrideSms` helpers calling `SmsNotificationService.sendSms` directly, with no
@@ -43,8 +45,10 @@ Current triggers: `RESULTS_PUBLISHED` (one per student who submitted, fired from
 
 Adding a new scenario: add a `NotificationType` enum value in `schema.prisma`, add a matching entry
 to `NOTIFICATION_TEMPLATES` in `backend/src/utils/constants.ts` (`{ title, inApp, sms }`, mustache
-`{placeholder}` tokens), call `dispatch(...)` from the triggering service. `NotificationSettingService`
-auto-seeds the new `(type, channel)` rows as `enabled: true` on first read — no manual migration.
+`{placeholder}` tokens), add an entry to `NOTIFICATION_SMS_DEFAULTS` (the compiler demands one), call `dispatch(...)` from the
+triggering service. `NotificationSettingService` auto-seeds the new `(type, channel)` rows on first read — no manual migration: the
+in-app row seeds on, the SMS row follows `NOTIFICATION_SMS_DEFAULTS`. The three launch types (`RESULTS_PUBLISHED`, `PAYMENT_CONFIRMED`,
+`PAYMENT_OVERRIDDEN`) stay on; `FEE_DUE` seeds SMS **off** until the owner enables it after a trial week (D-OPS-2). Existing rows are never touched.
 
 **EMAIL is deliberately not a channel** — no email-sending infrastructure exists (see Progress
 Tracker Decisions Log, "Email out of scope for v1"). Adding it means extending

@@ -1,6 +1,7 @@
 import { NotificationChannel, NotificationType, Prisma } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import { NOTIFICATION_SMS_DEFAULTS } from '@/utils/constants';
 import type { UpdateNotificationSettingInput } from '@/schemas/notification.schema';
 
 interface NotificationSettingSummary {
@@ -23,9 +24,11 @@ const ALL_TYPES = Object.values(NotificationType);
 const ALL_CHANNELS = Object.values(NotificationChannel);
 
 /**
- * Ensures a row exists for every (type, channel) combination, defaulting new
- * ones to enabled=true. Idempotent — safe to call on every list/check. This
- * is what lets a new NotificationType ship without a manual data migration.
+ * Ensures a row exists for every (type, channel) combination. In-app rows seed
+ * enabled; the SMS row follows NOTIFICATION_SMS_DEFAULTS so a new type can ship
+ * with SMS off until the owner turns it on. Existing rows are never touched.
+ * Idempotent — safe to call on every list/check. This is what lets a new
+ * NotificationType ship without a manual data migration.
  */
 const ensureDefaultSettings = async (): Promise<void> => {
 	const existing = await prisma.notificationSetting.findMany({
@@ -37,7 +40,7 @@ const ensureDefaultSettings = async (): Promise<void> => {
 		ALL_CHANNELS.filter((channel) => !existingKeys.has(`${type}:${channel}`)).map((channel) => ({
 			type,
 			channel,
-			enabled: true,
+			enabled: channel === NotificationChannel.SMS ? NOTIFICATION_SMS_DEFAULTS[type] : true,
 		})),
 	);
 

@@ -1044,6 +1044,8 @@
 
 **Settings and defaults:** fees.reminderFromDay = 11; fees.reminderMaxPerStudentPerMonth = 1; fees.autoReminderEnabled = false; tally.varianceFlagAmount = 0 (any difference); tally.enabled = true; bulk.maxRows = 300.
 
+**Wave 1 implementation of who owes and reminders (#111, unreleased):** `GET /payments/outstanding`, `/outstanding/export` (owner only, audited) and `POST /payments/outstanding/reminders` are live; the financial report's outstanding figure uses the same filter (F-78: deactivated students and archived courses no longer count, any month works). The guardian phone is the student's own mobile until D-IDENTITY-2, and the branch filter waits for `Course.instituteId`. `FEE_DUE` seeds SMS off (`NOTIFICATION_SMS_DEFAULTS`, enforced by the compiler for every new type); the in-app row is always created, which is also the record the monthly cap is counted from. **Not enforced yet:** SMS quiet hours (21:00-07:00), because the SMS settings that define them arrive later; the SMS channel stays off until the owner enables it after a trial week. The cash tally and bulk-upload guard of this decision ship in the next two Wave 1 PRs.
+
 **Rejected:** Automatic reminders at launch; front-desk CSV export; a hard cash-close lock; leaving bulk upload with ADMIN.
 
 **Reversibility:** Yes. Additive queries, a table and a role change.

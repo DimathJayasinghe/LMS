@@ -21,9 +21,16 @@ vi.mock('@/controllers/payment.controller', () => ({
   bulkUploadPayments: vi.fn(),
 }));
 
+vi.mock('@/controllers/outstanding.controller', () => ({
+  listOutstanding: vi.fn(),
+  exportOutstanding: vi.fn(),
+  sendFeeReminders: vi.fn(),
+}));
+
 import { paymentRoutes } from './payment.routes';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import * as PaymentController from '@/controllers/payment.controller';
+import * as OutstandingController from '@/controllers/outstanding.controller';
 
 interface RouterLayer {
   route?: {
@@ -79,5 +86,23 @@ describe('payment routes — idempotency wiring', () => {
     // before the controller (multer is between idempotency and controller) — this fails if
     // checkIdempotency and multer are swapped.
     expect(idempotencyIndex).toBe(controllerIndex - 2);
+  });
+});
+
+describe('payment routes — who owes wiring', () => {
+  const order = (method: string, path: string) =>
+    (paymentRoutes as unknown as { stack: RouterLayer[] }).stack.findIndex((l) => l.route?.path === path && l.route.methods[method]);
+
+  it('registers the outstanding routes before /:id so they are not read as an id', () => {
+    const byId = order('get', '/:id');
+    expect(order('get', '/outstanding')).toBeGreaterThanOrEqual(0);
+    expect(order('get', '/outstanding')).toBeLessThan(byId);
+    expect(order('get', '/outstanding/export')).toBeLessThan(byId);
+    expect(order('post', '/outstanding/reminders')).toBeGreaterThanOrEqual(0);
+  });
+
+  it('POST /outstanding/reminders runs checkIdempotency immediately before the controller', () => {
+    const stack = handlesFor(paymentRoutes, 'post', '/outstanding/reminders');
+    expect(stack.indexOf(checkIdempotency)).toBe(stack.indexOf(OutstandingController.sendFeeReminders) - 1);
   });
 });
