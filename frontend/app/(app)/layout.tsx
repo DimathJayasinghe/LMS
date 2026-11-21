@@ -11,10 +11,11 @@ import type { ApiSuccess, User } from "@/lib/types";
  * we bounce to login before any protected UI renders. The backend remains the
  * real authority — this is the first gate, not the only one.
  *
- * Note: server-side we don't silently refresh an expired access token (RSC
- * can't set cookies). A refreshable session that has let its access token
- * lapse is sent to login and re-authenticated there; a Next middleware could
- * later add a server-side refresh (see 04-api-integration.md §6).
+ * Session continuity: this layout cannot refresh an expired access token (a
+ * Server Component cannot set cookies). `frontend/proxy.ts` handles that before
+ * the layout runs: a navigation whose access cookie has expired goes through
+ * `/auth/session`, which refreshes once and returns here. See
+ * context/frontend/04-api-integration.md §6.
  */
 export default async function AppLayout({
   children,

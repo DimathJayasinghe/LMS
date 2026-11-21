@@ -181,7 +181,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually

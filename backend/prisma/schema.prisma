@@ -256,6 +256,8 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expiresAt DateTime
   createdAt DateTime @default(now())
+  // Set when the token is exchanged for a new pair; a duplicate presentation within the grace window is tolerated.
+  rotatedAt DateTime?
 
   // Tenant owner (ADR 14). Nullable with a default until M3 makes it required; services set it explicitly from M2.
   organizationId String?       @default("00000000-0000-4000-8000-000000000001")

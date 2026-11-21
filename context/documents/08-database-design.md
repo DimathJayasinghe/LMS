@@ -307,13 +307,14 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expiresAt DateTime
   createdAt DateTime @default(now())
+  rotatedAt DateTime?                          // set when exchanged; a re-presentation within the grace window is tolerated
 
   @@index([userId])
   @@index([expiresAt])                         // cleanup: DELETE WHERE expiresAt < NOW()
 }
 ```
 
-Enables logout revocation, refresh-token family detection (reuse → revoke all), and a scheduled cleanup job.
+Enables logout revocation, refresh-token family detection (reuse beyond `REFRESH_REUSE_GRACE_SECONDS` → revoke all), and a scheduled cleanup job. Rotated rows older than the grace window are deleted opportunistically on the user's next refresh.
 
 ### 4.4 IdempotencyRecord
 

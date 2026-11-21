@@ -25,7 +25,7 @@ The backend issues two **HTTP-only** cookies on login/register (see `auth.endpoi
 
 | Cookie | Scope | Used for |
 |---|---|---|
-| `access_token` | path `/` | Every protected request. |
+| `access_token` | path `/`, lives as long as the refresh cookie (7 days) | Every protected request. The JWT inside still expires after 15 minutes; the cookie outlives it on purpose so the backend can answer `expired` instead of seeing an anonymous request. |
 | `refresh_token` | path `/api/auth` | Only `POST /api/auth/refresh`. |
 
 Consequences for the frontend:
@@ -35,7 +35,7 @@ Consequences for the frontend:
 - **Server-side requests** (from Server Components / route handlers) don't automatically carry the browser's
   cookies — you must **forward them**: read `await cookies()` and pass a `Cookie` header to the backend.
 - On a `401` with `{ data: { expired: true } }`, call `POST /api/auth/refresh` once, then retry the original
-  request. If refresh fails, the session is over → redirect to `/auth/login`.
+  request (browser only; see §3 and §6 for how a server render is covered). If refresh fails, the session is over → redirect to `/auth/login`.
 
 ---
 
@@ -113,8 +113,11 @@ export default async function Page() {
 await api.post('/submissions', { examId, answers })
 ```
 
-> Add a `refresh-and-retry` wrapper around `request` for `401 + expired` (call `/auth/refresh`, then replay once).
-> Keep it in `lib/api.ts` so every call benefits.
+> `lib/api.ts` already does refresh-and-retry for `401 + expired` in the browser. The refresh is **single flight**: parallel
+> callers in one tab share one `POST /auth/refresh`, and `navigator.locks` (`lms-auth-refresh`) serialises it across tabs.
+> `refreshSession()` returns `{ ok: true }` or `{ ok: false, status }` (`status` is `null` for a network error). The request is
+> aborted after 10 s so a stalled connection cannot hold the cross-tab lock, and a network error or 5xx is retried once after
+> 1 s (inside the server's duplicate-tolerance window, so a lost response does not look like token reuse); 401, 403 and 429 are not retried.
 
 ---
 
@@ -184,8 +187,15 @@ Expose the current user app-wide via a small provider (Doc 02 §4 pattern). Fetc
 ```
 
 - **Route protection:** the authenticated shell `app/(app)/layout.tsx` checks the session (server-side
-  `/auth/me` with forwarded cookies); if unauthenticated, `redirect('/auth/login')`. Optionally add a Next
-  `middleware.ts` for a fast cookie-presence check before rendering (defense-in-depth, not authorization).
+  `/auth/me` with forwarded cookies); if unauthenticated, `redirect('/auth/login')`.
+- **Silent refresh for server renders:** a Server Component cannot set cookies, so `frontend/proxy.ts` (Next 16's
+  replacement for `middleware.ts`) runs first. On a `GET` navigation whose `access_token` cookie is present but
+  expired (it reads the unverified `exp` claim, a routing hint only; the backend still verifies), it redirects to
+  `/auth/session?next=<path>`. That client page runs one `refreshSession()` and returns to `next` (validated by
+  `safeNext`, relative paths only). A `401`/`403` from refresh calls `POST /auth/logout` to clear the dead cookies
+  and goes to `/auth/login?next=…`; a `429`, `5xx` or network error keeps the cookies and shows a retry button.
+  The matcher excludes `api`, Next internals, static files, `/auth/session`, `/auth/login`, `/auth/signup` and prefetch requests; `/auth/account-setup` is covered because it is a server-guarded page. The login page honours `?next=`.
+  This needs the supported same-origin topology (doc 09): the proxy must be able to read the cookie.
 - **Role-gated UI:** `useAuth().user.role` decides which nav items/actions render.
 
 ---

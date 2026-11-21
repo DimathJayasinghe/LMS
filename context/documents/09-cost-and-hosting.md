@@ -3,15 +3,15 @@
 
 > How this system stays **cheap, simple, and easy to host** while remaining secure and reliable. One small VPS runs the whole backend; everything else is a free tier or pay-per-use.
 >
-> **Topology note (decided 2026-11-20, [19](./19-owner-decisions-2026-11-20.md) §6).** The browser must reach the page and `/api` on **one host** (nginx routing both, or a Vercel rewrite of `/api` to the VPS with `NEXT_PUBLIC_API_URL=/api`), because the auth cookies are host-only and the server-rendered layout must read them. The split variant below (frontend at `<domain>`, API at `api.<domain>` with an absolute API URL) does not work with the server-side guard and is unsupported; the Wave 0 plan corrects this document and the nginx comment in its first PR.
+> **Topology note (decided 2026-11-20, [19](./19-owner-decisions-2026-11-20.md) §6).** The browser must reach the page and `/api` on **one host** (nginx routing both, or a Vercel rewrite of `/api` to the VPS with `NEXT_PUBLIC_API_URL=/api`), because the auth cookies are host-only and the server-rendered layout must read them. The split variant (frontend at `<domain>`, API at `api.<domain>` with an absolute API URL) does not work with the server-side guard and is unsupported. Deploy check: after logging in on production, `curl -sI -b <cookie jar> https://<page-host>/dashboard` returns 200 (not a redirect to `/auth/login`) and the `access_token` cookie host equals the page host.
 
 ---
 
 ## 1. Hosting Model at a Glance
 
 ```
-Vercel (free)                    ONE VPS  (~$5–12/mo)
-┌──────────────┐   HTTPS   ┌──────────────────────────────────────────────┐
+Page host (one origin with /api)  ONE VPS  (~$5–12/mo)
+┌──────────────┐  /api →   ┌──────────────────────────────────────────────┐
 │ Next.js app  │ ────────► │ nginx (TLS) → API → worker → Redis           │
 │ (all roles)  │           │                       │                      │
 └──────────────┘           │        PostgreSQL (pgdata vol) ◄─ backup ────┼──► off-site bucket
@@ -22,6 +22,7 @@ Vercel (free)                    ONE VPS  (~$5–12/mo)
                  (files)         (video)         (SMS)            (live / payments)
 ```
 
+- **One origin.** The page host and `/api` are the same host: the VPS nginx serves both, or the frontend host (Vercel) rewrites `/api/*` to the VPS with `NEXT_PUBLIC_API_URL=/api`.
 - **PostgreSQL is self-hosted** inside the Compose stack on a persistent volume (no more Neon). The `backup`
   service takes scheduled, verified, encrypted, off-site dumps — see [12-data-backup-and-recovery.md](./12-data-backup-and-recovery.md).
 
@@ -85,7 +86,7 @@ The table above is the cost of **one** organization. Decided 2026-11-19: the cod
 **One-time setup:**
 1. Create a VPS (Ubuntu LTS). Add a non-root sudo user; enable UFW (allow 22, 80, 443).
 2. Install Docker + Docker Compose plugin.
-3. Point Cloudflare DNS `api.academylms.com` → VPS IP (proxied, orange cloud).
+3. Point Cloudflare DNS for the single page host (the same host serves `/` and `/api`) → VPS IP (proxied, orange cloud).
 4. Clone the repo; create `backend/.env` (never commit it) — set a **strong `POSTGRES_PASSWORD`**, a
    `BACKUP_ENCRYPTION_PASSPHRASE`, and (recommended) `BACKUP_RCLONE_REMOTE` for off-site backups.
 5. Issue a Let's Encrypt cert for nginx (certbot or an nginx-companion container); enable auto-renew.
@@ -173,7 +174,7 @@ Result — one domain serves everything:
 - After changing frontend code: `docker compose build frontend && docker compose up -d frontend`
   (it runs a production `next start`, not HMR — for rapid iteration, run `npm run dev` on
   `:3000` separately as before; that path still uses the absolute `NEXT_PUBLIC_API_URL` in
-  `frontend/.env`).
+  `frontend/.env`; this works on `localhost` only because cookies ignore ports, and is not a production shape).
 - ngrok's **free-tier browser interstitial** shows once per session on first page load — click
   "Visit Site"; a session cookie then suppresses it (API `fetch`es are unaffected after that).
 

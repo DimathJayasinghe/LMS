@@ -35,7 +35,7 @@
 
 | ID | Sev | Kind | Issue | Effort | Owner? | Checked | Source IDs | Status |
 |---|---|---|---|---|---|---|---|---|
-| F-01 | critical | flow-gap | Student session silently dies after 15 minutes: refresh never fires because the access cookie expires with the JWT | M | - | code | UXS-01(student), ACC-01, UXS-01(staff) | Open |
+| F-01 | critical | flow-gap | Student session silently dies after 15 minutes: refresh never fires because the access cookie expires with the JWT | M | - | code | UXS-01(student), ACC-01, UXS-01(staff) | Fixed (#96, unreleased; ships with the rate-limit keying PR) |
 | F-02 | high | flow-gap | Server-rendered pages reach the API from one source address, so at peak the shared per-IP limit could be exhausted (a capacity estimate, not observed) and any /auth/me failure then redirects to login; users behind one campus or carrier address share the 10/min login limit | M | - | code + 2nd | ACC-02, UXS-15(student) | Open |
 | F-03 | high | flow-gap | No password recovery of any kind (self-service or staff-assisted); a forgotten password permanently strands the account | M | yes | code + 2nd | ACC-03, UXS-02(staff), UXS-11(student) | Open |
 | F-04 | high | access-leak | Recording stream access is not restricted to enrolled students and the owning teacher; some staff roles are not scoped by course | S | yes | live | EP-01, DEL-03 | Open |
