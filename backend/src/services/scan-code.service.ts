@@ -16,8 +16,6 @@ const SCAN_CODE_LOCK_NAMESPACE = 'scan-code';
 
 export const normalizeScanCode = (raw: string): string => raw.trim();
 
-const codeEquals = (code: string) => ({ equals: code, mode: 'insensitive' as const });
-
 const unavailable = (): AppError => new AppError('CODE_UNAVAILABLE', 409, 'This code is unavailable.');
 
 const studentSelect = {
@@ -51,10 +49,14 @@ export interface ResolvedScanStudent {
 export const resolveStudentByCode = async (rawCode: string): Promise<ResolvedScanStudent> => {
   const code = normalizeScanCode(rawCode);
 
+  const [userIds, cardIds] = await Promise.all([
+    prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "User" WHERE upper("barcode") = upper(${code})`,
+    prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "StudentBarcode" WHERE upper("barcode") = upper(${code})`,
+  ]);
   const [userMatches, cardMatches] = await Promise.all([
-    prisma.user.findMany({ where: { barcode: codeEquals(code) }, select: studentSelect }),
+    prisma.user.findMany({ where: { id: { in: userIds.map(({ id }) => id) } }, select: studentSelect }),
     prisma.studentBarcode.findMany({
-      where: { barcode: codeEquals(code) },
+      where: { id: { in: cardIds.map(({ id }) => id) } },
       select: { instituteId: true, user: { select: studentSelect } },
     }),
   ]);
@@ -114,18 +116,13 @@ export const assertScanCodeFree = async (
     throw unavailable();
   }
 
+  const exceptUserId = options.exceptUserId ?? '';
   const [heldAsCard, heldAsInstituteCard] = await Promise.all([
-    tx.user.findFirst({
-      where: { barcode: codeEquals(code), ...(options.exceptUserId ? { id: { not: options.exceptUserId } } : {}) },
-      select: { id: true },
-    }),
-    tx.studentBarcode.findFirst({
-      where: { barcode: codeEquals(code), ...(options.exceptUserId ? { userId: { not: options.exceptUserId } } : {}) },
-      select: { id: true },
-    }),
+    tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "User" WHERE upper("barcode") = upper(${code}) AND (${exceptUserId} = '' OR "id"::text <> ${exceptUserId})`,
+    tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "StudentBarcode" WHERE upper("barcode") = upper(${code}) AND (${exceptUserId} = '' OR "userId"::text <> ${exceptUserId})`,
   ]);
 
-  if (heldAsCard || heldAsInstituteCard) {
+  if (heldAsCard.length || heldAsInstituteCard.length) {
     throw unavailable();
   }
 };

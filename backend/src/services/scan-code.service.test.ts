@@ -2,14 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
-const { userFindMany, studentBarcodeFindMany, lockSpy } = vi.hoisted(() => ({
+const { userFindMany, studentBarcodeFindMany, lockSpy, queryRaw } = vi.hoisted(() => ({
 	userFindMany: vi.fn(),
 	studentBarcodeFindMany: vi.fn(),
 	lockSpy: vi.fn(),
+	queryRaw: vi.fn(),
 }));
 
 vi.mock('@/config/database', () => ({
 	prisma: {
+		$queryRaw: queryRaw,
 		user: { findMany: userFindMany },
 		studentBarcode: { findMany: studentBarcodeFindMany },
 	},
@@ -39,11 +41,16 @@ const makeTx = () => {
 	const tx = {
 		user: { findFirst: userFindFirst },
 		studentBarcode: { findFirst: barcodeFindFirst },
+		$queryRaw: vi.fn().mockImplementation(async (sql: TemplateStringsArray) => {
+			const row = await (sql.join('').includes('StudentBarcode') ? barcodeFindFirst() : userFindFirst());
+			return row ? [row] : [];
+		}),
 	} as unknown as Prisma.TransactionClient;
 	return { tx, userFindFirst, barcodeFindFirst };
 };
 
 beforeEach(() => {
+	queryRaw.mockReset().mockResolvedValue([{ id: 'candidate' }]);
 	userFindMany.mockReset().mockResolvedValue([]);
 	studentBarcodeFindMany.mockReset().mockResolvedValue([]);
 	lockSpy.mockReset().mockResolvedValue(undefined);
@@ -65,6 +72,16 @@ describe('LMS_CODE_PATTERN', () => {
 });
 
 describe('resolveStudentByCode', () => {
+	it.each(['A_1', '50%', 'END\\'])('binds the literal code %s to exact uppercase comparisons', async (code) => {
+		queryRaw.mockReset().mockResolvedValue([]);
+		await resolveStudentByCode(code).catch(() => undefined);
+		expect(queryRaw).toHaveBeenCalledTimes(2);
+		for (const [strings, bound] of queryRaw.mock.calls) {
+			expect(strings.join('?')).toMatch(/upper\("barcode"\)\s*=\s*upper\(\?\)/i);
+			expect(bound).toBe(code);
+		}
+	});
+
 	it('404s when the code is held by nobody', async () => {
 		await expect(resolveStudentByCode('NOPE')).rejects.toMatchObject({
 			code: 'BARCODE_NOT_FOUND',
@@ -72,15 +89,11 @@ describe('resolveStudentByCode', () => {
 		});
 	});
 
-	it('looks up both tables with a case-insensitive equality on the trimmed code', async () => {
+	it('loads details for the ids returned by the exact comparisons', async () => {
 		await resolveStudentByCode('  nug-001 ').catch(() => undefined);
-
-		expect(userFindMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: { equals: 'nug-001', mode: 'insensitive' } } }),
-		);
-		expect(studentBarcodeFindMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: { equals: 'nug-001', mode: 'insensitive' } } }),
-		);
+		expect(queryRaw).toHaveBeenCalledTimes(2);
+		expect(userFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['candidate'] } } }));
+		expect(studentBarcodeFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['candidate'] } } }));
 	});
 
 	it('resolves a code held only as a User.barcode, with no institute', async () => {
@@ -208,21 +221,15 @@ describe('assertScanCodeFree', () => {
 		await expect(assertScanCodeFree(tx, 'NUG-001', { exceptUserId: 'u1' })).resolves.toBeUndefined();
 	});
 
-	it('checks both tables case-insensitively and excludes the caller from the match', async () => {
-		const { tx, userFindFirst, barcodeFindFirst } = makeTx();
-
-		await assertScanCodeFree(tx, 'Nug-001', { exceptUserId: 'u1' });
-
-		expect(userFindFirst).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: { barcode: { equals: 'Nug-001', mode: 'insensitive' }, id: { not: 'u1' } },
-			}),
-		);
-		expect(barcodeFindFirst).toHaveBeenCalledWith(
-			expect.objectContaining({
-				where: { barcode: { equals: 'Nug-001', mode: 'insensitive' }, userId: { not: 'u1' } },
-			}),
-		);
+	it.each(['A_1', '50%', 'END\\'])('compares and excludes the caller for %s', async (code) => {
+		const { tx } = makeTx();
+		await assertScanCodeFree(tx, code, { exceptUserId: 'u1' });
+		const calls = vi.mocked(tx.$queryRaw).mock.calls;
+		expect(calls).toHaveLength(2);
+		for (const [strings, ...values] of calls) {
+			expect((strings as TemplateStringsArray).join('?')).toMatch(/upper\("barcode"\)\s*=\s*upper\(\?\)/i);
+			expect(values).toEqual([code, 'u1', 'u1']);
+		}
 	});
 
 	it('rejects a code another user holds as User.barcode with a generic message', async () => {
@@ -266,13 +273,11 @@ describe('assertScanCodeFree', () => {
 	});
 
 	it('works without an excluded user (nobody is the caller)', async () => {
-		const { tx, userFindFirst, barcodeFindFirst } = makeTx();
+		const { tx } = makeTx();
 		await assertScanCodeFree(tx, 'NUG-001', {});
-		expect(userFindFirst).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: { equals: 'NUG-001', mode: 'insensitive' } } }),
-		);
-		expect(barcodeFindFirst).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: { equals: 'NUG-001', mode: 'insensitive' } } }),
-		);
+		for (const [, ...values] of vi.mocked(tx.$queryRaw).mock.calls) {
+			expect(values).toEqual(['NUG-001', '', '']);
+		}
 	});
+
 });

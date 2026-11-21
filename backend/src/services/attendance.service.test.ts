@@ -6,6 +6,7 @@ const {
 	courseFindUnique,
 	instituteFindUnique,
 	studentBarcodeFindMany,
+	queryRaw,
 	userFindMany,
 	userFindUnique,
 	attendanceUpsert,
@@ -16,6 +17,7 @@ const {
 	courseFindUnique: vi.fn(),
 	instituteFindUnique: vi.fn(),
 	studentBarcodeFindMany: vi.fn(),
+	queryRaw: vi.fn(),
 	userFindMany: vi.fn(),
 	userFindUnique: vi.fn(),
 	attendanceUpsert: vi.fn(),
@@ -25,6 +27,7 @@ const {
 
 vi.mock('@/config/database', () => ({
 	prisma: {
+		$queryRaw: queryRaw,
 		classSession: { findUnique: classSessionFindUnique },
 		course: { findUnique: courseFindUnique },
 		institute: { findUnique: instituteFindUnique },
@@ -59,6 +62,7 @@ beforeEach(() => {
 	classSessionFindUnique.mockReset().mockResolvedValue(session);
 	courseFindUnique.mockReset().mockResolvedValue(course);
 	instituteFindUnique.mockReset().mockResolvedValue({ id: scanInput.instituteId, isActive: true });
+	queryRaw.mockReset().mockResolvedValue([{ id: 'candidate' }]);
 	studentBarcodeFindMany.mockReset().mockResolvedValue([{ instituteId: scanInput.instituteId, user: student }]);
 	userFindMany.mockReset().mockResolvedValue([]);
 	userFindUnique.mockReset().mockResolvedValue(student);
@@ -72,7 +76,7 @@ describe('scanBarcode - institute-aware resolution', () => {
 		await scanBarcode(scanInput);
 
 		expect(studentBarcodeFindMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: { equals: scanInput.barcode, mode: 'insensitive' } } }),
+			expect.objectContaining({ where: { id: { in: ['candidate'] } } }),
 		);
 		expect(attendanceUpsert).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -93,7 +97,7 @@ describe('scanBarcode - institute-aware resolution', () => {
 		await scanBarcode({ ...scanInput, barcode: 'LMS-000001', source: AttendanceSource.QR });
 
 		expect(userFindMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { barcode: { equals: 'LMS-000001', mode: 'insensitive' } } }),
+			expect.objectContaining({ where: { id: { in: ['candidate'] } } }),
 		);
 		expect(attendanceUpsert).toHaveBeenCalledWith(
 			expect.objectContaining({
