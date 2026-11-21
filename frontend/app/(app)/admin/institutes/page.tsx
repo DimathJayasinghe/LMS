@@ -1,6 +1,6 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { InstituteManager } from "./_components/InstituteManager";
 import { api } from "@/lib/api-server";
@@ -23,9 +23,9 @@ export default async function AdminInstitutesPage({
   const search = sp.search?.trim() ?? "";
   const query = search ? `?search=${encodeURIComponent(search)}` : "";
 
-  const res = await api
-    .get<ApiList<Institute>>(`/institutes${query}`, { cookie })
-    .catch(() => ({ data: [] as Institute[], count: 0 }) as ApiList<Institute>);
+  const res = await guard401(api
+    .get<ApiList<Institute>>(`/institutes${query}`, { cookie }))
+    .catch((error) => { unstable_rethrow(error); return ({ data: [] as Institute[], count: 0 }) as ApiList<Institute>; });
 
   return (
     <div className="mx-auto max-w-5xl">

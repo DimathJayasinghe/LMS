@@ -1,8 +1,8 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
@@ -51,8 +51,9 @@ export default async function ExamDetailPage({
   // Fetch the exam. Non-enrolled students get 403 NOT_ENROLLED → enrollment gate.
   let exam: ExamDetail;
   try {
-    exam = (await api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie })).data;
+    exam = (await guard401(api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie }))).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     if (e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403)) {
       return (
@@ -77,20 +78,22 @@ export default async function ExamDetailPage({
   const [courseName, mySub] = await Promise.all([
     (async (): Promise<string | undefined> => {
       try {
-        return (await api.get<ApiSuccess<Course>>(`/classes/${exam.courseId}`, { cookie })).data.name;
-      } catch {
+        return (await guard401(api.get<ApiSuccess<Course>>(`/classes/${exam.courseId}`, { cookie }))).data.name;
+      } catch (error) {
+        unstable_rethrow(error);
         return undefined;
       }
     })(),
     (async (): Promise<MySubmission | undefined> => {
       if (user.role !== "STUDENT") return undefined;
       try {
-        const mine = await api.get<ApiList<MySubmission>>(
+        const mine = await guard401(api.get<ApiList<MySubmission>>(
           `/submissions/mine?examId=${examId}`,
           { cookie },
-        );
+        ));
         return mine.data[0];
-      } catch {
+      } catch (error) {
+        unstable_rethrow(error);
         return undefined;
       }
     })(),

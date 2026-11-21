@@ -1,4 +1,5 @@
-import { requireUser } from "@/lib/session";
+import { unstable_rethrow } from "next/navigation";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Plus } from "lucide-react";
@@ -34,8 +35,8 @@ export default async function ExamsPage({
 
   const [me, examList, courseList] = await Promise.all([
     requireUser(cookie),
-    api.get<ApiList<Exam>>(`/exams${query}`, { cookie }),
-    api.get<ApiList<Course>>("/classes", { cookie }),
+    guard401(api.get<ApiList<Exam>>(`/exams${query}`, { cookie })),
+    guard401(api.get<ApiList<Course>>("/classes", { cookie })),
   ]);
   const user = me;
   const exams = examList.data;
@@ -49,11 +50,12 @@ export default async function ExamsPage({
   const stateByExam = new Map<string, ExamCardState>();
   if (user.role === "STUDENT") {
     try {
-      const mine = await api.get<ApiList<MySubmission>>("/submissions/mine", { cookie });
+      const mine = await guard401(api.get<ApiList<MySubmission>>("/submissions/mine", { cookie }));
       for (const s of mine.data) {
         stateByExam.set(s.examId, s.published ? "result" : "submitted");
       }
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       // Leave hints off if submissions can't be loaded.
     }
   }

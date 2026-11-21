@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 import { ArrowLeft, Info } from "lucide-react";
 import { LiveClassRoom } from "./_components/LiveClassRoom";
 import { api } from "@/lib/api-server";
@@ -21,12 +21,13 @@ export default async function LiveClassPage({
   let session: ClassSession;
   try {
     session = (
-      await api.get<ApiSuccess<ClassSession>>(
+      await guard401(api.get<ApiSuccess<ClassSession>>(
         `/classes/${classId}/sessions/${sessionId}`,
         { cookie },
-      )
+      ))
     ).data;
   } catch (e) {
+    unstable_rethrow(e);
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }

@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { guard401, requireUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/custom/PageHeader";
@@ -14,7 +14,7 @@ export default async function NotificationSettingsPage() {
   const viewer = await requireUser(cookie);
   if (viewer.role !== "SUPER_ADMIN") redirect("/dashboard");
 
-  const settings = await api.get<ApiList<NotificationSetting>>("/notification-settings", { cookie });
+  const settings = await guard401(api.get<ApiList<NotificationSetting>>("/notification-settings", { cookie }));
 
   return (
     <div className="mx-auto max-w-3xl">
