@@ -109,6 +109,9 @@ export const verifyZoomWebhook = (
     return;
   }
 
+  // Lets the route limiter leave signature-verified requests uncounted.
+  res.locals.zoomVerified = true;
+
   if (isValidation) {
     respondToValidation();
     return;

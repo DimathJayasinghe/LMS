@@ -194,7 +194,7 @@ Zoom webhook endpoint for `meeting.participant_joined`. Uses upsert to handle re
 
 **Zoom URL validation (endpoint.url_validation)**
 
-Zoom expects a raw response payload with `plainToken` and `encryptedToken` (no standard wrapper). The token must contain 8–64 ASCII letters, digits, underscores or hyphens. Validation requests with either signature header must pass the same signature and timestamp checks as other events. Other events require both headers and a timestamp within five minutes. Rejected requests (malformed, unsigned or invalid) are limited to 60 per minute per IP by default (`ZOOM_WEBHOOK_RATE_LIMIT_MAX` changes that); verified events are not counted by this limit, but the global API limiter still applies. Re-run endpoint validation in Zoom staging after deployment and verify a real participant event before production deployment.
+Zoom expects a raw response payload with `plainToken` and `encryptedToken` (no standard wrapper). The token must contain 8–64 ASCII letters, digits, underscores or hyphens. Validation requests with either signature header must pass the same signature and timestamp checks as other events. Other events require both headers and a timestamp within five minutes. Requests that are not signature-verified (malformed, unsigned or invalid) are limited to 60 per minute per IP by default (`ZOOM_WEBHOOK_RATE_LIMIT_MAX` changes that); signature-verified events are not counted by this limit, but the global API limiter still applies. Re-run endpoint validation in Zoom staging after deployment and verify a real participant event before production deployment.
 
 ### GET `/session/:sessionId/reconciliation`
 

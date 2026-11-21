@@ -11,12 +11,14 @@ const timestamp = '1700000000';
 const sign = (value: string) => createHmac('sha256', secret).update(value).digest('hex');
 function invoke(body: unknown, headers: Record<string, string> = {}) {
   const req = { body, rawBody: JSON.stringify(body), headers } as unknown as Request;
-  const result: { status?: number; body?: unknown; next: boolean } = { next: false };
+  const result: { status?: number; body?: unknown; next: boolean; verified?: boolean } = { next: false };
   const res = {
+    locals: {} as Record<string, unknown>,
     status: (status: number) => { result.status = status; return res; },
     json: (value: unknown) => { result.body = value; return res; },
   } as unknown as Response;
   verifyZoomWebhook(req, res, (() => { result.next = true; }) as NextFunction);
+  result.verified = res.locals.zoomVerified === true;
   return result;
 }
 const validation = (plainToken: unknown) => ({ event: 'endpoint.url_validation', payload: { plainToken } });
@@ -29,7 +31,7 @@ beforeEach(() => {
 });
 describe('Zoom webhook validation', () => {
   it('returns a response for an allowed validation token', () => {
-    expect(invoke(validation('abc_DEF-123'))).toEqual({ next: false, status: 200, body: { plainToken: 'abc_DEF-123', encryptedToken: sign('abc_DEF-123') } });
+    expect(invoke(validation('abc_DEF-123'))).toEqual({ next: false, status: 200, verified: false, body: { plainToken: 'abc_DEF-123', encryptedToken: sign('abc_DEF-123') } });
   });
   it.each(['v0:1:{}', 'a:b', ' abc', '', 'a'.repeat(65), 'abcdefghé', 'short', 'abcdefgh\n'])('rejects a validation token outside the allowed format', (token) => {
     expect(invoke(validation(token))).toMatchObject({ status: 400, body: { code: 'ZOOM_VALIDATION_INVALID' }, next: false });
@@ -50,6 +52,14 @@ describe('Zoom webhook validation', () => {
   it('accepts a signed participant event', () => {
     const body = { event: 'meeting.participant_joined', payload: {} };
     expect(invoke(body, signed(body)).next).toBe(true);
+  });
+  it('marks only signature-verified requests as verified for the route limiter', () => {
+    const body = validation('abcdefgh');
+    const participant = { event: 'meeting.participant_joined', payload: {} };
+    expect(invoke(body, signed(body)).verified).toBe(true);
+    expect(invoke(participant, signed(participant)).verified).toBe(true);
+    expect(invoke(body).verified).toBe(false);
+    expect(invoke(participant, { 'x-zm-request-timestamp': timestamp, 'x-zm-signature': 'v0=00' }).verified).toBe(false);
   });
   it('rejects a stale timestamp', () => {
     const body = { event: 'meeting.participant_joined' };

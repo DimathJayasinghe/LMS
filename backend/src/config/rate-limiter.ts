@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import type { Request, Response } from 'express';
 import { RedisStore } from 'rate-limit-redis';
 import { redis } from './redis';
 import { logger } from './logger';
@@ -28,7 +29,7 @@ const createLimiter = (
   windowMs: number,
   max: number,
   keyPrefix: string,
-  options: { skipSuccessfulRequests?: boolean } = {},
+  options: { skipSuccessfulRequests?: boolean; requestWasSuccessful?: (req: Request, res: Response) => boolean } = {},
 ): ReturnType<typeof rateLimit> => {
   // Check if Redis is connected at creation time
   const isRedisReady = redis.status === 'ready' || redis.status === 'connect';
@@ -96,10 +97,12 @@ export const createRateLimiters = (): {
     'rl:auth:',
   ),
 
-  // Counts only rejected requests (malformed, unsigned, invalid), so a burst of verified
-  // participant events at the start of a class is never throttled.
+  // Counts every request except signature-verified ones (the verifier sets `zoomVerified`),
+  // so a burst of real participant events at the start of a class is never throttled while
+  // malformed, unsigned and unverified validation requests all count.
   zoomWebhookLimiter: createLimiter(60 * 1000, env.ZOOM_WEBHOOK_RATE_LIMIT_MAX, 'rl:zoom-webhook:', {
     skipSuccessfulRequests: true,
+    requestWasSuccessful: (_req, res) => res.locals.zoomVerified === true,
   }),
 
   /**
