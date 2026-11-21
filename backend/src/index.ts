@@ -18,7 +18,7 @@ import { instituteRoutes } from './routes/institute.routes';
 import { timetableRoutes } from './routes/timetable.routes';
 import { classRoutes } from './routes/class.routes';
 import { enrollmentRoutes } from './routes/enrollment.routes';
-import { createAttendanceRouter } from './routes/attendance.routes';
+import { attendanceRoutes } from './routes/attendance.routes';
 import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
 import { submissionRoutes } from './routes/submission.routes';
@@ -84,7 +84,9 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/timetable', timetableRoutes);
   app.use('/api/classes', classRoutes);
   app.use('/api/enrollments', enrollmentRoutes);
-  app.use('/api/attendance', createAttendanceRouter(zoomWebhookLimiter));
+  // Throttle the unauthenticated Zoom webhook (on top of the global limiter).
+  app.use('/api/attendance/zoom-webhook', zoomWebhookLimiter);
+  app.use('/api/attendance', attendanceRoutes);
   // Extra throttle on the stream-token endpoint (on top of the global limiter).
   app.use('/api/videos/:id/stream', streamLimiter);
   app.use('/api/videos', videoRoutes);

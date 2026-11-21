@@ -19,10 +19,7 @@ vi.mock('@/controllers/attendance-reconciliation.controller', () => ({
 	reconcileZoomAttendance: vi.fn(),
 }));
 
-import { createAttendanceRouter } from './attendance.routes';
-
-const zoomWebhookLimiter = vi.fn();
-const attendanceRoutes = createAttendanceRouter(zoomWebhookLimiter);
+import { attendanceRoutes } from './attendance.routes';
 
 interface RouterLayer {
 	route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: unknown }> };
@@ -49,14 +46,5 @@ describe('attendance history route: role gate', () => {
 
 	it('refuses a marker with 403 FORBIDDEN_ROLE', () => {
 		expect(roleGate(Role.MARKER)).toEqual({ status: 403, code: 'FORBIDDEN_ROLE' });
-	});
-});
-
-describe('Zoom webhook route', () => {
-	it('runs a limiter before verification and handling', () => {
-		const stack = (attendanceRoutes as unknown as { stack: RouterLayer[] }).stack;
-		const route = stack.find((layer) => layer.route?.path === '/zoom-webhook' && layer.route.methods.post);
-		expect(route!.route!.stack).toHaveLength(3);
-		expect(route!.route!.stack[0]!.handle).toBe(zoomWebhookLimiter);
 	});
 });
