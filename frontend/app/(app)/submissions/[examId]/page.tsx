@@ -61,7 +61,7 @@ export default async function GradeExamPage({
   } catch (e) {
     unstable_rethrow(e);
     if (e instanceof ApiError && (e.code === "MARKER_NOT_ASSIGNED" || e.status === 403)) {
-      gateError = "You're not assigned to mark this exam.";
+      gateError = user.role === "MARKER" ? "You're not assigned to mark this exam." : "You do not have access to these submissions.";
     } else {
       throw e;
     }
@@ -108,7 +108,7 @@ export default async function GradeExamPage({
       </header>
 
       {gateError ? (
-        <ExamNotice icon={Ban} title="Not assigned" message={gateError} />
+        <ExamNotice icon={Ban} title="Access unavailable" message={gateError} />
       ) : (
         <>
           {canPublish && (

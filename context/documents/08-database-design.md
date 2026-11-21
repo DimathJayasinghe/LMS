@@ -229,6 +229,7 @@ erDiagram
 | `PaymentMethod` | `ONLINE`, `ENTRANCE`, `BULK`, `MANUAL`; **`BANK_TRANSFER` planned** | Payment |
 | `PaymentSlipStatus` **(planned)** | `PENDING_UPLOAD`, `SUBMITTED`, `APPROVED`, `REJECTED`, `EXPIRED`, `SUPERSEDED` | PaymentSlip |
 | `SubmissionStatus` | `UPLOADING`, `COMPLETED` | Submission |
+| `SubmissionSource` | `ONLINE`, `HALL` | Submission |
 | `AttendanceSource` | `QR`, `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL` | Attendance |
 | `SmsStatus` | `PENDING`, `SENT`, `FAILED` | SmsLog |
 | `ExamType` | `MCQ`, `WRITTEN`, `HYBRID`, `INCLASS` | Exam |
@@ -687,6 +688,9 @@ const mcqPayloadSchema = z.object({
 model Submission {
   id             String           @id @default(uuid())
   status         SubmissionStatus @default(UPLOADING)
+  source         SubmissionSource @default(ONLINE)
+  gradedById     String?
+  gradedBy       User? @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: Restrict)
   answerPdfUrl   String?                          // R2 URL — uploaded PDF answer
   answers        Json?                            // MCQ selections — MCQ/HYBRID
   writtenAnswers Json?                            // typed essay/structured answers (see below)
@@ -707,8 +711,11 @@ model Submission {
   @@index([userId])
   @@index([examId])
   @@index([status])
+  @@index([gradedById])
 }
 ```
+
+`gradedById` records the most recent manual grader; legacy and automatically graded rows may be null. `HALL` is reserved for the later hall-entry workflow.
 
 **Answer channels on one submission** (a `HYBRID` exam can use several):
 
@@ -973,7 +980,7 @@ Controllers never import Prisma. Services scope every query by the authenticated
 | **Attendance** | Read all | Read own courses | Read all, scan QR/barcode | Read own | Read own |
 | **VideoRecording** | CRUD | CRUD **own courses** | Read all | Read | Read enrolled + paid |
 | **Exam** | CRUD | CRUD **own courses** | Read all | Read assigned | Read enrolled (non-deleted) |
-| **Submission** | Read all, publish | Read + publish own | Read all | Read + grade assigned | Create/read own |
+| **Submission** | Read, grade, publish | Read, grade, publish own | ❌ | Read + grade assigned | Create/read own |
 | **MarkerAssignment** | CRUD | CRUD own exams | Read all | Read own | ❌ |
 | **AuditLog** | Read all | Read own actions | Read own actions | ❌ | ❌ |
 | **SmsLog** | Read all | ❌ | Read all | ❌ | ❌ |

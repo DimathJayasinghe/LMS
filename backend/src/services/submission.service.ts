@@ -1,4 +1,4 @@
-import { ExamType, NotificationType, Prisma, Role, SubmissionStatus } from '@prisma/client';
+import { ExamType, NotificationType, Prisma, Role, SubmissionSource, SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import type { AuthenticatedUser } from '@/types/auth.types';
@@ -33,6 +33,8 @@ type McqPayload = Prisma.JsonObject & {
 interface SubmissionListItem {
   id: string;
   status: SubmissionStatus;
+  source: SubmissionSource;
+  gradedById: string | null;
   answerPdfUrl: string | null;
   answers: Prisma.JsonValue | null;
   writtenAnswers: Prisma.JsonValue | null;
@@ -46,6 +48,8 @@ interface SubmissionListItem {
 interface SubmissionResult {
   id: string;
   status: SubmissionStatus;
+  source: SubmissionSource;
+  gradedById: string | null;
   answerPdfUrl: string | null;
   answers: Prisma.JsonValue | null;
   writtenAnswers: Prisma.JsonValue | null;
@@ -95,6 +99,8 @@ interface PublishResult {
 const submissionDetailSelect = {
   id: true,
   status: true,
+  source: true,
+  gradedById: true,
   answerPdfUrl: true,
   answers: true,
   writtenAnswers: true,
@@ -110,6 +116,8 @@ const submissionDetailSelect = {
 const submissionListSelect = {
   id: true,
   status: true,
+  source: true,
+  gradedById: true,
   answerPdfUrl: true,
   answers: true,
   writtenAnswers: true,
@@ -550,17 +558,15 @@ export const listMySubmissions = async (
 };
 
 // ─── Submit Marks ──────────────────────────────────────────
-// Markers grade a specific submission. Idempotency is handled at the route level.
+// Idempotency is handled at the route level.
 
-export const assertMarkerMayGradeSubmission = async (
-  submissionId: string,
-  markerId: string,
-) => {
+const getSubmissionForGrading = async (submissionId: string) => {
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
     select: {
       ...submissionDetailSelect,
-      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true, paperRevisionId: true } },
+      exam: { select: { id: true, totalMarks: true, type: true, isPublished: true, paperRevisionId: true, courseId: true } },
+      gradedBy: { select: { role: true } },
       user: { select: { examParticipants: { select: { examId: true, audienceId: true } } } },
     },
   });
@@ -569,6 +575,11 @@ export const assertMarkerMayGradeSubmission = async (
     throw new AppError('SUBMISSION_NOT_FOUND', 404, 'Submission not found.');
   }
 
+  return submission;
+};
+
+export const assertMarkerMayGradeSubmission = async (submissionId: string, markerId: string) => {
+  const submission = await getSubmissionForGrading(submissionId);
   if (submission.exam.paperRevisionId) {
     const audienceId = submission.user.examParticipants.find((participant) => participant.examId === submission.exam.id)?.audienceId;
     if (!audienceId) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'This scoped submission has no eligible exam audience.');
@@ -579,12 +590,23 @@ export const assertMarkerMayGradeSubmission = async (
   return submission;
 };
 
+export const assertMayGradeSubmission = async (submissionId: string, actor: AuthenticatedUser) => {
+  if (actor.role === Role.MARKER) return assertMarkerMayGradeSubmission(submissionId, actor.userId);
+  const submission = await getSubmissionForGrading(submissionId);
+  if (actor.role === Role.TEACHER) {
+    await assertCourseAccess(submission.exam.courseId, actor);
+  } else if (actor.role !== Role.SUPER_ADMIN) {
+    throw new AppError('FORBIDDEN', 403, 'You cannot grade this submission.');
+  }
+  return submission;
+};
+
 export const submitMarks = async (
   submissionId: string,
   input: SubmitMarksInput,
-  markerId: string,
+  actor: AuthenticatedUser,
 ): Promise<SubmissionResult> => {
-  const submission = await assertMarkerMayGradeSubmission(submissionId, markerId);
+  const submission = await assertMayGradeSubmission(submissionId, actor);
 
   if (submission.exam.isPublished) {
     throw new AppError(
@@ -611,17 +633,35 @@ export const submitMarks = async (
     );
   }
 
-  const updated = await prisma.submission.update({
-    where: { id: submissionId },
-    data: {
-      marks: input.marks,
-      feedback: input.feedback ?? null,
-      gradedAt: new Date(),
-    },
-    select: submissionDetailSelect,
-  });
+  if (actor.role === Role.MARKER && (submission.gradedBy?.role === Role.TEACHER || submission.gradedBy?.role === Role.SUPER_ADMIN)) {
+    throw new AppError('MARKS_SET_BY_TEACHER', 409, 'Marks set by a teacher or owner cannot be overwritten by a marker.');
+  }
 
-  return updated;
+  try {
+    return await prisma.submission.update({
+      where: {
+        id: submissionId,
+        ...(actor.role === Role.MARKER ? {
+          OR: [
+            { gradedById: null },
+            { gradedBy: { is: { role: { notIn: [Role.TEACHER, Role.SUPER_ADMIN] } } } },
+          ],
+        } : {}),
+      },
+      data: {
+        marks: input.marks,
+        feedback: input.feedback ?? null,
+        gradedAt: new Date(),
+        gradedById: actor.userId,
+      },
+      select: submissionDetailSelect,
+    });
+  } catch (error) {
+    if (actor.role === Role.MARKER && typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
+      throw new AppError('MARKS_SET_BY_TEACHER', 409, 'Marks set by a teacher or owner cannot be overwritten by a marker.');
+    }
+    throw error;
+  }
 };
 
 // ─── Publish Results ──────────────────────────────────────
@@ -740,6 +780,7 @@ export const correctPublishedResult = async (
       marks: input.marks,
       feedback: input.feedback === undefined ? submission.feedback : input.feedback,
       gradedAt: new Date(),
+      gradedById: actor.userId,
     },
     select: submissionDetailSelect,
   });

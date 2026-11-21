@@ -43,7 +43,7 @@ export function GradeSubmissionRow({
 
   const incomplete = submission.status !== "COMPLETED";
   const graded = submission.marks !== null;
-  const isMarker = viewerRole === "MARKER";
+  const canGrade = viewerRole === "MARKER" || viewerRole === "TEACHER" || viewerRole === "SUPER_ADMIN";
   const canCorrect = published && (viewerRole === "TEACHER" || viewerRole === "SUPER_ADMIN");
 
   const save = async (): Promise<void> => {
@@ -198,7 +198,7 @@ export function GradeSubmissionRow({
               <AlertCircle className="size-4 shrink-0" aria-hidden />
               This submission is still uploading and can&apos;t be graded yet.
             </p>
-          ) : isMarker && !published ? (
+          ) : canGrade && !published ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <label htmlFor={`marks-${submission.id}`} className="text-sm font-medium text-foreground">
@@ -303,7 +303,7 @@ export function GradeSubmissionRow({
             <div className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
               {published
                 ? "Published results are locked for markers. Contact the course teacher if a correction is needed."
-                : "Assigned markers enter marks here. Teachers can review submissions and publish the completed results."}
+                : "Only assigned markers, the course teacher, and the owner can enter marks."}
               {graded && (
                 <span className="mt-1 block text-foreground">
                   Current result: {submission.marks} / {totalMarks}

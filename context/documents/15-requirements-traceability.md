@@ -121,7 +121,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-EXM-03 | Server-timed exams | Done | 02 §5.3 |
 | R-EXM-04 | Anti-cheat (shuffle, tab-switch detection) | Planned | Roadmap P2 "Academic integrity" |
 | R-EXM-05 | Reusable question bank by unit/difficulty/past paper | Planned | Roadmap P1 |
-| R-EXM-06 | Marking workflow, marker groups | Done / Partial (audit F-67: the owning teacher cannot enter marks) | Exact assignment done; groups E1 done; scoped allocations with preview/confirm/history (E2, #85) done; physical-result entry next |
+| R-EXM-06 | Marking workflow, marker groups | Done | Assigned markers, owning teachers and owners enter marks; scoped allocations with preview/confirm/history (E2, #85) done; physical-result entry next |
 | R-EXM-07 | Physical-paper marks entered by staff | Planned | Tracker 2026-09-06: Phase E must add the staff API. Audit F-13: `INCLASS` exams are offered in the UI today with no entry path, so this is a live dead end, not only a future feature |
 | R-EXM-08 | Rankings and percentiles | Planned | Roadmap P1 "Gradebook" |
 | R-EXM-09 | Student progress charts and weak-topic analysis | Planned | Roadmap P2 "Learning analytics" |
@@ -217,7 +217,7 @@ decision stands.
 | 10 | "Super admin can do everything" | Global oversight, not impersonation (gap analysis §2) | Keep |
 | 11 | PHYSICAL-only students and online content | Today the gate ignores `classType` | **Resolved 2026-11-19:** physical-only students lose live/recording access unless `HYBRID` or the session opts in (`onlineForPhysical`); payment/enrollment spec §4.4 |
 | 12 | Which month's fee unlocks which content | Gate = current organization billing month or configured grace with a previous-month `SUCCESS` payment | **Decided 2026-11-20 (D-MONEY-1, D-ACCESS-1, D-ACCESS-9):** one covered-student function, current billing month in Asia/Colombo plus a configurable grace for students who paid last month, per-course gate, one recording window rule. See [19](./19-owner-decisions-2026-11-20.md) |
-| 13 | Who may mark an exam | Markers mark; teachers only publish and correct | **Decided 2026-11-20 (D-EXAMS-1):** the owning teacher and the owner may enter marks on their own exams; markers keep their assigned scope |
+| 13 | Who may mark an exam | Assigned markers, owning teachers and owners mark | **Decided 2026-11-20 (D-EXAMS-1):** the owning teacher and the owner may enter marks on their own exams; markers keep their assigned scope |
 | 14 | Branch dimension | Institute = branch (ADR 14), but `Course`, `Enrollment` and `ClassSession` carry no branch | **Decided 2026-11-20 (D-STRUCTURE-1):** each branch runs its own course with its own roster and fee; branch recorded on sessions and scans |
 | 15 | Exams and payment | Exams gated by enrollment only | **Decided 2026-11-20 (D-ACCESS-2):** exam sitting follows the same coverage function, with a per-course owner toggle |
 | 16 | Teacher and owner authority | Money adjustments and refunds are owner-only; teachers publish and correct; the owner has no read-only console | **Decided 2026-11-20 (D-MONEY-9, D-EXAMS-5, D-OPS-1):** teacher money caps ship at zero (requests go to an owner queue), configurable per teacher; late-work policy as in D-EXAMS-5; owner console is read-only (F-127) |

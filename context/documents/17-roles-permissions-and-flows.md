@@ -63,7 +63,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Role | Scope as implemented | Where it leaks or is thin |
 |---|---|---|
 | `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28). Both fixed in #102 (unreleased); owner cap and step-up wait for Wave 1 |
-| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Cannot mark own exam (F-67). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
+| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Can enter marks on own exams since #105 (F-67, unreleased). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
 | `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
 | `MARKER` | Assigned exams or audiences only for list, get and grade | Sees full student identity on every script (F-74). Refused on recording and attendance reads (F-04, F-09 fixed in Wave 0) |
 | `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); recording read scoping (F-06); not applied to exams (F-23) |
@@ -86,7 +86,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Who owes this month | no view (F-10) | – | – | – | – |
 | Scan or mark attendance | ✔ | read own course | ✔ | – | own QR; video flag (F-24) |
 | Create exam, assign markers | ✔ | ✔ own | – | – | – |
-| Enter marks | – | **– (F-67)** | – | ✔ assigned | – |
+| Enter marks | ✔ (#105) | ✔ own course (F-67, #105) | – | ✔ assigned | – |
 | Enter hall (`INCLASS`) marks | – | – | – | – | no path for anyone (F-13) |
 | Publish results, post-publish correction | ✔ | ✔ own | – | – | read own |
 | Roster of enrolled students | ✔ | **– (F-83)** | ✔ | – | – |
@@ -181,13 +181,13 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, F-07 in #99, status per finding in doc 18):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, F-55 fixed in #100, unreleased, F-07 in #99, F-28 and F-31 in #102, F-02 in #103; code complete 2026-11-21, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom endpoint-validation handling hardened and route rate-limited (#101, staging verification pending); F-55 production boot check for the keys actually
   used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution; the owner-safety slice
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
-- **Wave 1 — give each role a working day (foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
+- **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
   entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation; F-104 timetable-generated classes
   that can go live (a live-checked S fix); F-127 read-only owner console.
