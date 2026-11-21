@@ -266,19 +266,13 @@ describe('createMyInstituteBarcode — code uniqueness', () => {
 		expect(assertScanCodeFree).not.toHaveBeenCalled();
 	});
 
-	it('the second of two concurrent writers of the same code is refused (the lock makes it see the first row)', async () => {
-		let taken = false;
-		assertScanCodeFree.mockImplementation(async () => {
-			if (taken) throw unavailable();
-		});
-		studentBarcodeCreate.mockImplementation(async () => {
-			taken = true;
-			return created;
-		});
-
-		await expect(createMyInstituteBarcode('u1', input)).resolves.toEqual(created);
-		await expect(createMyInstituteBarcode('u2', input)).rejects.toMatchObject({ code: 'CODE_UNAVAILABLE' });
+	it('runs the guard before the write inside one transaction', async () => {
+		await createMyInstituteBarcode('u1', input);
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(assertScanCodeFree).toHaveBeenCalledWith(txClient, input.barcode, { exceptUserId: 'u1' });
+		expect(assertScanCodeFree.mock.invocationCallOrder[0]).toBeLessThan(studentBarcodeCreate.mock.invocationCallOrder[0]!);
 	});
+
 });
 
 describe('resolveStudentByBarcode', () => {

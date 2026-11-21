@@ -95,13 +95,6 @@ const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
 
-/**
- * The LMS QR (`User.barcode`) is issued to every student automatically —
- * derived from their already-unique `indexNumber`, so it's guaranteed
- * collision-free without a generate-and-retry loop. Admins can still
- * reassign it later via `PATCH /users/:id/barcode` (e.g. a lost card).
- */
-
 /** Strips sensitive fields from user objects before returning to client */
 const toSafeUser = (user: {
   id: string;
