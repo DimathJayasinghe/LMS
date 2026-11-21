@@ -38,7 +38,7 @@
 | F-01 | critical | flow-gap | Student session silently dies after 15 minutes: refresh never fires because the access cookie expires with the JWT | M | - | code | UXS-01(student), ACC-01, UXS-01(staff) | Fixed (#96, unreleased; ships with the rate-limit keying PR) |
 | F-02 | high | flow-gap | Server-rendered pages reach the API from one source address, so at peak the shared per-IP limit could be exhausted (a capacity estimate, not observed) and any /auth/me failure then redirects to login; users behind one campus or carrier address share the 10/min login limit | M | - | code + 2nd | ACC-02, UXS-15(student) | Open |
 | F-03 | high | flow-gap | No password recovery of any kind (self-service or staff-assisted); a forgotten password permanently strands the account | M | yes | code + 2nd | ACC-03, UXS-02(staff), UXS-11(student) | Open |
-| F-04 | high | access-leak | Recording stream access is not restricted to enrolled students and the owning teacher; some staff roles are not scoped by course | S | yes | live | EP-01, DEL-03 | Fixed (#PR, unreleased) |
+| F-04 | high | access-leak | Recording stream access is not restricted to enrolled students and the owning teacher; some staff roles are not scoped by course | S | yes | live | EP-01, DEL-03 | Fixed (#97, unreleased) |
 | F-05 | high | domain-mismatch | Content gate checks only the CURRENT month, not the month the content belongs to | M | yes | live | EP-02, DEL-04, EP-02v | Open |
 | F-07 | high | data-integrity | Scan identity resolution can be ambiguous in some cases (details kept in the private audit notes) | S | yes | live | ACC-15, ATT-01 | Open |
 | F-09 | high | access-leak | Attendance read scoping needs tightening (details kept in the private audit notes) | S | - | code + 2nd | ATT-03, OVR-06 | Open |
@@ -54,7 +54,7 @@
 | F-83 | high | access-gap | Teacher has no general roster of enrolled students and no view of who has paid or who is absent (exception: the exam-configuration eligible-students list for the teacher's own course) | M | yes | code + 2nd | UXS-07(staff) | Open |
 | F-86 | high | flow-gap | Exam answers other than MCQ ticks are never autosaved; at 0:00 the Submit button is disabled so typed answers are lost | S | - | code + 2nd | UXS-05(student) | Open |
 | F-104 | high | flow-gap | Default timetable mode ('All cohorts') produces sessions that can never be scheduled as a live Zoom class, and no UI edits a session's mode, so timetable-generated classes can never go online | S | no | live | CAT-08, UXS-14(staff) | Open |
-| F-06 | medium | access-leak | Recording metadata read is not scoped by enrollment | S | - | live | EP-04, DEL-02 | Fixed (#PR, unreleased) |
+| F-06 | medium | access-leak | Recording metadata read is not scoped by enrollment | S | - | live | EP-04, DEL-02 | Fixed (#97, unreleased) |
 | F-08 | medium | data-integrity | Check-in QR integrity: the code is static and the scanner shows no photo, so a lent or screenshotted code can mark a classmate present (proxy attendance); scan also checks no enrollment or payment | M | yes | code + 2nd | ATT-02 | Open |
 | F-11 | medium | ui-gap | Front-desk walk-in cannot be enrolled from the UI: enroll is student-only in the frontend, CollectPayment only lists existing enrollments | M | - | code + 2nd | PAY-06, UXS-03(staff) | Open |
 | F-15 | medium | access-gap | Deactivation and role change do not revoke live access tokens: stale session keeps full access up to 15 min | S | yes | live | ACC-11, OVR-08, DEL-05 | Open |
