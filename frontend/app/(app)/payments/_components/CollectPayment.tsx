@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { QrCamera } from "@/components/custom/QrCamera";
 import { api, ApiError } from "@/lib/api";
 import { currentPaymentMonth } from "@/lib/payhere";
+import { CollectionBranch, useRememberedBranch } from "./CollectionBranch";
 import { formatCurrency } from "@/lib/utils";
 import type { ApiList, ApiSuccess, Enrollment, Payment, ResolvedBarcodeStudent, User } from "@/lib/types";
 
@@ -34,8 +35,9 @@ function monthsFrom(startMonth: string, endMonth: string): string[] {
   return months;
 }
 
-export function CollectPayment({ timezone }: { timezone: string }) {
+export function CollectPayment({ timezone, institutes = [] }: { timezone: string; institutes?: { id: string; name: string }[] }) {
   const router = useRouter();
+  const [branchId, setBranchId] = useRememberedBranch(institutes);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponse, setSearchResponse] = useState<{ term: string; results: User[] }>({
@@ -164,7 +166,8 @@ export function CollectPayment({ timezone }: { timezone: string }) {
           enrollmentId: selectedEnrollment.id,
           paymentMonth: month,
           amount: Number(amount),
-          ...(instituteId ? { collectedAtInstituteId: instituteId } : {}),
+          // The branch this desk chose is where the cash is taken; the student's home branch only fills in when none is chosen.
+          ...(branchId || instituteId ? { collectedAtInstituteId: branchId || instituteId } : {}),
           ...(matchedBarcode ? { collectedViaBarcode: matchedBarcode } : {}),
         },
         { headers: { "Idempotency-Key": crypto.randomUUID() } },
@@ -190,6 +193,8 @@ export function CollectPayment({ timezone }: { timezone: string }) {
           Find a student by name/index or scan their barcode.
         </p>
       </div>
+
+      <CollectionBranch institutes={institutes} value={branchId} onChange={setBranchId} />
 
       <div className="print:hidden">
         {!student ? (

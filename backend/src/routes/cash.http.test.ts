@@ -33,8 +33,8 @@ let base: string;
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  m.list.mockResolvedValue({ from: '2026-11-14', to: '2026-11-20', data: [], count: 0 });
-  m.tallies.mockResolvedValue({ from: '2026-11-14', to: '2026-11-20', data: [], count: 0 });
+  m.list.mockResolvedValue({ from: '2026-11-14', to: '2026-11-20', tallyEnabled: true, data: [], count: 0 });
+  m.tallies.mockResolvedValue({ from: '2026-11-14', to: '2026-11-20', tallyEnabled: true, data: [], count: 0 });
   m.close.mockResolvedValue({ id: 't1', flagged: false });
   m.reconcile.mockResolvedValue({ id: 't1', reconciledAt: new Date('2026-11-20T10:00:00Z'), alreadyReconciled: false });
   const app = express();
@@ -77,7 +77,7 @@ describe.each([['/cash', () => m.list], ['/cash-tally', () => m.tallies]])('GET 
     const response = await call(role, 'GET', `${path}?from=2026-11-14&to=2026-11-20`);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.json).toEqual({ status: 'success', data: [], count: 0, from: '2026-11-14', to: '2026-11-20' });
+    expect(response.json).toEqual({ status: 'success', data: [], count: 0, from: '2026-11-14', to: '2026-11-20', tallyEnabled: true });
     expect(service()).toHaveBeenCalledWith(expect.objectContaining({ role }), { from: '2026-11-14', to: '2026-11-20' });
   });
 

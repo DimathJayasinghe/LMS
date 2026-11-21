@@ -16,6 +16,8 @@ const DEFAULT_RANGE_DAYS = 6;
 export interface CashList {
   from: string;
   to: string;
+  /** False when the owner turned the end-of-day count off; screens hide their count controls. */
+  tallyEnabled: boolean;
   data: CashRow[];
   count: number;
 }
@@ -43,16 +45,18 @@ export const listCashDays = async (actor: AuthenticatedUser, query: CashQueryInp
   if (from > to) throw new AppError('INVALID_RANGE', 400, 'The start day is after the end day.');
   if (daysBetween(from, to) > CASH_MAX_RANGE_DAYS) throw new AppError('RANGE_TOO_LARGE', 400, `Choose at most ${CASH_MAX_RANGE_DAYS + 1} days.`);
 
-  const [days, tallies, threshold] = await Promise.all([
+  const setting = createSettingsReader(organizationId);
+  const [days, tallies, threshold, tallyEnabled] = await Promise.all([
     queryCashDays({ organizationId, timezone, from, to, collectorId, instituteId: query.instituteId }),
     prisma.cashTally.findMany({
       where: { organizationId, day: { gte: from, lte: to }, ...(collectorId ? { collectorId } : {}), ...(query.instituteId ? { instituteId: query.instituteId } : {}) },
       select: tallySelect,
     }),
-    createSettingsReader(organizationId)('tally.varianceFlagAmount'),
+    setting('tally.varianceFlagAmount'),
+    setting('tally.enabled'),
   ]);
   const data = buildCashRows(days, tallies, threshold);
-  return { from, to, data, count: data.length };
+  return { from, to, tallyEnabled, data, count: data.length };
 };
 
 /** The same rows, restricted to days that were counted; the owner's queue is `unreconciled`. */

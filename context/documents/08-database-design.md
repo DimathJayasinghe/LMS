@@ -459,6 +459,7 @@ model Payment {
 
   collectedById String?                        // staff who took an ENTRANCE/MANUAL payment
   collectedBy   User?         @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
+  collectedAt   DateTime?                      // when staff took the money (Wave 1, F-77); the end-of-day cash count groups by its Colombo day
 
   adjustments PaymentAdjustment[]
 
@@ -476,6 +477,8 @@ model Payment {
 - **`enrollmentId`, not `userId`** — payment is tied to a specific enrollment (student + course + mode).
 - **`method`** — records the channel. `ENTRANCE` payments are taken at the front desk; `collectedById` records which staff member took the cash. `ONLINE` = PayHere; `BULK` = Excel import; `MANUAL` = owner/admin adjustment.
 - **`@@unique([enrollmentId, paymentMonth])`** — prevents double-paying the same month for the same enrollment (whether online, at the entrance or by bank transfer). It deliberately stays one row per month; slip attempts live in `PaymentSlip` (below) so reject → re-upload does not need to break it.
+- **`collectedAt`** — the instant a desk took the money (set by `collect-entrance`; nullable, backfilled from `updatedAt` for desk cash that pre-dates it). `createdAt` is wrong for a PENDING row converted at the desk and `updatedAt` moves on a refund or override, so the cash tally needs its own time. Indexed with `collectedById`.
+- **`CashTally`** (Wave 1, F-77) — one end-of-day count per collector, Colombo `day` (`YYYY-MM-DD` text) and optional branch: `countedAmount` typed by the clerk, `systemAmount` and `paymentCount` computed at the count, `variance` (counted minus system), `note`, `reconciledAt`/`reconciledById` set by the owner. A record, not a lock: later cash leaves the stored figures alone and the read side reports the row stale. One row per (collector, day, branch) is guaranteed by the service under an advisory lock, not by a database unique index (Prisma cannot express the partial index a nullable branch needs). Tenant model: `organizationId`, relation and index.
 - **`collectedAtInstituteId` / `collectedViaBarcode`** — for `ENTRANCE` payments, the branch that took the cash and the barcode that identified the student (a snapshot, not a foreign key). These are present in the schema; the model block above predates them.
 - **Tenancy:** `payhereId` becomes `@@unique([organizationId, payhereId])` (ADR 14 §3.3).
 - **`amount` stays gross; `refundedAmount` is the net-reporting projection.** Partial refunds keep

@@ -11,17 +11,17 @@ const noStore = (res: Response): void => {
 };
 
 export const listCash = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-	const { from, to, data, count } = await CashListService.listCashDays(req.user!, cashQuerySchema.parse(req.query));
+	const { from, to, tallyEnabled, data, count } = await CashListService.listCashDays(req.user!, cashQuerySchema.parse(req.query));
 
 	noStore(res);
-	res.status(200).json({ status: 'success', data, count, from, to });
+	res.status(200).json({ status: 'success', data, count, from, to, tallyEnabled });
 });
 
 export const listCashTallies = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-	const { from, to, data, count } = await CashListService.listCashTallies(req.user!, cashTallyQuerySchema.parse(req.query));
+	const { from, to, tallyEnabled, data, count } = await CashListService.listCashTallies(req.user!, cashTallyQuerySchema.parse(req.query));
 
 	noStore(res);
-	res.status(200).json({ status: 'success', data, count, from, to });
+	res.status(200).json({ status: 'success', data, count, from, to, tallyEnabled });
 });
 
 export const closeCashDay = asyncHandler(async (req: Request, res: Response): Promise<void> => {

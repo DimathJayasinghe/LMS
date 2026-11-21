@@ -27,7 +27,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
-  m.settings = { 'tally.varianceFlagAmount': 0 };
+  m.settings = { 'tally.varianceFlagAmount': 0, 'tally.enabled': true };
   m.clock.mockResolvedValue({ organizationId: 'org', timezone: 'Asia/Colombo' });
   m.days.mockResolvedValue([]);
   m.findMany.mockResolvedValue([]);
@@ -101,6 +101,15 @@ describe('listCashDays', () => {
     expect(count).toBe(2);
     expect(data[0]!.tally).toMatchObject({ flagged: true, staleSinceClose: false });
     expect(data[1]!.tally).toBeNull();
+  });
+});
+
+describe('the owner switch', () => {
+  it('reports whether the end-of-day count is on, and still lists the cash when it is off', async () => {
+    m.days.mockResolvedValue([day()]);
+    expect(await listCashDays(owner, {})).toMatchObject({ tallyEnabled: true, count: 1 });
+    m.settings['tally.enabled'] = false;
+    expect(await listCashDays(owner, {})).toMatchObject({ tallyEnabled: false, count: 1 });
   });
 });
 

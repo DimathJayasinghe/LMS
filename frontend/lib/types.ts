@@ -578,6 +578,44 @@ export interface ReminderResult {
   skipped: { enrollmentId: string; reason: ReminderSkipReason }[];
 }
 
+/** A stored end-of-day count, with the checks the screen shows (GET /payments/cash). */
+export interface CashTallyView {
+  id: string;
+  countedAmount: string;
+  systemAmount: string;
+  /** Counted minus system, "N.NN"; negative means the clerk is short. */
+  variance: string;
+  paymentCount: number;
+  note: string | null;
+  closedAt: string;
+  /** The difference is beyond the owner's threshold. */
+  flagged: boolean;
+  /** Cash was taken, refunded or changed after the count. */
+  staleSinceClose: boolean;
+  reconciledAt: string | null;
+  reconciledByName: string | null;
+}
+
+/** One collector's cash for one Colombo day at one branch, with the count for it when there is one. */
+export interface CashRow {
+  day: string;
+  collectorId: string;
+  collectorName: string;
+  instituteId: string | null;
+  instituteName: string | null;
+  amount: string;
+  paymentCount: number;
+  tally: CashTallyView | null;
+}
+
+/** GET /payments/cash and /payments/cash-tally. */
+export interface CashList extends ApiList<CashRow> {
+  from: string;
+  to: string;
+  /** False when the owner turned the end-of-day count off. */
+  tallyEnabled: boolean;
+}
+
 export interface PaymentAdjustment {
   id: string;
   type: PaymentAdjustmentType;
