@@ -272,20 +272,32 @@ export const refreshTokens = async (
 
   const graceMs = env.REFRESH_REUSE_GRACE_SECONDS * 1000;
   const now = new Date();
+  let rotatedAt = storedToken.rotatedAt;
 
-  if (storedToken.rotatedAt === null) {
+  if (rotatedAt === null) {
     // First use: mark the row rotated. updateMany with the rotatedAt guard means
-    // two concurrent first uses cannot both win; the loser (count 0) is a duplicate
-    // that was rotated an instant ago, so it takes the grace path below.
+    // two concurrent first uses cannot both win.
     const { count } = await prisma.refreshToken.updateMany({
       where: { id: storedToken.id, rotatedAt: null },
       data: { rotatedAt: now },
     });
-    if (count === 0 && graceMs === 0) {
-      return revokeAfterReuse(decoded.userId);
+    if (count === 1) {
+      rotatedAt = now;
+    } else {
+      // Lost the race. Re-read to learn why: another request rotated it an instant
+      // ago (a duplicate), or the row is gone because a logout or revoke-all got
+      // there first. A vanished row must fail closed, never mint a new pair.
+      const current = await prisma.refreshToken.findUnique({ where: { token: hashedOldToken } });
+      if (!current || current.rotatedAt === null) {
+        throw new AppError('INVALID_REFRESH_TOKEN', 401, 'Invalid refresh token. Please log in again.');
+      }
+      rotatedAt = current.rotatedAt;
     }
-  } else if (graceMs === 0 || now.getTime() - storedToken.rotatedAt.getTime() > graceMs) {
-    // Presented again after the tolerance window: genuine reuse.
+  }
+
+  // The token we just rotated is at age 0 and always passes; a token rotated
+  // earlier must be inside the tolerance window, otherwise it is genuine reuse.
+  if (rotatedAt !== now && (graceMs === 0 || now.getTime() - rotatedAt.getTime() > graceMs)) {
     return revokeAfterReuse(decoded.userId);
   }
 

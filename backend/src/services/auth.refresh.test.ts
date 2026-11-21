@@ -101,8 +101,11 @@ describe('refreshTokens: first use', () => {
 		expect(tokenFindUnique).toHaveBeenCalledWith({ where: { token: sha(t) } });
 	});
 
-	it('two concurrent first uses both succeed and neither revokes (loser sees count 0)', async () => {
-		tokenFindUnique.mockResolvedValue(row(null));
+	it('two concurrent first uses both succeed and neither revokes (loser sees count 0, re-reads the rotated row)', async () => {
+		tokenFindUnique
+			.mockResolvedValueOnce(row(null))
+			.mockResolvedValueOnce(row(null))
+			.mockResolvedValue(row(NOW));
 		tokenUpdateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
 		const t = signRefresh();
 		const [a, b] = await Promise.all([refreshTokens(t), refreshTokens(t)]);
@@ -112,9 +115,26 @@ describe('refreshTokens: first use', () => {
 		expect(revokedAll()).toBe(false);
 	});
 
+	it('fails closed when the row vanished between lookup and rotation (logout or revoke-all raced us)', async () => {
+		tokenFindUnique.mockResolvedValueOnce(row(null)).mockResolvedValue(null);
+		tokenUpdateMany.mockResolvedValue({ count: 0 });
+
+		await expect(refreshTokens(signRefresh())).rejects.toMatchObject({ code: 'INVALID_REFRESH_TOKEN', statusCode: 401 });
+		expect(tokenCreate).not.toHaveBeenCalled();
+		expect(userFindUnique).not.toHaveBeenCalled();
+	});
+
+	it('a count-0 loser whose re-read shows a rotation outside the grace window is reuse', async () => {
+		tokenFindUnique.mockResolvedValueOnce(row(null)).mockResolvedValue(row(secondsAgo(30)));
+		tokenUpdateMany.mockResolvedValue({ count: 0 });
+
+		await expect(refreshTokens(signRefresh())).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
+		expect(revokedAll()).toBe(true);
+	});
+
 	it('the count-0 loser is treated as reuse when the grace window is disabled', async () => {
 		mockEnv.REFRESH_REUSE_GRACE_SECONDS = 0;
-		tokenFindUnique.mockResolvedValue(row(null));
+		tokenFindUnique.mockResolvedValueOnce(row(null)).mockResolvedValue(row(NOW));
 		tokenUpdateMany.mockResolvedValue({ count: 0 });
 
 		await expect(refreshTokens(signRefresh())).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
