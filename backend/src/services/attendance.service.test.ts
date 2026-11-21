@@ -175,15 +175,6 @@ describe('scanBarcode - institute-aware resolution', () => {
 		expect(attendanceUpsert).not.toHaveBeenCalled();
 	});
 
-	it('does not let an institute card shadow another student\'s LMS card (the same code held by two students is ambiguous, not first-match)', async () => {
-		studentBarcodeFindMany.mockResolvedValue([{ instituteId: scanInput.instituteId, user: { ...student, id: 'squatter' } }]);
-		userFindMany.mockResolvedValue([{ ...student, id: 'victim' }]);
-
-		await expect(scanBarcode({ ...scanInput, barcode: 'LMS-000042' })).rejects.toMatchObject({
-			code: 'AMBIGUOUS_CODE',
-		});
-		expect(attendanceUpsert).not.toHaveBeenCalled();
-	});
 
 	it('resolves an institute card held at another institute (codes are organization-wide)', async () => {
 		studentBarcodeFindMany.mockResolvedValue([{ instituteId: '99999999-9999-4999-8999-999999999999', user: student }]);

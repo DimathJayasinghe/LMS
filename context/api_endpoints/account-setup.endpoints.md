@@ -148,8 +148,7 @@ Self-scoped CRUD over the caller's own `StudentBarcode` rows.
 | `STUDENT_BARCODE_NOT_FOUND` | 404 | `DELETE` on a barcode that doesn't exist or isn't the caller's own (ownership-scoped, not just existence) |
 
 The ownership check was verified end-to-end on the production stack (student B gets 404, not 403,
-deleting student A's row — existence is deliberately not confirmed to a non-owner). Before 2026-11-21 the
-same code value was accepted at a second institute; it is now refused with `CODE_UNAVAILABLE`.
+deleting student A's row — existence is deliberately not confirmed to a non-owner).
 
 ---
 

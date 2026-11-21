@@ -266,7 +266,7 @@ describe('assertScanCodeFree', () => {
 			assertScanCodeFree(tx, 'LMS-000123', { exceptUserId: 'u1', allowLmsFormat: true }),
 		).resolves.toBeUndefined();
 
-		userFindFirst.mockResolvedValue({ id: 'squatter' });
+		userFindFirst.mockResolvedValue({ id: 'other-holder' });
 		await expect(
 			assertScanCodeFree(tx, 'LMS-000123', { exceptUserId: 'u1', allowLmsFormat: true }),
 		).rejects.toMatchObject({ code: 'CODE_UNAVAILABLE' });

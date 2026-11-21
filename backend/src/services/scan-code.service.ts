@@ -9,7 +9,7 @@ import { withAdvisoryLock } from '@/utils/advisory-lock';
 // (the LMS card in `User.barcode` or an institute card in `StudentBarcode`).
 // This is the only place that reads or guards those two tables for that purpose.
 
-/** The card format written at registration (`LMS-<index>`); reserved so nobody can register it ahead of time. */
+/** The registration card format (`LMS-<index>`); only the registration writer may use it. */
 export const LMS_CODE_PATTERN = /^LMS-\d+$/i;
 
 const SCAN_CODE_LOCK_NAMESPACE = 'scan-code';
