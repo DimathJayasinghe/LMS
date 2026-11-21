@@ -442,6 +442,8 @@
 
 **Settings and defaults:** exams.hallMarks.maxRowsPerBatch = 500; exams.hallMarks.allowDecimal = false.
 
+**Wave 1 implementation (#109, unreleased):** `PUT /exams/:id/hall-marks` with a dry run, all rows or none, and the audit row in the same transaction. `exams.hallMarks.allowDecimal` is registered but inert: `Submission.marks` is an integer column, so a decimal is refused rather than rounded. Honoring the setting needs a column type change across marking, results and exports, so it stays a later migration.
+
 **Rejected:** Per-student form only; Excel import; front desk types marks; writing absent as 0; a new HallMark table.
 
 **Reversibility:** Yes. Additive endpoint and one defaulted column.

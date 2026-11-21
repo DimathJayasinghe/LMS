@@ -37,9 +37,6 @@ beforeEach(async () => {
   vi.clearAllMocks();
   m.cache.clear();
   m.enter.mockResolvedValue(result());
-  db.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
-    role: where.id.startsWith('marker') ? Role.MARKER : Role.TEACHER, deletedAt: null, tokenVersion: 0, mustChangePassword: false,
-  }));
   db.idempotencyRecord.findUnique.mockImplementation(async ({ where }: { where: { key: string } }) => m.cache.get(where.key) ?? null);
   db.idempotencyRecord.create.mockImplementation(async ({ data }: { data: { key: string } }) => { m.cache.set(data.key, data); return data; });
   const app = express();
@@ -56,6 +53,8 @@ afterEach(async () => {
 });
 
 const put = async (role: Role | null, payload: unknown, idempotencyKey?: string, userId = role === Role.MARKER ? 'marker-1' : 'teacher-1', path = `/api/exams/${examId}/hall-marks`) => {
+  // The role the route sees comes from the account row, not from the token.
+  db.user.findUnique.mockResolvedValue({ role: role ?? Role.TEACHER, deletedAt: null, tokenVersion: 0, mustChangePassword: false });
   const token = role ? jwt.sign({ userId, role }, 'http-test-secret') : null;
   const response = await fetch(`${base}${path}`, {
     method: 'PUT',
@@ -77,7 +76,6 @@ describe('PUT /exams/:id/hall-marks wiring', () => {
   });
 
   it.each([Role.SUPER_ADMIN, Role.TEACHER, Role.MARKER])('lets %s through to the service', async (role) => {
-    db.user.findUnique.mockResolvedValue({ role, deletedAt: null, tokenVersion: 0, mustChangePassword: false });
     const response = await put(role, body, key(1));
     expect(response.status).toBe(200);
     expect(m.enter).toHaveBeenCalledWith(examId, body, expect.objectContaining({ role }), expect.objectContaining({ actorRole: role }));

@@ -314,6 +314,8 @@ export interface Exam {
   allowTypedAnswers: boolean;
   allowPdfUpload: boolean;
   courseId: string;
+  /** Set for a scoped exam (one with audiences); null for a course-wide exam. */
+  paperRevisionId?: string | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -726,4 +728,35 @@ export interface PublicUpcomingSession {
     name: string;
     subject: { name: string };
   };
+}
+
+// ─── Hall marks (paper exams sat in the hall) ─────────────────
+
+export type HallMarkRowStatus =
+  | "OK"
+  | "WILL_CHANGE"
+  | "UNKNOWN_INDEX"
+  | "NOT_ELIGIBLE"
+  | "NOT_ASSIGNED"
+  | "DUPLICATE_IN_BATCH"
+  | "OUT_OF_RANGE"
+  | "ONLINE_SUBMISSION_EXISTS"
+  | "MARKS_SET_BY_TEACHER";
+
+export interface HallMarkRow {
+  line: number;
+  indexNumber: number;
+  marks: number;
+  status: HallMarkRowStatus;
+  before?: number | null;
+  after?: number;
+  /** Present for teachers and the owner only. */
+  name?: string;
+}
+
+export interface HallMarksResult {
+  dryRun: boolean;
+  applied: boolean;
+  counts: { total: number; changed: number; unchanged: number; rejected: number };
+  rows: HallMarkRow[];
 }
