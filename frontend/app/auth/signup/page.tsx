@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/hooks/useAuth";
 import type { ApiSuccess, User } from "@/lib/types";
+import { signupErrorMessage } from "./signup-error";
 
 type FormValues = {
   name: string;
@@ -62,7 +63,7 @@ export default function SignupPage() {
         err.fields?.forEach((f) =>
           setError(f.field as keyof FormValues, { message: f.message }),
         );
-        setFormError(err.message);
+        setFormError(signupErrorMessage(err));
       } else {
         setFormError("Something went wrong. Please try again.");
       }
