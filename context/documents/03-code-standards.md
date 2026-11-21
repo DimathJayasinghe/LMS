@@ -87,7 +87,7 @@ src/app/(dashboard)/student/exams/
 ### 4.4 API Client (Axios)
 
 - Single Axios instance in `src/lib/api.ts` with:
-  - `baseURL` pointing to `api.academylms.com`
+  - `baseURL` `/api` (same-origin)
   - Request interceptor: attach JWT from cookie
   - Response interceptor: on `401`, trigger silent token refresh
   - `withCredentials: true` for HTTP-only cookies

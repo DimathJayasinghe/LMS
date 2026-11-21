@@ -4,7 +4,7 @@
 > This is an inventory, not a promise to ship every competitor feature. Each item still needs a
 > focused design, acceptance criteria, security review, tests, and a separate PR.
 
-**Last reviewed:** 2026-11-19 (requirements alignment: tenancy, payment channels, HYBRID, guardian, localization)
+**Last reviewed:** 2026-11-20 (owner decisions settled by delegation, [19](./19-owner-decisions-2026-11-20.md); fix-wave plans written)
 
 ## Product Direction
 
@@ -51,7 +51,7 @@ These are prerequisites for calling the platform production-ready.
 | Backup/restore readiness | Backup engine exists; production drill pending | Configure off-site target, restore drill, RPO/RTO evidence, alerting |
 | Observability | Logging/Sentry foundations exist | Health dashboard, queue lag, webhook failures, provider status, alert thresholds |
 | Accessibility baseline | Partial component-level accessibility | WCAG 2.2 AA audit, keyboard flows, focus management, contrast, reduced motion, captions |
-| Tenant foundation | No `Organization` model; global uniques; provider credentials only in `env.ts` ([14](./14-multi-tenancy-readiness.md)) | ADR steps M1–M3 (default organization, `organizationId` everywhere, per-organization uniques) **before further schema-changing slices**, so new tables are created tenant-aware |
+| Tenant foundation | M1 done (`Organization` table, nullable `organizationId` everywhere); global uniques and provider credentials in `env.ts` remain ([14](./14-multi-tenancy-readiness.md)) | M2–M3 as one stretch after Wave 1 (only hotfixes merge) and before Wave 2; every new table already carries `organizationId` (registry test); M4–M7 wait for a second organization ([14](./14-multi-tenancy-readiness.md) §11) |
 | Dependency security | Backend and frontend full npm audits report zero known advisories after the 2026-08-20 Next/Prisma/Sentry/Multer/parser upgrades | Keep audit in CI and review framework/provider advisories on every release |
 
 ## P0.5 - Access and Flow Coherence (audit 2026-11-19)
@@ -60,9 +60,10 @@ Found by the roles, scope and flow audit ([17](./17-roles-permissions-and-flows.
 
 | Wave | Deliverable | Findings |
 |---|---|---|
-| 0 | Session lifetime fix; recording read scoping; enrollment check on recording metadata; attendance read scoping; Zoom webhook hardening; production boot check for Bunny keys; SSR traffic out of the per-IP limiter; scan identity resolution | F-01, F-04, F-06, F-09, F-54, F-55, F-02, F-07 |
-| 1 | Front desk: enroll UI, who-owes, end-of-day cash tally, scanner context. Teacher: roster, marking, hall-mark entry. Students: scoped-exam sitting, exam resilience. Accounts: password reset, staff creation. Timetable: generated classes can go live | F-11, F-10, F-77, F-12, F-83, F-67, F-13, F-17, F-22, F-86, F-03, F-21, F-104, F-127 |
-| 2 | One content gate with mode and payment rules; branch dimension; money edges; guardian contact and SMS events (needs owner decisions) | F-05, F-23, F-52, F-53, F-37, F-105, F-58 to F-65, F-91, F-93, F-94, F-25, F-76, F-98, F-125, F-126 |
+| 0 | Session lifetime fix; recording read scoping; enrollment check on recording metadata; attendance read scoping; Zoom webhook hardening; production boot check for Bunny keys; SSR traffic out of the per-IP limiter; scan identity resolution; owner-account safety slice | F-01, F-04, F-06, F-09, F-54, F-55, F-02, F-07, F-28, F-31 |
+| 1 | Foundations (settings registry, Colombo billing clock, per-request revocation F-15). Front desk: enroll UI, who-owes, end-of-day cash tally, bulk-upload guard, scanner context. Teacher: roster, marking, hall-mark entry. Students: scoped-exam sitting, exam resilience. Accounts: password reset, staff creation. Timetable: generated classes can go live. Owner: read-only console | F-15, F-11, F-10, F-77, F-58, F-12, F-83, F-67, F-13, F-17, F-22, F-86, F-03, F-21, F-104, F-127 |
+| M2 + M3 | Tenancy context and constraints as one focused stretch after Wave 1 (only hotfixes merge) | doc 14 §11 |
+| 2 | One content gate with mode and payment rules, HYBRID and bank slip; branch dimension; money edges and enrollment lifecycle; guardian contact and SMS events; teacher money authority (decisions made: [19](./19-owner-decisions-2026-11-20.md)) | F-05, F-23, F-52, F-53, F-59 to F-65, F-91, F-93, F-94, F-25, F-76, F-98, F-125, F-126, plus the residuals of F-37 and F-105 (session branch, T13) |
 | 3 | Remaining medium and low findings with a Vitest matrix per guard | doc 18 |
 
 ## P1 - Complete the Core Teaching Product
@@ -137,7 +138,7 @@ Every feature slice must include:
 3. ✅ Teacher course authoring, subject assignment, marker workflow, result corrections, and student new-lesson dashboard (2026-08-20).
 4. ✅ Secure class banner/backdrop upload with public-R2 lifecycle, full image decoding, exact dimensions, accessibility text, and audit events (2026-08-20).
 5. ✅ Private course modules/materials and timetable-slot/live-flow unification (2026-08-21).
-6. **Next (re-ordered 2026-11-19):** tenant foundation (ADR 14 M1–M3), then continue Phase E (physical-result entry and academic evidence), then `HYBRID` enrollment and the bank-slip channel, then standalone assignments. Phase E (marker groups, exam papers/audiences, allocation snapshots, guided
+6. **Next (re-ordered 2026-11-20):** audit Wave 0; Wave 1 (two plans, Wave 1 and Wave 1b: settings registry and Colombo clock first, then identity safety, attendance, teacher and money visibility); then M2 and M3 as one one-to-two-week stretch in which only hotfixes merge; then Wave 2 (2a one enrollment migration with HYBRID, 2b money core and the single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority, shares and statements); M4-M7 only when a second organization is contracted, then standalone assignments. Wave 1 includes the physical hall-mark entry of Phase E (D-EXAMS-2). Master order: `docs/superpowers/plans/2026-11-20-wave-2-access-coherence-and-delivery-order.md`; Wave 1 is split into two plans (`…-wave-1-working-day-per-role.md` and `…-wave-1b-identity-attendance-structure-and-drivers.md`). Phase E (marker groups, exam papers/audiences, allocation snapshots, guided
    exam authoring) is partly merged: E1 marker groups, exam papers/audiences and scoped marker allocations (#85) are on `dev`. The incremental
    Phase E implementation plan is documented in
    [`docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md`](../../docs/plans/2026-08-22-phase-e-marker-groups-exam-workflow.md).

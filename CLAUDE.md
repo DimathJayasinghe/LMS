@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
+A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not; delivery order is audit Wave 0, Wave 1 (two plans), then M2–M3 as one one-to-two-week stretch where only hotfixes merge, then Wave 2 (2a enrollment migration with HYBRID, 2b money core and single gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money), with M4–M7 waiting for a second organization**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
 `frontend/` (Next.js) and `backend/` (Express) — no npm workspace, no root `package.json`; `cd` into
 each separately. Designed to run on **one small VPS** via Docker Compose: no Kubernetes, no
 auto-scaling, no multi-instance anything. The backend API is deliberately kept **stateless** anyway
-(all shared state in Redis) so a second instance stays a config change, not a rewrite.
+(all shared state in Redis) so a second instance stays a config change, not a rewrite. Production serves the page and `/api` from one host (nginx routes `/` and `/api`, or a Vercel rewrite of `/api` to the VPS with `NEXT_PUBLIC_API_URL=/api`): auth cookies are host-only and the server-rendered layout reads them, so a frontend at `<domain>` with the API at `api.<domain>` is unsupported (doc 19 §6).
 
 ## Commands
 
@@ -132,8 +132,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
   `PLATFORM_ADMIN` is reserved for a future SaaS operator and is not in the `Role` enum.
 - The `Organization` table and a nullable `organizationId` (default: the one `default`/`DEF` organization) exist
   on every model since M1; the scoped Prisma client, JWT context and `NOT NULL` constraints (M2–M3) do not yet.
-  Until `14-multi-tenancy-readiness.md §11` M2–M3 land, do not add new global uniques on user-visible values,
-  hand-built R2/Redis keys, or new provider-credential reads from `env`. Every new model must declare
+  Until M3 lands (per-organization uniques), do not add new global uniques on user-visible values; until M5 do not add hand-built R2/Redis keys; until M4 do not add new provider-credential reads from `env` (M4–M7 wait for a second organization; `14-multi-tenancy-readiness.md §11`). Every new model must declare
   `organizationId` + the `Organization` relation + `@@index([organizationId])` (the registry test in
   `backend/src/utils/tenant-integrity.test.ts` fails otherwise), and CI runs the tenant integrity check.
 - **Stack decision:** stay on Express + Next.js. A NestJS rewrite was considered and rejected.
@@ -144,6 +143,9 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
   flow audit of 2026-11-19 (what each role can and cannot actually do, with a fix for each finding) is
   `context/documents/17-roles-permissions-and-flows.md` and `18-flow-audit-findings-register.md`; read them
   before changing any access rule, because several flows there are dead ends rather than missing features.
+  The open owner decisions from that audit were settled on 2026-11-20 (57 decisions, configurable and reversible):
+  `context/documents/19-owner-decisions-2026-11-20.md`; the fix-wave plans are `docs/superpowers/plans/2026-11-20-wave-*.md`.
+  Where a rule in doc 17 or 18 differs from doc 19 or a plan, doc 19 and the plan win.
 - Offline local development uses provider **drivers** (`STORAGE_DRIVER`, `SMS_DRIVER`, more planned) that default to the real providers and are refused when `NODE_ENV=production`; run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. See `context/documents/16-local-development.md`. A local video driver is planned and will have no DRM.
 
 ### Invariants (see `context/documents/02-architecture.md §5` for the full list)
@@ -160,7 +162,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 
 ## Working with `context/`
 
-`context/documents/` (numbered `01`-`18`) is the source of truth for architecture, code standards,
+`context/documents/` (numbered `01`-`19`) is the source of truth for architecture, code standards,
 DB design, and AI workflow rules — read the relevant one before a non-trivial change.
 `context/api_endpoints/*.md` documents the actual current API surface per domain.
 `context/plan/` is historical brainstorming only; where it conflicts with `documents/`, `documents/`

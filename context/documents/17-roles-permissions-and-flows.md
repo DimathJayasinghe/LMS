@@ -13,6 +13,10 @@
 > channels (planned, [spec](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md)),
 > and the PHYSICAL-only access rule (planned).
 >
+> **Update 2026-11-20.** The open owner decisions in §9 were settled by delegation and are recorded in
+> [19-owner-decisions-2026-11-20.md](./19-owner-decisions-2026-11-20.md) (57 decisions, defaults configurable and reversible). §7 below
+> carries the resulting fix order; the task-level plans are in `docs/superpowers/plans/2026-11-20-wave-*.md`.
+>
 > Related: [01 overview](./01-project-overview.md), [15 traceability](./15-requirements-traceability.md),
 > [13 roadmap](./13-product-roadmap.md). Evidence labels `live` / `code` are defined in doc 18.
 
@@ -39,16 +43,7 @@ content is one coarse rule applied differently depending on the route.
 | T10 Commercial and lifecycle model | No teacher settlement, class medium or capacity, drop and transfer lifecycle, non-monthly products, assistant role, substitutes, year rollover, minors' consent and retention | F-91 to F-102 |
 | T11 Scheduling, offboarding and oversight hygiene | Timetable-generated classes cannot go live, front desk not tied to a branch, offboarding without hand-over, no SMS log, thin security audit | F-104, F-105, F-107, F-118, F-120, F-121 |
 
-**Most urgent single item:** F-01 (verified in code; the login response was observed live with
-`Max-Age=900` on the access cookie, but the 16-minute logout itself has not been replayed, so reproduce it before
-fixing). The access cookie is set with the same lifetime as the access JWT
-(`backend/src/utils/auth-cookies.ts:8`, `auth.service.ts:308-311`), so after 15 minutes the browser discards it,
-the API answers 401 *without* the `expired` flag, and the frontend's silent refresh
-(`frontend/lib/api.ts:92-98`) never fires. Separately, the app layout resolves the session server-side and by
-design does not refresh (`frontend/app/(app)/layout.tsx`), so even a longer cookie would not keep a server-rendered
-navigation alive. Expect users to be sent to login about every 15 minutes, which stops a student mid-exam and a
-front-desk operator mid-queue. Refresh-token rotation is unaffected, but the fix needs a server-side refresh path
-(effort M), not only a cookie change.
+**Most urgent single item:** F-01: browser sessions end about 15 minutes after login (verified in code; the logout itself has not been replayed, so reproduce it before fixing). Users are sent to login mid-exam and mid-queue. The fix needs a server-side renewal path, not only a cookie change (effort M); mechanics are in the private audit notes.
 
 ## 2. Roles and how scope is actually enforced
 
@@ -186,24 +181,25 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; F-04 and F-07 need a quick owner confirmation, §9 item 12):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually
-  used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution.
-- **Wave 1 — give each role a working day:** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally
+  used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution; the owner-safety slice
+  of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
+- **Wave 1 — give each role a working day (foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
   and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking and F-13 hall-mark
   entry; F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset and F-21 staff creation; F-104 timetable-generated classes
   that can go live (a live-checked S fix); F-127 read-only owner console.
-- **Wave 2 — make access coherent (needs owner decisions, §9):** the single content gate with mode and
-  payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105), money and enrollment lifecycle (F-58 to F-65, F-91, F-93, F-94),
-  guardian contact, minors and notification events (F-25, F-76, F-98); teacher authority over concessions, refunds and
-  late work (F-125, F-126).
+- **Wave 2 — make access coherent (decisions made, doc 19; sub-order 2a enrollment migration with HYBRID, 2b money core and single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority):** the single content gate with mode and
+  payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105 residual: session branch), money and enrollment lifecycle (F-59 to F-65, F-91, F-93, F-94),
+  guardian contact, minors and notification events (F-25, F-76, F-98); teacher requests for concessions, waivers, refunds and corrections, executed by the owner or capped (F-125, 2f); late work (F-126, 2e).
+- **M2 + M3 (tenancy) sit between Wave 1 and Wave 2** as a one-to-two-week stretch where only hotfixes merge, because Wave 2 adds nearly all new tables and uniques and is cheaper to write once on the scoped client (D-STRUCTURE-10 and the master delivery order in the Wave 2 plan). M4-M7 wait until a second organization is contracted.
 - **Wave 3 — hardening and polish:** the remaining mediums and lows in doc 18, with Vitest matrices for every
   new guard as `04-ai-workflow-rules.md` §3.4 requires.
 
-Do **not** start Wave 2 mode and payment changes before the owner rules in §9, because three items interact
-(F-05, F-23, F-65) and the planned HYBRID work already changes the same gate.
+The owner rules in §9 are now decided (doc 19). Wave 2 mode and payment changes ship as one change set, because three items interact
+(F-05, F-23, F-65) and the planned HYBRID work changes the same gate. Doc 19 §4 is the authoritative order; where this section and doc 19 differ, doc 19 and the plans win.
 
 ## 8. Verified aligned
 
@@ -219,9 +215,9 @@ student per exam; marks hidden until publish; post-publish corrections are teach
 an audit entry; front-desk is deliberately denied exam content; the student timetable is scoped server-side to
 active enrollments.
 
-## 9. Open owner decisions
+## 9. Owner decisions (decided 2026-11-20 by delegation)
 
-These change what gets built and cannot be settled from code.
+These changed what gets built and could not be settled from code. The product owner delegated them ("you can decide what's best"); each is now a decision in [19-owner-decisions-2026-11-20.md](./19-owner-decisions-2026-11-20.md), reversible and configurable. Mapping: 1 → D-MONEY-1, D-ACCESS-9; 2 → D-ACCESS-2; 3 → D-EXAMS-1; 4 → D-STRUCTURE-1 to -3; 5 → D-IDENTITY-1, -2, -9; 6 → D-ACCESS-3, D-OPS-3; 7 → D-ACCESS-5 to -7; 8 → D-MONEY-3 to -5; 9 → D-IDENTITY-3, D-OPS-2; 10 → D-IDENTITY-4 to -6; 11 → D-MONEY-2, D-ACCESS-4, D-IDENTITY-13; 12 → D-ACCESS-8, D-ACCESS-4; 13 → D-MONEY-7 to -9, D-STRUCTURE-3 to -9, D-EXAMS-6, D-EXAMS-9 to -10, D-IDENTITY-9, -11; 14 → D-MONEY-9, D-EXAMS-5, D-OPS-1. The questions below are kept as the record of what was asked.
 
 1. **Fee unlock model (F-05, F-66, F-65).** Which month's payment unlocks which content, whether there is a
    grace window, and whether the gate is per enrollment or per course.
@@ -237,10 +233,10 @@ These change what gets built and cannot be settled from code.
    authority, and what minimum duration counts as present?
 8. **Money edges (F-61, F-63, F-64).** Chargeback handling, free and half cards, mid-month proration.
 9. **Parents (F-25).** Capture a guardian phone and send absence and fee-due SMS (and, from earlier decisions,
-   whether WhatsApp is wanted).
-10. **Roles (F-27, F-31, F-32).** Keep the per-user `Permission` override model or remove it from the docs; owner
+   whether WhatsApp is wanted; decided in D-IDENTITY-2 guardian capture and D-IDENTITY-3 SMS only).
+10. **Roles (F-27, F-31, F-32).** Settled: the per-user `Permission` model is removed (D-IDENTITY-4, Wave 1b Task 7); owner
     invariants; who may deactivate staff.
-11. Carried over: per-mode fees, the QR value scheme versus random tokens (F-08), a tenant export/restore
+11. Carried over (settled: D-MONEY-2 per-mode fees, D-ACCESS-4 QR scheme, D-IDENTITY-13 export/restore, D-IDENTITY-3 languages): per-mode fees, the QR value scheme versus random tokens (F-08), a tenant export/restore
     tool, Sinhala and Tamil at launch.
 12. **Wave 0 confirmations (F-04, F-07).** May front-desk or marker accounts ever open recordings (for support or
     marking)? The proposed default is no. And is scan identity required to be unique across both code kinds?
@@ -252,7 +248,7 @@ These change what gets built and cannot be settled from code.
     class fee.
 14. **Authority of the teacher and the owner (F-125, F-126, F-127).** How much money authority a teacher gets
     (concession and refund caps, what is automatic, who bears the cost), the default late-work and late-result
-    policy, and what the owner console must show. Defaults are proposed in §12.
+    policy, and what the owner console must show. Decided in D-MONEY-9, D-EXAMS-5 and D-OPS-1 (doc 19).
 
 ## 10. UI evidence (rendered per role)
 
@@ -288,7 +284,9 @@ reused. Verdicts on those: H1 confirmed (F-29), H2 confirmed (F-15), H3 confirme
 (F-05, F-18), H4 partly (F-04 family), H6 confirmed for videos and attendance (F-06, F-09), H7 confirmed
 (F-52, F-53), H8 confirmed (F-10, F-11, F-21, F-83).
 
-## 12. Proposed privileges for the higher roles
+## 12. Privileges for the higher roles (proposed 2026-11-19; settled in doc 19, which wins where they differ)
+
+Settled departures: teacher assistants and teacher cash handling rejected (D-EXAMS-9); refunds never auto-approved and teacher caps ship at zero (D-MONEY-9).
 
 In a Sri Lankan tuition institute the class teacher and the owner hold the real authority. The teacher runs the
 class, owns its income and decides concessions, late work and results; the owner answers for the whole institute;
@@ -307,11 +305,11 @@ not reopen, the 2026-11-19 decisions (HYBRID enrollment, three payment channels,
 | Teacher | Enter marks on own exam, hall (`INCLASS`) marks | marker only | owning teacher may enter and finalize | F-67, F-13 |
 | Teacher | Results: publish, correct after publish | publish once; correction needs a reason | add completeness check, unpublish and re-publish with a reason and a notification | F-71, F-126 |
 | Teacher | Late work: extension, late window, re-open | none | per-student extension and late flag on own exams, with a reason | F-126 |
-| Teacher | Concession (free or half card, waiver) on own course | owner override only | grant within an owner-set cap per month; above the cap it queues for the owner | F-125, F-63 |
-| Teacher | Refund or payment correction on own course | owner only | request; small amounts auto-approved within the cap, execution stays in the owner-only refund path, never above the paid amount | F-125 |
+| Teacher | Concession (free or half card, waiver) on own course | owner override only | grant within an owner-set cap per month; above the cap it queues for the owner. Caps ship at ZERO (D-MONEY-9), so every request queues for the owner until a teacher's cap is raised on one screen (suggested start Rs 5,000 per month and 3 cards). Teacher-granted concessions are bearer SHARED (D-MONEY-8) | F-125, F-63 |
+| Teacher | Refund or payment correction on own course | owner only | request only; never auto-approved (fixed, D-MONEY-9); the owner approves and executes through the existing owner-only refund path, never above the paid amount. Corrections and fee changes also execute only by the owner | F-125 |
 | Teacher | Attendance and sessions of own course | read, reconciliation | mark and undo, cancel, name a substitute | F-35, F-96, F-123 |
 | Teacher | Income statement | gross only | per-student drill-down, share, CSV | F-91 |
-| Teacher | Delegate to an assistant | none | scoped to own classes, with a cash handover record | F-95 |
+| Teacher | Delegate to an assistant | none | **rejected for v1 (D-EXAMS-9):** no assistant role and no teacher cash handling; the owner or front desk handle cash | F-95 |
 | Owner | Organization-wide read-only console | scattered or missing | rosters, attendance, marking progress, who owes, cash by collector, SMS log, security audit, teacher statements | F-127, F-10, F-77, F-120, F-121 |
 | Owner | View as a teacher, front desk or student | none | audited and strictly read-only | F-127 |
 | Owner | Approve teacher requests | none | one approval queue with reason and amount | F-125 |
@@ -320,5 +318,4 @@ not reopen, the 2026-11-19 decisions (HYBRID enrollment, three payment channels,
 **Guardrails that do not change.** Front desk keeps no refund, override or role power. Markers see no money.
 A teacher never touches another teacher's course (`assertCourseAccess`) and never approves their own request
 above the cap. Every adjustment carries an `Idempotency-Key`, a reason and an audit row. The owner invariants in
-F-31 (last owner, self-demotion) still apply. Cap values are owner decisions (§9 item 14), so start with
-conservative defaults (caps of zero, meaning every request goes to the owner) and raise them per teacher.
+F-31 (last owner, self-demotion) still apply. Cap values were decided in D-MONEY-9: caps ship at zero, so every request goes to the owner until the owner raises a teacher's caps; refunds are never auto-approved.
