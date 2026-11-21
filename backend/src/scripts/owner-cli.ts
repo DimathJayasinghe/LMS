@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { addOwner, resetOwnerPassword } from './owner-lib';
+import { addOwner, assertOwnerPassword, parseOwnerEmail, resetOwnerPassword } from './owner-lib';
 
 const promptPassword = (): Promise<string> => new Promise((resolve, reject) => {
   if (!process.stdin.isTTY) return reject(new Error('An interactive terminal is required.'));
@@ -26,14 +26,15 @@ const promptPassword = (): Promise<string> => new Promise((resolve, reject) => {
 export const runOwnerCli = async (mode: 'add' | 'reset'): Promise<void> => {
   const args = process.argv.slice(2);
   const emailIndex = args.indexOf('--email');
-  const email = emailIndex >= 0 ? args[emailIndex + 1]?.trim().toLowerCase() : undefined;
+  const rawEmail = emailIndex >= 0 ? args[emailIndex + 1] : undefined;
   const allowed = mode === 'reset' ? ['--generate', '--reactivate'] : ['--generate'];
   const other = args.filter((_, index) => index !== emailIndex && index !== emailIndex + 1);
-  if (!email || email.startsWith('--') || other.some((arg) => !allowed.includes(arg)) || new Set(other).size !== other.length) throw new Error('Use --email <address> [--generate]' + (mode === 'reset' ? ' [--reactivate]' : ''));
+  if (!rawEmail || rawEmail.startsWith('--') || other.some((arg) => !allowed.includes(arg)) || new Set(other).size !== other.length) throw new Error('Use --email <address> [--generate]' + (mode === 'reset' ? ' [--reactivate]' : ''));
+  const email = parseOwnerEmail(rawEmail);
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
   const generated = args.includes('--generate');
   const password = generated ? randomBytes(24).toString('base64url') : await promptPassword();
-  if (password.length < 8 || Buffer.byteLength(password) > 72) throw new Error('Password must be at least 8 characters and at most 72 bytes.');
+  assertOwnerPassword(password);
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = new PrismaClient({ adapter: new PrismaPg(pool) });
   try {

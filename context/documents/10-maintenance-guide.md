@@ -203,7 +203,7 @@ Mock tests do not establish transaction serialization. Run the disposable-stack 
 
 ## Owner account operations
 
-The startup seed creates the initial owner only when the default organization has no owner, including inactive owners. It does not change existing accounts; if the configured email belongs to another account it skips creation. Startup continues when the seed skips.
+The startup seed creates the initial owner only when the default organization has no owner, including inactive owners. It does not change existing accounts; if the configured email belongs to another account it skips creation. Startup continues when the seed skips. The seed has no built-in credentials: it needs both `LMS_ADMIN_EMAIL` (a valid address) and `LMS_ADMIN_PASSWORD` (8 to 72 bytes), and the operator commands validate the address the same way.
 
 Run the operator commands in an interactive container terminal. Passwords are entered without echo, or a generated password is shown once with `--generate`. Do not put passwords in command arguments.
 

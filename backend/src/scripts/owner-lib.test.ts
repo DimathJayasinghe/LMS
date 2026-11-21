@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { seedOwner, addOwner, resetOwnerPassword } from './owner-lib';
+import { seedOwner, addOwner, resetOwnerPassword, parseOwnerEmail, assertOwnerPassword, readSeedCredentials } from './owner-lib';
 
 const { findFirst, findUnique, create, update, deleteMany, audit, lock } = vi.hoisted(() => ({
   findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn(), audit: vi.fn(), lock: vi.fn(),
@@ -49,5 +49,26 @@ describe('owner scripts', () => {
     expect(deleteMany).toHaveBeenCalledWith({ where: { userId: 'owner' } });
     expect(audit.mock.calls[0]![0].data).toMatchObject({ action: 'OWNER_PASSWORD_RESET', metadata: { via: 'operator-cli' } });
     expect(JSON.stringify(audit.mock.calls)).not.toContain('password');
+  });
+});
+
+describe('owner credential input', () => {
+  it('normalises a valid email', () => {
+    expect(parseOwnerEmail(' Owner@Example.test ')).toBe('owner@example.test');
+  });
+  it.each([undefined, '', 'owner', 'owner@', 'a b@example.test'])('rejects the email %s', (value) => {
+    expect(() => parseOwnerEmail(value)).toThrow('valid email');
+  });
+  it.each(['short', 'x'.repeat(73), 'é'.repeat(37)])('rejects an unusable password', (value) => {
+    expect(() => assertOwnerPassword(value)).toThrow('Password must be');
+  });
+  it('accepts a password between 8 characters and 72 bytes', () => {
+    expect(() => assertOwnerPassword('x'.repeat(72))).not.toThrow();
+  });
+  it('requires both seed settings and has no built-in defaults', () => {
+    expect(() => readSeedCredentials({})).toThrow('required');
+    expect(() => readSeedCredentials({ LMS_ADMIN_EMAIL: 'owner@example.test' })).toThrow('required');
+    expect(() => readSeedCredentials({ LMS_ADMIN_PASSWORD: 'long-enough-password' })).toThrow('required');
+    expect(readSeedCredentials({ LMS_ADMIN_EMAIL: 'Owner@Example.test', LMS_ADMIN_PASSWORD: 'long-enough-password' })).toEqual({ email: 'owner@example.test', password: 'long-enough-password' });
   });
 });

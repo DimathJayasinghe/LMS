@@ -2,11 +2,10 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { seedOwner } from './owner-lib';
+import { readSeedCredentials, seedOwner } from './owner-lib';
 
 const main = async (): Promise<void> => {
-  const email = (process.env.LMS_ADMIN_EMAIL ?? 'admin@lms.test').toLowerCase();
-  const password = process.env.LMS_ADMIN_PASSWORD ?? 'Admin@12345';
+  const { email, password } = readSeedCredentials(process.env);
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = new PrismaClient({ adapter: new PrismaPg(pool) });

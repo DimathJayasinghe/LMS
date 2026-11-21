@@ -2,8 +2,27 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient, Role } from '@prisma/client';
 import { AUDIT_ACTION, DEFAULT_ORGANIZATION_ID } from '../utils/constants';
 import { withAdvisoryLock } from '../utils/advisory-lock';
+import { loginSchema } from '../schemas/auth.schema';
 
 const organizationId = DEFAULT_ORGANIZATION_ID;
+
+/** Same address rules as sign-in, so an owner can never be created with an address that cannot log in. */
+export const parseOwnerEmail = (value: string | undefined): string => {
+  const parsed = loginSchema.shape.email.safeParse((value ?? '').trim().toLowerCase());
+  if (!parsed.success) throw new Error('A valid email address is required.');
+  return parsed.data;
+};
+
+export const assertOwnerPassword = (password: string): void => {
+  if (password.length < 8 || Buffer.byteLength(password) > 72) throw new Error('Password must be at least 8 characters and at most 72 bytes.');
+};
+
+/** The startup seed has no built-in credentials: both settings must be provided. */
+export const readSeedCredentials = (env: NodeJS.ProcessEnv): { email: string; password: string } => {
+  if (!env.LMS_ADMIN_EMAIL || !env.LMS_ADMIN_PASSWORD) throw new Error('LMS_ADMIN_EMAIL and LMS_ADMIN_PASSWORD are required.');
+  assertOwnerPassword(env.LMS_ADMIN_PASSWORD);
+  return { email: parseOwnerEmail(env.LMS_ADMIN_EMAIL), password: env.LMS_ADMIN_PASSWORD };
+};
 
 export const seedOwner = async (db: PrismaClient, email: string, password: string): Promise<'created' | 'exists' | 'email-taken'> => {
   return db.$transaction(async (tx) => {
