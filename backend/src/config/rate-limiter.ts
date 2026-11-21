@@ -28,6 +28,7 @@ const createLimiter = (
   windowMs: number,
   max: number,
   keyPrefix: string,
+  options: { skipSuccessfulRequests?: boolean } = {},
 ): ReturnType<typeof rateLimit> => {
   // Check if Redis is connected at creation time
   const isRedisReady = redis.status === 'ready' || redis.status === 'connect';
@@ -54,6 +55,7 @@ const createLimiter = (
     standardHeaders: true,  // Return rate limit info in `RateLimit-*` headers
     legacyHeaders: false,   // Disable deprecated `X-RateLimit-*` headers
     store,
+    ...options,
     message: {
       status: 'error',
       message: 'Too many requests. Please try again later.',
@@ -94,7 +96,11 @@ export const createRateLimiters = (): {
     'rl:auth:',
   ),
 
-  zoomWebhookLimiter: createLimiter(60 * 1000, env.ZOOM_WEBHOOK_RATE_LIMIT_MAX, 'rl:zoom-webhook:'),
+  // Counts only rejected requests (malformed, unsigned, invalid), so a burst of verified
+  // participant events at the start of a class is never throttled.
+  zoomWebhookLimiter: createLimiter(60 * 1000, env.ZOOM_WEBHOOK_RATE_LIMIT_MAX, 'rl:zoom-webhook:', {
+    skipSuccessfulRequests: true,
+  }),
 
   /**
    * Stream limiter: applied to the signed video-token endpoint.
