@@ -252,6 +252,58 @@ Success `200`: `{ "data": { "sent": 2, "skipped": [{ "enrollmentId": "uuid", "re
 - One audit row `FEE_REMINDER_SENT` per request: month, course, `sent` and skip counts only.
 - Errors: 400 validation or `MONTH_IN_FUTURE`; 403; 404 `ENROLLMENT_NOT_FOUND` (an id that does not exist or is not in the given course; nothing is sent); 409 `REMINDER_TOO_EARLY`, `REMINDERS_DISABLED`.
 
+### 4e. Cash by Day and the End-of-Day Count (Admin / Super Admin)
+
+The "cash" of the counter is the money front desk took through **Collect payment** (`method = ENTRANCE`). A refund does not un-collect it, so
+`SUCCESS` and `REFUNDED` rows both count. Cash is grouped by **Colombo calendar day**, collector and branch (`Payment.collectedAtInstituteId`; cash with
+no branch recorded is its own group). The day comes from `Payment.collectedAt`, the instant staff took the money (set by `collect-entrance`; rows that
+pre-date the column were backfilled from `updatedAt`). All four routes are registered **before** `GET /:id` and answer `Cache-Control: no-store`.
+
+#### GET `/cash` and GET `/cash-tally` (Admin / Super Admin)
+
+- **Auth:** `SUPER_ADMIN` sees every collector and may filter with `collectorId`; `ADMIN` sees only their own cash and is refused (`403`) when asking for another collector. `TEACHER`, `MARKER`, `STUDENT` get 403.
+- **Query Params:** `from`, `to` (`YYYY-MM-DD`; default the last seven days ending today in the organization zone; at most 93 days, else `400 RANGE_TOO_LARGE`; `from` after `to` is `400 INVALID_RANGE`), `instituteId`, `collectorId` (owner only). `GET /cash-tally` also takes `unreconciled=true`.
+- **`/cash`** lists every (day, collector, branch) with cash, joined to the count recorded for it. **`/cash-tally`** is the same rows limited to counted days.
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "success", "from": "2026-11-14", "to": "2026-11-20", "tallyEnabled": true, "count": 1,
+    "data": [{
+      "day": "2026-11-20", "collectorId": "uuid", "collectorName": "Nimal", "instituteId": "uuid", "instituteName": "Kandy",
+      "amount": "7500.00", "paymentCount": 3,
+      "tally": {
+        "id": "uuid", "countedAmount": "7499.00", "systemAmount": "7500.00", "variance": "-1.00", "paymentCount": 3, "note": null,
+        "closedAt": "2026-11-20T10:00:00.000Z", "flagged": true, "staleSinceClose": false,
+        "reconciledAt": null, "reconciledByName": null
+      }
+    }]
+  }
+  ```
+  `amount` and `paymentCount` are **live**. `tally` is `null` for a day nobody counted. `variance` is counted minus system (negative is short). `flagged` is true when
+  the difference is beyond `tally.varianceFlagAmount` (default 0, so any difference), either way. `staleSinceClose` is true when the live cash no longer equals what the count recorded
+  (cash taken, refunded or overridden afterwards); a counted day whose cash has since gone away still appears, as a zero row. `tallyEnabled` mirrors `tally.enabled`.
+
+#### POST `/cash-tally` (Admin / Super Admin)
+
+The caller counts the cash **they** took on one day at one branch. There is no collector field (it is always the caller; extra fields are a 400).
+
+```json
+{ "day": "2026-11-20", "instituteId": "uuid", "countedAmount": 7499, "note": "one coin short" }
+```
+
+`day` defaults to today (Colombo) and may be a past day, never a day that has not started (`400 DAY_IN_FUTURE`). `instituteId` null or absent counts the cash with no branch recorded; an
+unknown branch is `404 INSTITUTE_NOT_FOUND`. `countedAmount` is rupees, at most two decimals, `0` to 100,000,000. The system amount is computed inside a per-collector, per-day, per-branch
+advisory lock and stored with the count, so counting again **updates the same row** (no duplicate). It is a record, not a lock: cash taken afterwards still lands and the row reports `staleSinceClose`.
+Naturally idempotent, so no `Idempotency-Key`. Writes the audit row `CASH_DAY_CLOSED` (day, branch, counted, system, variance, payment count) in the same transaction.
+- **Errors:** 400 validation or `DAY_IN_FUTURE`; 403; 404 `INSTITUTE_NOT_FOUND`; 409 `TALLY_DISABLED` (the owner turned `tally.enabled` off), `TALLY_RECONCILED` (the owner already reconciled that day; ask the owner).
+
+#### PATCH `/cash-tally/:id/reconcile` (Super Admin only)
+
+Marks a counted day as checked. Repeating it changes nothing and writes no second audit row (`data.alreadyReconciled` says which). `404 CASH_TALLY_NOT_FOUND` for an id that does not exist or belongs
+to another organization. Writes the audit row `CASH_TALLY_RECONCILED`. A reconciled day cannot be counted again.
+
+---
+
 ### 5. List All Payments (Admin)
 Allows admins to list and filter all payments in the system.
 
@@ -342,9 +394,11 @@ written or updated.
 
 ### 8. Collect Entrance Payment (Admin/Staff)
 Records a cash/in-person payment collected at the physical center, without going through
-PayHere. Upserts: a missing or PENDING/FAILED row is written to `SUCCESS`/`ENTRANCE`; a
-confirmed **online** `SUCCESS` (has a `payhereId`) is refused rather than overwritten — use
-`/override` to correct an online payment.
+PayHere. A missing row is created and a PENDING/FAILED row is converted to `SUCCESS`/`ENTRANCE`, stamping
+`collectedAt` (the instant the money was taken, which the end-of-day count in 4e groups by). **Any existing
+`SUCCESS` row is refused with `409 ALREADY_PAID`** (online ones with the more specific `ALREADY_PAID_ONLINE`) — a paid month is
+never overwritten here, so a day's cash cannot change silently; correct a paid month with `/override`. Both writes are conditional, so two desks
+collecting the same month together cannot both succeed: the loser gets `409 ALREADY_PAID`.
 
 - **URL:** `/collect-entrance`
 - **Method:** `POST`
@@ -364,7 +418,7 @@ confirmed **online** `SUCCESS` (has a `payhereId`) is refused rather than overwr
   `collectedViaBarcode` optional — present only when the student was identified via
   `GET /users/resolve-barcode` (see `users.endpoints.md`) rather than a name/index search.
 - **Success Response (200 OK):** the `Payment` (same shape as `/override`'s response).
-- **Errors:** `404 ENROLLMENT_NOT_FOUND`, `400 ENROLLMENT_NOT_ACTIVE`, `400 FUTURE_MONTH` (cannot collect after the enrollment organization's current billing month), `409 ALREADY_PAID_ONLINE`.
+- **Errors:** `404 ENROLLMENT_NOT_FOUND`, `400 ENROLLMENT_NOT_ACTIVE`, `400 FUTURE_MONTH` (cannot collect after the enrollment organization's current billing month), `409 ALREADY_PAID_ONLINE`, `409 ALREADY_PAID`, `409 PAYMENT_REFUNDED_IMMUTABLE`. `collectedAtInstituteId` should be the branch the desk is sitting at (the screen remembers it per device); the student's home branch from a barcode scan is only a fallback.
 
 ---
 

@@ -126,6 +126,33 @@ describe("AdminPayments — who owes", () => {
   });
 });
 
+describe("AdminPayments — cash", () => {
+  it("links to the cash page", () => {
+    render(<AdminPayments {...baseProps} />);
+    expect(screen.getByRole("link", { name: "Cash" })).toHaveAttribute("href", "/payments/cash");
+  });
+
+  it("shows the user's cash today above the collect form when it is available", () => {
+    render(<AdminPayments {...baseProps} todaysCash={{ amount: 7500, payments: 3, needCount: 1 }} />);
+    expect(screen.getByText("Your cash today")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Count the day" })).toBeInTheDocument();
+  });
+
+  it("leaves the strip out when the count is off or unavailable", () => {
+    render(<AdminPayments {...baseProps} todaysCash={null} />);
+    expect(screen.queryByText("Your cash today")).not.toBeInTheDocument();
+    expect(screen.queryByText("No cash taken yet today.")).not.toBeInTheDocument();
+  });
+
+  it("offers the branch choice to the collect form only when there are branches", () => {
+    const { unmount } = render(<AdminPayments {...baseProps} institutes={[{ id: "i1", name: "Kandy" }]} />);
+    expect(screen.getByLabelText("Collecting at")).toBeInTheDocument();
+    unmount();
+    render(<AdminPayments {...baseProps} />);
+    expect(screen.queryByLabelText("Collecting at")).not.toBeInTheDocument();
+  });
+});
+
 describe("AdminPayments — filters", () => {
   it("pushes month + status on status change", async () => {
     const user = userEvent.setup();

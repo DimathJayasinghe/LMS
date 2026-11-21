@@ -4,6 +4,7 @@ import { prisma } from '@/config/database';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { AppError } from '@/utils/app-error';
+import { hasPrismaCode } from '@/utils/prisma-error';
 import * as NotificationService from '@/services/notification.service';
 import {
 	PAYHERE_CHECKOUT_PATH,
@@ -701,6 +702,9 @@ export const overridePayment = async (
 	return updated;
 };
 
+const alreadyPaid = (): AppError =>
+	new AppError('ALREADY_PAID', 409, 'This month is already paid. Refresh to see the current record.');
+
 export const collectEntrancePayment = async (
 	collectedById: string,
 	input: CollectEntrancePaymentInput,
@@ -740,27 +744,38 @@ export const collectEntrancePayment = async (
 	if (existing?.status === PaymentStatus.REFUNDED) {
 		throw new AppError('PAYMENT_REFUNDED_IMMUTABLE', 409, 'This payment was fully refunded and cannot be overwritten.');
 	}
+	// A paid row is never re-collected: replacing the amount or collector would silently change a closed day's cash.
+	// Correcting a paid month is the owner's override, which keeps its own audit trail.
+	if (existing?.status === PaymentStatus.SUCCESS) throw alreadyPaid();
 
 	const fields = {
 		status: PaymentStatus.SUCCESS,
 		method: PaymentMethod.ENTRANCE,
 		amount: resolvedAmount,
 		collectedById,
+		collectedAt: new Date(),
 		collectedAtInstituteId: input.collectedAtInstituteId ?? null,
 		collectedViaBarcode: input.collectedViaBarcode ?? null,
 		note: 'Collected at entrance',
 	};
 
-	const payment = existing
-		? await prisma.payment.update({
-				where: { id: existing.id },
-				data: fields,
-				select: paymentSelect,
-			})
-		: await prisma.payment.create({
-				data: { enrollmentId: input.enrollmentId, paymentMonth: input.paymentMonth, ...fields },
-				select: paymentSelect,
-			});
+	// Both writes are conditional so two desks racing for the same month cannot both succeed.
+	let payment: PaymentSummary;
+	try {
+		payment = existing
+			? await prisma.payment.update({
+					where: { id: existing.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.FAILED] } },
+					data: fields,
+					select: paymentSelect,
+				})
+			: await prisma.payment.create({
+					data: { enrollmentId: input.enrollmentId, paymentMonth: input.paymentMonth, ...fields },
+					select: paymentSelect,
+				});
+	} catch (error) {
+		if (hasPrismaCode(error, 'P2002') || hasPrismaCode(error, 'P2025')) throw alreadyPaid();
+		throw error;
+	}
 
 	void NotificationService.dispatch({
 		type: NotificationType.PAYMENT_CONFIRMED,

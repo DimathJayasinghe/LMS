@@ -88,7 +88,7 @@
 | F-55 | medium | data-integrity | Prod boot validation checks a legacy Bunny webhook secret but not the keys actually used; wrong/missing key silently leaves every upload stuck UPLOADING and playback 503 | S | - | code + 2nd | DEL-08 | Fixed (#100, unreleased) |
 | F-56 | medium | domain-mismatch | Live-class token path: teacher host credentials come from the one shared owner Zoom account, single Zoom licence means one live class at a time | M | yes | code | DEL-10, CAT-09 | Open |
 | F-58 | medium | data-integrity | Bulk Excel upload lets front desk mark any month SUCCESS with any amount, with no future-month or active-enrollment guard, no collector stamp and no per-row audit trail | M | - | code + 2nd | PAY-08 | Open |
-| F-59 | medium | data-integrity | Collect-entrance silently overwrites an existing SUCCESS cash/manual/bulk row (double-collection, amount and collector replaced) with no adjustment record | S | - | code | PAY-09 | Open |
+| F-59 | medium | data-integrity | Collect-entrance silently overwrites an existing SUCCESS cash/manual/bulk row (double-collection, amount and collector replaced) with no adjustment record | S | - | code | PAY-09 | Fixed (#112, unreleased) |
 | F-60 | medium | data-integrity | PayHere notify arriving on a row already settled in cash either double-charges silently (same amount) or errors forever (different amount) | M | - | code | PAY-10 | Open |
 | F-61 | medium | data-integrity | PayHere chargeback or failure after SUCCESS is ignored, student keeps access after the money is clawed back | S | yes | code | PAY-11 | Open |
 | F-62 | medium | data-integrity | PayHere initiate does not check that the enrollment/course is active or that the month is sensible: a cancelled student can pay and gets nothing | S | - | code | PAY-12 | Open |
@@ -102,7 +102,7 @@
 | F-73 | medium | domain-mismatch | No ranking, percentile or class-level results view for staff or students | M | yes | code | EXM-11 | Open |
 | F-75 | medium | data-integrity | Publishing results sends two SMS per student and ignores the owner's SMS switch | S | - | code | OVR-01 | Open |
 | F-76 | medium | flow-gap | Only three notification events exist; no absence, fee-due, timetable-change, refund or marker-assignment messages, and no scheduled reminder jobs | L | yes | code | OVR-02 | Open |
-| F-77 | medium | flow-gap | No end-of-day cash tally: the API returns collector, branch and amount per row, but there are no collector, branch or date filters, no group-by endpoint and no UI columns, so short-collection is invisible | M | yes | code + 2nd | OVR-09 | Open |
+| F-77 | medium | flow-gap | No end-of-day cash tally: the API returns collector, branch and amount per row, but there are no collector, branch or date filters, no group-by endpoint and no UI columns, so short-collection is invisible | M | yes | code + 2nd | OVR-09 | Fixed (#112, unreleased) |
 | F-78 | medium | data-integrity | Outstanding-fees figure is wrong for any month other than the current one and still counts deactivated students | M | - | code | OVR-10, OVR-17 | Fixed (#111, unreleased) |
 | F-79 | medium | data-integrity | Teacher income reports follow the course's CURRENT teacher, so reassignment rewrites history and strips the old teacher | M | yes | code | OVR-11 | Open |
 | F-80 | medium | ui-gap | Audit log date filter drops the whole 'to' day and the dropdown omits real audit actions | S | - | code | OVR-12 | Open |

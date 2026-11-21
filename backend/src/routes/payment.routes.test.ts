@@ -27,10 +27,18 @@ vi.mock('@/controllers/outstanding.controller', () => ({
   sendFeeReminders: vi.fn(),
 }));
 
+vi.mock('@/controllers/cash.controller', () => ({
+  listCash: vi.fn(),
+  listCashTallies: vi.fn(),
+  closeCashDay: vi.fn(),
+  reconcileCashTally: vi.fn(),
+}));
+
 import { paymentRoutes } from './payment.routes';
 import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import * as PaymentController from '@/controllers/payment.controller';
 import * as OutstandingController from '@/controllers/outstanding.controller';
+import * as CashController from '@/controllers/cash.controller';
 
 interface RouterLayer {
   route?: {
@@ -104,5 +112,25 @@ describe('payment routes — who owes wiring', () => {
   it('POST /outstanding/reminders runs checkIdempotency immediately before the controller', () => {
     const stack = handlesFor(paymentRoutes, 'post', '/outstanding/reminders');
     expect(stack.indexOf(checkIdempotency)).toBe(stack.indexOf(OutstandingController.sendFeeReminders) - 1);
+  });
+});
+
+describe('payment routes — cash tally wiring', () => {
+  const order = (method: string, path: string) =>
+    (paymentRoutes as unknown as { stack: RouterLayer[] }).stack.findIndex((l) => l.route?.path === path && l.route.methods[method]);
+
+  it('registers every cash route before /:id so none is read as an id', () => {
+    const byId = order('get', '/:id');
+    for (const [method, path] of [['get', '/cash'], ['get', '/cash-tally'], ['post', '/cash-tally'], ['patch', '/cash-tally/:id/reconcile']] as const) {
+      expect(order(method, path), `${method} ${path}`).toBeGreaterThanOrEqual(0);
+      expect(order(method, path), `${method} ${path}`).toBeLessThan(byId);
+    }
+  });
+
+  it('wires each route to its controller', () => {
+    expect(handlesFor(paymentRoutes, 'get', '/cash')).toContain(CashController.listCash);
+    expect(handlesFor(paymentRoutes, 'get', '/cash-tally')).toContain(CashController.listCashTallies);
+    expect(handlesFor(paymentRoutes, 'post', '/cash-tally')).toContain(CashController.closeCashDay);
+    expect(handlesFor(paymentRoutes, 'patch', '/cash-tally/:id/reconcile')).toContain(CashController.reconcileCashTally);
   });
 });

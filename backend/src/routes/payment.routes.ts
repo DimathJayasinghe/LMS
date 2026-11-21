@@ -3,6 +3,7 @@ import multer from 'multer';
 import { Role } from '@prisma/client';
 import * as PaymentController from '@/controllers/payment.controller';
 import * as OutstandingController from '@/controllers/outstanding.controller';
+import * as CashController from '@/controllers/cash.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
@@ -18,6 +19,7 @@ import {
 	paymentsSummaryQuerySchema,
 	financialReportQuerySchema,
 } from '@/schemas/payment.schema';
+import { cashQuerySchema, cashTallyIdParamSchema, cashTallyQuerySchema, closeCashDaySchema } from '@/schemas/cash.schema';
 import { outstandingExportQuerySchema, outstandingQuerySchema, sendFeeRemindersSchema } from '@/schemas/outstanding.schema';
 import { PAYMENTS_BULK_UPLOAD_MAX_BYTES } from '@/utils/constants';
 
@@ -132,6 +134,41 @@ paymentRoutes.post(
 	validateBody(sendFeeRemindersSchema),
 	checkIdempotency,
 	OutstandingController.sendFeeReminders,
+);
+
+// ─── End-of-day cash (Admin sees and counts their own; Super Admin sees all and reconciles) ─
+// Registered BEFORE '/:id' so "cash" and "cash-tally" aren't captured as an id param.
+paymentRoutes.get(
+	'/cash',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateQuery(cashQuerySchema),
+	CashController.listCash,
+);
+
+paymentRoutes.get(
+	'/cash-tally',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateQuery(cashTallyQuerySchema),
+	CashController.listCashTallies,
+);
+
+// Naturally idempotent: one row per collector, day and branch, so a repeat updates instead of adding.
+paymentRoutes.post(
+	'/cash-tally',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	validateBody(closeCashDaySchema),
+	CashController.closeCashDay,
+);
+
+paymentRoutes.patch(
+	'/cash-tally/:id/reconcile',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN),
+	validateParams(cashTallyIdParamSchema),
+	CashController.reconcileCashTally,
 );
 
 // ─── Get Payment by Id (Owner/Admin/Staff) ────────────────

@@ -4,6 +4,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CollectPayment } from "./CollectPayment";
 import { formatCurrency } from "@/lib/utils";
+import { ApiError } from "@/lib/api";
 import type { Enrollment, Payment, ResolvedBarcodeStudent, User } from "@/lib/types";
 
 const { get, post, push, refresh } = vi.hoisted(() => ({
@@ -187,6 +188,63 @@ describe("CollectPayment — barcode scan resolution", () => {
       },
       { headers: { "Idempotency-Key": expect.any(String) } },
     );
+  });
+});
+
+describe("CollectPayment — the branch the desk collects at", () => {
+  const institutes = [{ id: "inst-1", name: "Kandy" }, { id: "inst-2", name: "Galle" }];
+  const collectWith = async (user: ReturnType<typeof userEvent.setup>) => {
+    await selectStudentByName(user);
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+  };
+  beforeEach(() => localStorage.clear());
+
+  it("records the cash against the chosen branch", async () => {
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" institutes={institutes} />);
+    await user.selectOptions(screen.getByLabelText("Collecting at"), "inst-2");
+    await collectWith(user);
+    expect(post).toHaveBeenCalledWith("/payments/collect-entrance", expect.objectContaining({ collectedAtInstituteId: "inst-2" }), expect.anything());
+  });
+
+  it("prefers the chosen branch to the student's home branch from a scan", async () => {
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" institutes={institutes} />);
+    await user.selectOptions(screen.getByLabelText("Collecting at"), "inst-2");
+    await user.click(screen.getByLabelText("Turn camera on"));
+    await screen.findByText("Nimal Perera");
+    await user.selectOptions(await screen.findByLabelText("Select enrollment"), "e1");
+    await user.click(screen.getByRole("button", { name: /Collect/ }));
+    expect(post).toHaveBeenCalledWith("/payments/collect-entrance", expect.objectContaining({ collectedAtInstituteId: "inst-2", collectedViaBarcode: "NUG-001" }), expect.anything());
+  });
+
+  it("sends no branch when none is chosen and the student was found by search", async () => {
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" institutes={institutes} />);
+    await collectWith(user);
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("collectedAtInstituteId");
+  });
+
+  it("starts from the branch chosen on this device earlier", async () => {
+    localStorage.setItem("lms.collectionBranch", "inst-1");
+    post.mockResolvedValueOnce({ data: paymentFixture() });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" institutes={institutes} />);
+    expect(await screen.findByLabelText("Collecting at")).toHaveValue("inst-1");
+    await collectWith(user);
+    expect(post).toHaveBeenCalledWith("/payments/collect-entrance", expect.objectContaining({ collectedAtInstituteId: "inst-1" }), expect.anything());
+  });
+
+  it("shows the server's reason when the month was paid by someone else meanwhile", async () => {
+    post.mockRejectedValueOnce(new ApiError(409, "This month is already paid. Refresh to see the current record.", "ALREADY_PAID"));
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" institutes={institutes} />);
+    await collectWith(user);
+    expect(await screen.findByText("This month is already paid. Refresh to see the current record.")).toBeInTheDocument();
   });
 });
 

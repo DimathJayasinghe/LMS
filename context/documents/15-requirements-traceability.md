@@ -156,7 +156,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 |---|---|---|---|
 | R-RPT-01 | Financial reports, scoped by role | Done | Admin reports; teacher own-class aggregates |
 | R-RPT-02 | Per-student attendance, fees, marks trend | Partial | Pieces exist; no combined student profile |
-| R-RPT-03 | Daily collection report for the counter | Planned | D-OPS-1 cash tally, Wave 1 Task 6 |
+| R-RPT-03 | Daily collection report for the counter | Done | Payments, Cash: cash by Colombo day, collector and branch, the clerk's end-of-day count, difference and stale marker, owner reconcile (D-OPS-1, F-77, #112, unreleased); no printable slip yet |
 | R-RPT-04 | Export to Excel/PDF | Planned | Phase G settlement/export |
 | R-RPT-05 | Owner dashboard on mobile | Partial | Responsive web; role dashboards tracked in issue #81 |
 

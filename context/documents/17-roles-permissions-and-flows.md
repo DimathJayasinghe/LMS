@@ -85,6 +85,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Collect fee at entrance, bulk upload | ✔ | – | ✔ | – | – |
 | Override or refund a payment | ✔ | – | – | – | – |
 | Who owes this month | ✔ list, CSV export, reminders (F-10, #111) | – | ✔ list and reminders, no CSV (#111) | – | – |
+| End-of-day cash count | ✔ every collector, reconcile (F-77, #112) | – | ✔ own cash and own count only (#112) | – | – |
 | Scan or mark attendance | ✔ | read own course | ✔ | – | own QR; video flag (F-24) |
 | Create exam, assign markers | ✔ | ✔ own | – | – | – |
 | Enter marks | ✔ (#105) | ✔ own course (F-67, #105) | – | ✔ assigned | – |
@@ -118,8 +119,8 @@ Submit button disables at 0:00 (F-86); a failed PDF upload leaves a dead submiss
 unpaid → end-of-day tally. *Breaks:* no enroll UI (F-11; UI only, the API allows it and the student can self-enroll on a phone meanwhile), no bulk "who owes" list (F-10, fixed in #111: Payments, Who owes, with reminders), scanner marks any active
 student present and shows nothing about enrollment, payment or mode (F-12), the scanner and cash desk resolve
 the same card with different rules (F-39), scan identity resolution was hardened in Wave 0 (F-07), the bulk Excel upload can set any month `SUCCESS` without a per-row trail (F-58),
-cash collection can silently overwrite an existing `SUCCESS` row (F-59), and there is no end-of-day cash tally
-(F-77).
+cash collection could silently overwrite an existing `SUCCESS` row (F-59, fixed in #112: it is now refused with `ALREADY_PAID`), and there was no end-of-day cash tally
+(F-77, fixed in #112: Payments, Cash).
 
 **Marker.** Sees only assigned scripts, which is right. *Breaks:* nav shows Dashboard, Classes, Timetable and
 Submissions; the Classes list says "Manage classes across the institution" and lists every course with its fee

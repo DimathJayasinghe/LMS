@@ -11,6 +11,8 @@ import { CollectPayment } from "./CollectPayment";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
 import { PaymentOverrideForm } from "./PaymentOverrideForm";
 import { PaymentAdjustmentPanel } from "./PaymentAdjustmentPanel";
+import { TodaysCash } from "./TodaysCash";
+import type { CashSummary } from "@/lib/cash";
 import type { ApiSuccess, BulkUploadResult, Payment, PaymentStatus, PaymentSummary } from "@/lib/types";
 
 interface Props {
@@ -24,6 +26,10 @@ interface Props {
   summary: PaymentSummary | null;
   canOverride: boolean;
   timezone: string;
+  /** Branches the desk can record cash against; empty hides the branch choice. */
+  institutes?: { id: string; name: string }[];
+  /** This user's cash today; null when the end-of-day count is off or could not be read. */
+  todaysCash?: CashSummary | null;
 }
 
 const inputClass =
@@ -40,6 +46,8 @@ export function AdminPayments({
   summary,
   canOverride,
   timezone,
+  institutes = [],
+  todaysCash = null,
 }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -138,6 +146,12 @@ export function AdminPayments({
           className="ml-auto inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
         >
           Who owes
+        </Link>
+        <Link
+          href="/payments/cash"
+          className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
+        >
+          Cash
         </Link>
       </div>
 
@@ -247,7 +261,8 @@ export function AdminPayments({
       )}
 
       {/* Collect at entrance */}
-      <CollectPayment timezone={timezone} />
+      {todaysCash && <TodaysCash summary={todaysCash} />}
+      <CollectPayment timezone={timezone} institutes={institutes} />
 
       {/* Bulk upload */}
       <section className="rounded-2xl border border-border bg-card p-4">

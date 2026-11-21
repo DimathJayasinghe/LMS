@@ -6,10 +6,13 @@ import { StudentPayments } from "./_components/StudentPayments";
 import { AdminPayments } from "./_components/AdminPayments";
 import { api } from "@/lib/api-server";
 import { currentPaymentMonth } from "@/lib/payhere";
+import { dayInTimezone, summarizeCash, type CashSummary } from "@/lib/cash";
 import type {
   ApiList,
   ApiSuccess,
+  CashList,
   Enrollment,
+  Institute,
   Payment,
   PaymentStatus,
   PaymentSummary,
@@ -70,7 +73,9 @@ export default async function PaymentsPage({
   if (status) query.set("status", status);
   query.set("paymentMonth", month);
 
-  const [list, summary] = await Promise.all([
+  // The desk's own cash for today, for the strip above the collect form. A failure only hides the strip.
+  const today = dayInTimezone(timezone);
+  const [list, summary, cash, institutes] = await Promise.all([
     guard401(api
       .get<ApiList<Payment>>(`/payments?${query.toString()}`, { cookie }))
       .catch((error) => { unstable_rethrow(error); return ({ data: [] as Payment[], count: 0 }) as ApiList<Payment>; }),
@@ -78,7 +83,15 @@ export default async function PaymentsPage({
       .get<ApiSuccess<PaymentSummary>>(`/payments/summary?month=${month}`, { cookie }))
       .then((r) => r.data)
       .catch((error) => { unstable_rethrow(error); return null; }),
+    guard401(api
+      .get<CashList>(`/payments/cash?from=${today}&to=${today}&collectorId=${viewer.id}`, { cookie }))
+      .catch((error) => { unstable_rethrow(error); return null; }),
+    guard401(api
+      .get<ApiList<Institute>>("/institutes", { cookie }))
+      .then((r) => r.data)
+      .catch((error) => { unstable_rethrow(error); return [] as Institute[]; }),
   ]);
+  const todaysCash: CashSummary | null = cash?.tallyEnabled ? summarizeCash(cash.data) : null;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -94,6 +107,8 @@ export default async function PaymentsPage({
         summary={summary}
         canOverride={viewer.role === "SUPER_ADMIN"}
         timezone={timezone}
+        institutes={institutes.map((i) => ({ id: i.id, name: i.name }))}
+        todaysCash={todaysCash}
       />
     </div>
   );
