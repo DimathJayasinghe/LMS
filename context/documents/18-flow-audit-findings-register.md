@@ -41,7 +41,7 @@
 | F-04 | high | access-leak | Recording stream access is not restricted to enrolled students and the owning teacher; some staff roles are not scoped by course | S | yes | live | EP-01, DEL-03 | Fixed (#97, unreleased) |
 | F-05 | high | domain-mismatch | Content gate checks only the CURRENT month, not the month the content belongs to | M | yes | live | EP-02, DEL-04, EP-02v | Open |
 | F-07 | high | data-integrity | Scan identity resolution can be ambiguous in some cases (details kept in the private audit notes) | S | yes | live | ACC-15, ATT-01 | Open |
-| F-09 | high | access-leak | Attendance read scoping needs tightening (details kept in the private audit notes) | S | - | code + 2nd | ATT-03, OVR-06 | Fixed (#PR, unreleased) |
+| F-09 | high | access-leak | Attendance read scoping needs tightening (details kept in the private audit notes) | S | - | code + 2nd | ATT-03, OVR-06 | Fixed (#98, unreleased) |
 | F-10 | high | flow-gap | No bulk 'who owes' list, export or reminder trigger: unpaid months have no Payment row so listPayments cannot enumerate them (a per-student outstanding view exists inside CollectPayment); the only aggregate is a count hidden from front desk | M | - | code + 2nd | PAY-07, OVR-05, UXS-12(staff) | Open |
 | F-12 | high | flow-gap | Entrance scan, manual mark and the Zoom webhook never check enrollment, delivery mode or payment, and the staff member sees none of it | M | yes | live | ATT-04, UXS-04(staff) | Open |
 | F-13 | high | flow-gap | In-class / physical-hall paper marks have no entry path at all (INCLASS exams are dead ends) | L | - | code + 2nd | EXM-02, UXS-08(staff) | Open |
