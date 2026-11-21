@@ -1,9 +1,7 @@
+import './load-env-file';
 import { z } from 'zod';
 import { RATE_LIMIT_GLOBAL_MAX, RATE_LIMIT_AUTH_MAX } from '../utils/constants';
-import dotenv from 'dotenv';
 import { SMS_DRIVERS, STORAGE_DRIVERS, findLocalDrivers } from './drivers';
-
-dotenv.config();
 
 const resolvedEnv = {
   ...process.env,
