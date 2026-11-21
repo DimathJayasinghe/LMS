@@ -85,7 +85,7 @@
 | F-51 | medium | flow-gap | Session create/update/cancel never notifies students; the only signal is an SSE event nobody consumes | M | - | code | CAT-04 | Open |
 | F-52 | medium | domain-mismatch | A branch (Institute) can host only ONE class at a time: same-institute overlap is rejected even for different teachers and courses | M | yes | code + 2nd | CAT-05 | Open |
 | F-53 | medium | domain-mismatch | A course, enrollment and session carry no branch; the student UI never shows where a physical class meets | M | yes | code + 2nd | CAT-06 | Open |
-| F-55 | medium | data-integrity | Prod boot validation checks a legacy Bunny webhook secret but not the keys actually used; wrong/missing key silently leaves every upload stuck UPLOADING and playback 503 | S | - | code + 2nd | DEL-08 | Fixed (#PR, unreleased) |
+| F-55 | medium | data-integrity | Prod boot validation checks a legacy Bunny webhook secret but not the keys actually used; wrong/missing key silently leaves every upload stuck UPLOADING and playback 503 | S | - | code + 2nd | DEL-08 | Fixed (#100, unreleased) |
 | F-56 | medium | domain-mismatch | Live-class token path: teacher host credentials come from the one shared owner Zoom account, single Zoom licence means one live class at a time | M | yes | code | DEL-10, CAT-09 | Open |
 | F-58 | medium | data-integrity | Bulk Excel upload lets front desk mark any month SUCCESS with any amount, with no future-month or active-enrollment guard, no collector stamp and no per-row audit trail | M | - | code + 2nd | PAY-08 | Open |
 | F-59 | medium | data-integrity | Collect-entrance silently overwrites an existing SUCCESS cash/manual/bulk row (double-collection, amount and collector replaced) with no adjustment record | S | - | code | PAY-09 | Open |
