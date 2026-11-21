@@ -63,7 +63,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Role | Scope as implemented | Where it leaks or is thin |
 |---|---|---|
 | `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28). Both fixed in #102 (unreleased); owner cap and step-up wait for Wave 1 |
-| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Cannot mark own exam (F-67). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
+| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Can enter marks on own exams since #105 (F-67, unreleased). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
 | `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
 | `MARKER` | Assigned exams or audiences only for list, get and grade | Sees full student identity on every script (F-74). Refused on recording and attendance reads (F-04, F-09 fixed in Wave 0) |
 | `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); recording read scoping (F-06); not applied to exams (F-23) |
@@ -86,7 +86,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Who owes this month | no view (F-10) | – | – | – | – |
 | Scan or mark attendance | ✔ | read own course | ✔ | – | own QR; video flag (F-24) |
 | Create exam, assign markers | ✔ | ✔ own | – | – | – |
-| Enter marks | – | **– (F-67)** | – | ✔ assigned | – |
+| Enter marks | ✔ (#105) | ✔ own course (F-67, #105) | – | ✔ assigned | – |
 | Enter hall (`INCLASS`) marks | – | – | – | – | no path for anyone (F-13) |
 | Publish results, post-publish correction | ✔ | ✔ own | – | – | read own |
 | Roster of enrolled students | ✔ | **– (F-83)** | ✔ | – | – |
