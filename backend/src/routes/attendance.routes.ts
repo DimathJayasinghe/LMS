@@ -102,10 +102,12 @@ attendanceRoutes.get(
 );
 
 // ─── Query: By Student ───────────────────────────────────────
-// GET /api/attendance/student/:userId — Student's own or admin lookup
+// GET /api/attendance/student/:userId — student's own history, owner and front desk any,
+// a teacher only rows from their own courses (markers are refused)
 attendanceRoutes.get(
   '/student/:userId',
   verifyToken,
+  requireRole(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER, Role.STUDENT),
   validateParams(attendanceStudentParamsSchema),
   validateQuery(attendanceQuerySchema),
   AttendanceController.getStudentAttendance,

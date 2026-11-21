@@ -63,9 +63,9 @@ Enforcement has three layers, and the gaps are always between them:
 | Role | Scope as implemented | Where it leaks or is thin |
 |---|---|---|
 | `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28) |
-| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | Attendance read scoping gap (F-09). No roster of own students (F-83). Cannot mark own exam (F-67) |
-| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Recording access scoping gap (F-04). Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
-| `MARKER` | Assigned exams or audiences only for list, get and grade | Recording and attendance read scoping gaps (F-04, F-09). Sees full student identity on every script (F-74) |
+| `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Cannot mark own exam (F-67). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
+| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
+| `MARKER` | Assigned exams or audiences only for list, get and grade | Sees full student identity on every script (F-74). Refused on recording and attendance reads (F-04, F-09 fixed in Wave 0) |
 | `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); recording read scoping (F-06); not applied to exams (F-23) |
 
 ## 3. Capability matrix (today, from the route matrix)
@@ -181,7 +181,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, status per finding in doc 18):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, F-09 in #98, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually

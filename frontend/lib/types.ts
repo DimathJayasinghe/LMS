@@ -599,8 +599,10 @@ export interface AttendanceRecord {
   user?: {
     id: string;
     name: string;
-    email: string;
+    /** Roster and scan reads only; per-student history omits it. */
+    email?: string;
     indexNumber: number;
+    /** Roster and scan reads only; per-student history omits it. */
     barcode?: string | null;
   };
   classSession?: {

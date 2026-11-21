@@ -36,7 +36,7 @@ vi.mock('@/config/database', () => ({
 	},
 }));
 
-import { getAttendanceBySession, getAttendanceByCourse, scanBarcode } from './attendance.service';
+import { getAttendanceBySession, getAttendanceByCourse, getStudentAttendance, scanBarcode } from './attendance.service';
 
 const SUPER_ADMIN = { userId: 'sa-1', role: Role.SUPER_ADMIN };
 const ADMIN = { userId: 'fd-1', role: Role.ADMIN };
@@ -233,5 +233,121 @@ describe('getAttendanceByCourse — teacher-scoped access', () => {
 			code: 'CLASS_NOT_FOUND',
 			statusCode: 404,
 		});
+	});
+});
+
+
+describe('getStudentAttendance - role and target scoping', () => {
+	const query = { page: 1, limit: 20 };
+	const MARKER = { userId: 'marker-1', role: Role.MARKER };
+	const studentSelf = { userId: 'student-1', role: Role.STUDENT };
+	const studentOther = { userId: 'student-9', role: Role.STUDENT };
+
+	const targets: Record<string, { id: string; role: Role; deletedAt: Date | null } | null> = {
+		student: { id: 'student-1', role: Role.STUDENT, deletedAt: null },
+		'teacher id': { id: 'student-1', role: Role.TEACHER, deletedAt: null },
+		'marker id': { id: 'student-1', role: Role.MARKER, deletedAt: null },
+		'front-desk id': { id: 'student-1', role: Role.ADMIN, deletedAt: null },
+		'soft-deleted student': { id: 'student-1', role: Role.STUDENT, deletedAt: new Date('2026-05-01') },
+		'missing id': null,
+	};
+	const setTarget = (name: keyof typeof targets) => userFindUnique.mockResolvedValue(targets[name]);
+
+	it.each([
+		['owner', SUPER_ADMIN],
+		['front desk', ADMIN],
+		['owning teacher', owningTeacher],
+		['student (self)', studentSelf],
+	])('%s reads a student history', async (_n, actor) => {
+		setTarget('student');
+		await expect(getStudentAttendance('student-1', actor, query)).resolves.toEqual({ records: [], total: 0 });
+	});
+
+	it.each(['teacher id', 'marker id', 'front-desk id', 'missing id'])(
+		'a %s as target is the same 404 for every allowed role',
+		async (name) => {
+			for (const actor of [SUPER_ADMIN, ADMIN, owningTeacher, studentSelf]) {
+				setTarget(name);
+				await expect(getStudentAttendance('student-1', actor, query)).rejects.toMatchObject({
+					code: 'USER_NOT_FOUND',
+					statusCode: 404,
+				});
+			}
+		},
+	);
+
+	it('owner and front desk can still read a soft-deleted student (history survives); teacher and the student themselves cannot', async () => {
+		setTarget('soft-deleted student');
+		await expect(getStudentAttendance('student-1', SUPER_ADMIN, query)).resolves.toEqual({ records: [], total: 0 });
+		await expect(getStudentAttendance('student-1', ADMIN, query)).resolves.toEqual({ records: [], total: 0 });
+		await expect(getStudentAttendance('student-1', owningTeacher, query)).rejects.toMatchObject({
+			code: 'USER_NOT_FOUND',
+		});
+		await expect(getStudentAttendance('student-1', studentSelf, query)).rejects.toMatchObject({
+			code: 'USER_NOT_FOUND',
+			statusCode: 404,
+		});
+	});
+
+	it('marker is refused 403 before any database read', async () => {
+		await expect(getStudentAttendance('student-1', MARKER, query)).rejects.toMatchObject({
+			code: 'FORBIDDEN_ROLE',
+			statusCode: 403,
+		});
+		expect(userFindUnique).not.toHaveBeenCalled();
+		expect(attendanceFindMany).not.toHaveBeenCalled();
+	});
+
+	it('a student asking for someone else is 403 before any database read', async () => {
+		await expect(getStudentAttendance('student-1', studentOther, query)).rejects.toMatchObject({
+			code: 'FORBIDDEN',
+			statusCode: 403,
+		});
+		expect(userFindUnique).not.toHaveBeenCalled();
+		expect(attendanceFindMany).not.toHaveBeenCalled();
+	});
+
+	it('check order: role gate, then target lookup, then scope filter (a missing target never reaches the history query)', async () => {
+		setTarget('missing id');
+		await expect(getStudentAttendance('student-1', owningTeacher, query)).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+		expect(attendanceFindMany).not.toHaveBeenCalled();
+	});
+
+	it('a teacher only ever queries rows from the courses they teach, and only live sessions', async () => {
+		setTarget('student');
+		await getStudentAttendance('student-1', owningTeacher, query);
+		const where = attendanceFindMany.mock.calls[0]![0].where;
+		expect(where).toEqual({
+			userId: 'student-1',
+			classSession: { deletedAt: null, course: { teacherId: 'teacher-1' } },
+		});
+		expect(attendanceCount.mock.calls[0]![0].where).toEqual(where);
+	});
+
+	it('a teacher with no rows in their courses gets an empty list, not a refusal', async () => {
+		setTarget('student');
+		attendanceFindMany.mockResolvedValueOnce([]);
+		await expect(getStudentAttendance('student-1', otherTeacher, query)).resolves.toEqual({ records: [], total: 0 });
+		expect(attendanceFindMany.mock.calls[0]![0].where.classSession.course).toEqual({ teacherId: otherTeacher.userId });
+	});
+
+	it.each([
+		['owner', SUPER_ADMIN],
+		['front desk', ADMIN],
+		['student (self)', studentSelf],
+	])('%s is not given the teacher course filter', async (_n, actor) => {
+		setTarget('student');
+		await getStudentAttendance('student-1', actor, query);
+		expect(attendanceFindMany.mock.calls[0]![0].where).toEqual({
+			userId: 'student-1',
+			classSession: { deletedAt: null },
+		});
+	});
+
+	it('the selected student fields carry neither email nor barcode', async () => {
+		setTarget('student');
+		await getStudentAttendance('student-1', ADMIN, query);
+		const select = attendanceFindMany.mock.calls[0]![0].select;
+		expect(select.user.select).toEqual({ id: true, name: true, indexNumber: true });
 	});
 });
