@@ -197,6 +197,8 @@ export interface ClassSession {
   durationMinutes: number;
   zoomMeetingId?: string | null;
   liveScheduled: boolean;
+  /** True when at least one READY recording exists (all roles; students and the teacher can open it). */
+  hasRecording: boolean;
   courseId: string;
   deletedAt?: string | null;
   createdAt: string;
@@ -424,7 +426,8 @@ export type VideoStatus = "UPLOADING" | "READY" | "FAILED";
 export interface VideoRecording {
   id: string;
   title: string;
-  bunnyVideoId: string;
+  /** Provider video id field: sent only to the owning teacher and the owner (a student's signed embed URL contains it, by design). */
+  bunnyVideoId?: string;
   durationSeconds?: number | null;
   status: VideoStatus;
   classSessionId: string;
@@ -435,9 +438,10 @@ export interface VideoRecording {
 }
 
 /**
- * Signed stream payload (GET /videos/:id/stream). `streamUrl` is IP-bound to
- * the requesting client, so this MUST be fetched from the browser — never from
- * a Server Component (the token would bind to the Next server's IP).
+ * Signed stream payload (GET /videos/:id/stream). The embed URL is
+ * token-authenticated with a 4-hour TTL and is NOT bound to the viewer's IP; it
+ * is still fetched from the browser (per-viewer watermark, short-lived token),
+ * not from a Server Component.
  */
 export interface StreamData {
   videoId: string;

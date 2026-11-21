@@ -48,6 +48,7 @@ const sessionRow = {
 	deletedAt: null,
 	createdAt: new Date('2026-06-01T00:00:00.000Z'),
 	updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+	_count: { videoRecordings: 0 },
 };
 
 beforeEach(() => {
@@ -80,7 +81,9 @@ describe('listClassSessions — TEACHER course-ownership scoping', () => {
 
 		const result = await listClassSessions('course-1', {}, superAdmin);
 
-		expect(result).toEqual([{ ...sessionRow, liveScheduled: false }]);
+		const { _count, ...publicFields } = sessionRow;
+		void _count;
+		expect(result).toEqual([{ ...publicFields, liveScheduled: false, hasRecording: false }]);
 		expect(assertCourseAccess).toHaveBeenCalledWith('course-1', superAdmin);
 	});
 
@@ -115,5 +118,42 @@ describe('getClassSessionById — TEACHER course-ownership scoping', () => {
 			statusCode: 403,
 		});
 		expect(classSessionFindUnique).not.toHaveBeenCalled();
+	});
+});
+
+describe('hasRecording flag', () => {
+	const rowWith = (ready: number) => ({ ...sessionRow, _count: { videoRecordings: ready } });
+
+	it.each([
+		['owner', superAdmin],
+		['owning teacher', teacher],
+		['student', student],
+	])('%s: true when a ready recording exists, and the raw count is not exposed', async (_n, actor) => {
+		classSessionFindMany.mockResolvedValueOnce([rowWith(2)]);
+		const [result] = await listClassSessions('course-1', { page: 1, limit: 20 } as never, actor);
+
+		expect(result).toMatchObject({ id: 'sess-1', hasRecording: true });
+		expect(result).not.toHaveProperty('_count');
+	});
+
+	it('false when there is no ready recording', async () => {
+		classSessionFindMany.mockResolvedValueOnce([rowWith(0)]);
+		const [result] = await listClassSessions('course-1', { page: 1, limit: 20 } as never, superAdmin);
+		expect(result).toMatchObject({ hasRecording: false });
+	});
+
+	it('counts only READY recordings (the select filters on status)', async () => {
+		classSessionFindMany.mockResolvedValueOnce([rowWith(1)]);
+		await listClassSessions('course-1', { page: 1, limit: 20 } as never, superAdmin);
+
+		const select = classSessionFindMany.mock.calls[0]![0].select;
+		expect(select._count).toEqual({ select: { videoRecordings: { where: { status: 'READY' } } } });
+	});
+
+	it('getClassSessionById carries the flag too', async () => {
+		classSessionFindUnique.mockResolvedValueOnce({ ...rowWith(1), deletedAt: null });
+		const result = await getClassSessionById('course-1', 'sess-1', teacher);
+		expect(result).toMatchObject({ hasRecording: true });
+		expect(result).not.toHaveProperty('_count');
 	});
 });

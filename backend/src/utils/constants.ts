@@ -75,8 +75,8 @@ export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 // ─── Bunny.net Video Streaming ──────────────────────────────
 
 /**
- * How long an IP-bound Bunny.net stream token stays valid (4 hours).
- * Long enough to watch a full lecture; short enough to limit replay attacks.
+ * How long a signed Bunny.net embed token stays valid (4 hours; not IP-bound).
+ * Long enough to watch a full lecture.
  */
 export const BUNNY_TOKEN_TTL_SECONDS = 4 * 60 * 60;
 
@@ -291,6 +291,7 @@ export const AUDIT_ACTION = {
 	VIDEO_ATTACHED: 'VIDEO_ATTACHED',
 	VIDEO_UPDATED: 'VIDEO_UPDATED',
 	VIDEO_DELETED: 'VIDEO_DELETED',
+	RECORDING_STREAM_STAFF: 'RECORDING_STREAM_STAFF',
 
 	// Exams
 	EXAM_CREATED: 'EXAM_CREATED',

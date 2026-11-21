@@ -32,16 +32,27 @@ const videoSelect = {
   updatedAt: true,
 } satisfies Prisma.VideoRecordingSelect;
 
+const videoSessionRelation = {
+  select: {
+    id: true,
+    title: true,
+    date: true,
+    courseId: true,
+  },
+} as const;
+
 const videoWithSessionSelect = {
   ...videoSelect,
-  classSession: {
-    select: {
-      id: true,
-      title: true,
-      date: true,
-      courseId: true,
-    },
-  },
+  classSession: videoSessionRelation,
+} satisfies Prisma.VideoRecordingSelect;
+
+// Student-facing records omit the provider's video id as a metadata field; the
+// signed embed URL from generateStreamUrl (which contains it) is what a viewer uses.
+const { bunnyVideoId: _omitProviderId, ...studentVideoFields } = videoSelect;
+void _omitProviderId;
+const studentVideoWithSessionSelect = {
+  ...studentVideoFields,
+  classSession: videoSessionRelation,
 } satisfies Prisma.VideoRecordingSelect;
 
 // ─── Return Types ─────────────────────────────────────────────
@@ -65,6 +76,39 @@ export interface VideoRecordWithSession extends VideoRecord {
     courseId: string;
   };
 }
+
+/** What a student may see of a recording: no provider video id. */
+export type StudentVideoRecordWithSession = Omit<VideoRecordWithSession, 'bunnyVideoId'>;
+
+// ─── Recording read access ───────────────────────────────────
+
+/** Roles that may open recordings at all: enrolled students, the owning teacher, the owner. */
+const RECORDING_READER_ROLES: Role[] = [Role.STUDENT, Role.TEACHER, Role.SUPER_ADMIN];
+
+/**
+ * Role gate for every recording read. Runs BEFORE any lookup so a refused role
+ * cannot learn whether a video or course exists (D-ACCESS-8).
+ */
+const assertRecordingReaderRole = (actor: AuthenticatedUser): void => {
+  if (!RECORDING_READER_ROLES.includes(actor.role)) {
+    throw new AppError('FORBIDDEN_ROLE', 403, 'Recordings are available to students and the class teacher.');
+  }
+};
+
+/**
+ * One access function for the list, metadata and stream paths. Owner passes; a
+ * teacher must own the course; a student must be enrolled (and, for a stream,
+ * have paid the current month: enrollment is checked before payment).
+ */
+const assertRecordingAccess = async (
+  actor: AuthenticatedUser,
+  courseId: string,
+  opts: { requirePaid: boolean },
+): Promise<void> => {
+  assertRecordingReaderRole(actor);
+  await assertCourseAccess(courseId, actor);
+  await assertStudentContentAccess(actor, courseId, opts);
+};
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -201,14 +245,17 @@ export const deleteVideoRecording = async (
 };
 
 // ─── List Videos for a Class ─────────────────────────────────
-// Any authenticated user can list videos for a course.
+// Enrolled students, the owning teacher and the owner can list a course's videos.
 // Returns paginated results ordered newest-first.
 
 export const listVideosByClass = async (
   courseId: string,
   query: VideoListQuery,
   actor: AuthenticatedUser,
-): Promise<{ records: VideoRecordWithSession[]; total: number }> => {
+): Promise<{ records: Array<VideoRecordWithSession | StudentVideoRecordWithSession>; total: number }> => {
+  // Role first: a refused role must not learn whether the course exists.
+  assertRecordingReaderRole(actor);
+
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     select: { id: true },
@@ -218,11 +265,8 @@ export const listVideosByClass = async (
     throw new AppError('CLASS_NOT_FOUND', 404, 'Class (course) not found.');
   }
 
-  // Students must be enrolled to see a course's video list.
-  await assertStudentContentAccess(actor, courseId, { requirePaid: false });
-
-  // Teachers may only list videos for courses they teach.
-  await assertCourseAccess(courseId, actor);
+  // Students must be enrolled; teachers must own the course.
+  await assertRecordingAccess(actor, courseId, { requirePaid: false });
 
   const where: Prisma.VideoRecordingWhereInput = {
     classSession: {
@@ -237,7 +281,7 @@ export const listVideosByClass = async (
   const [records, total] = await Promise.all([
     prisma.videoRecording.findMany({
       where,
-      select: videoWithSessionSelect,
+      select: actor.role === Role.STUDENT ? studentVideoWithSessionSelect : videoWithSessionSelect,
       orderBy: { classSession: { date: 'desc' } },
       skip: (query.page - 1) * query.limit,
       take: query.limit,
@@ -249,49 +293,72 @@ export const listVideosByClass = async (
 };
 
 // ─── Get Single Video ─────────────────────────────────────────
-// Used before generating the stream URL to verify the video exists.
+// Metadata only (no stream URL). Students get the shape without the provider id.
 
 export const getVideoById = async (
   videoId: string,
   actor: AuthenticatedUser,
-): Promise<VideoRecordWithSession> => {
+): Promise<VideoRecordWithSession | StudentVideoRecordWithSession> => {
+  // Role first: a refused role must not learn whether the video exists.
+  assertRecordingReaderRole(actor);
+
   const video = await prisma.videoRecording.findUnique({
     where: { id: videoId },
-    select: videoWithSessionSelect,
+    select: actor.role === Role.STUDENT ? studentVideoWithSessionSelect : videoWithSessionSelect,
   });
 
   if (!video) {
     throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
   }
 
-  await assertCourseAccess(video.classSession.courseId, actor);
+  await assertRecordingAccess(actor, video.classSession.courseId, { requirePaid: false });
+
+  // Students only ever see finished recordings (as in the list); an unfinished one
+  // reads as not found. Checked after access so an unenrolled student learns nothing.
+  if (actor.role === Role.STUDENT && video.status !== VideoStatus.READY) {
+    throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
+  }
 
   return video;
 };
 
-// ─── Generate Stream URL (IP-Bound) ──────────────────────────
-// Generates a signed, IP-bound Bunny.net stream URL for a student.
+// ─── Generate Stream URL ─────────────────────────────────────
+// Generates a signed Bunny.net embed URL for an enrolled, paid student, the
+// owning teacher or the owner.
 //
 // Security:
-//  - Token is bound to req.ip (plan §13 — The Telegram Pirate fix)
-//  - Token expires after BUNNY_TOKEN_TTL_SECONDS
-//  - If the link is shared, Bunny rejects it with 403 because the
-//    viewer's IP won't match the embedded IP in the token signature.
+//  - Token-authenticated (signed URL), expires after BUNNY_TOKEN_TTL_SECONDS
+//    (4 hours). It is not bound to the viewer's IP.
+//  - Only the roles in RECORDING_READER_ROLES reach this point; front-desk and
+//    marker accounts are refused before the video is even looked up.
 
 export const generateStreamUrl = async (
   videoId: string,
   actor: AuthenticatedUser,
 ): Promise<{
-  video: VideoRecordWithSession;
+  video: StudentVideoRecordWithSession;
   embedUrl: string;
   watermark: string;
   expiresAt: number;
 }> => {
-  const video = await getVideoById(videoId, actor);
+  assertRecordingReaderRole(actor);
+
+  // The provider id is needed here to sign the URL, for every role; the returned
+  // `video` omits it.
+  const stored = await prisma.videoRecording.findUnique({
+    where: { id: videoId },
+    select: videoWithSessionSelect,
+  });
+
+  if (!stored) {
+    throw new AppError('VIDEO_NOT_FOUND', 404, 'Video recording not found.');
+  }
 
   // Gate: a student must be enrolled AND have paid the current month before we
   // ever mint a signed Bunny embed token (architecture §7.1 — content protection).
-  await assertStudentContentAccess(actor, video.classSession.courseId, { requirePaid: true });
+  await assertRecordingAccess(actor, stored.classSession.courseId, { requirePaid: true });
+
+  const { bunnyVideoId, ...video } = stored;
 
   if (video.status !== VideoStatus.READY) {
     throw new AppError(
@@ -305,7 +372,7 @@ export const generateStreamUrl = async (
 
   // Token-authenticated Bunny iframe (DRM enforced by Bunny's player) + a
   // per-viewer watermark string the client overlays to deter screen capture.
-  const { embedUrl, expiresAt } = getSignedBunnyEmbedUrl(video.bunnyVideoId);
+  const { embedUrl, expiresAt } = getSignedBunnyEmbedUrl(bunnyVideoId);
 
   const viewer = await prisma.user.findUnique({
     where: { id: actor.userId },

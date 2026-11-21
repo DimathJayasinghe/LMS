@@ -134,14 +134,9 @@ describe("api single-flight refresh", () => {
   it("gives up on a stalled refresh request instead of holding the lock forever", async () => {
     vi.useFakeTimers();
     try {
-      installFetch(
-        (_url) =>
-          new Promise<Response>(() => {
-            /* never settles */
-          }),
-      );
-      fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
-        calls.push({ url: _url, method: init?.method ?? "GET" });
+      // A connection that never answers; only the abort signal can end it.
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? "GET" });
         return new Promise<Response>((_res, rej) => {
           init?.signal?.addEventListener("abort", () => rej(new DOMException("aborted", "TimeoutError")));
         });

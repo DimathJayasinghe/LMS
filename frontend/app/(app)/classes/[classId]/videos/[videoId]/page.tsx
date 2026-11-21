@@ -31,6 +31,22 @@ export default async function VideoPage({
     video = (await api.get<ApiSuccess<VideoRecording>>(`/videos/${videoId}`, { cookie })).data;
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 403) {
+      return (
+        <div className="mx-auto max-w-4xl">
+          <Link
+            href={`/classes/${classId}`}
+            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" aria-hidden />
+            Back to class
+          </Link>
+          <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
+            Recordings are available to students enrolled in this class and the class teacher.
+          </div>
+        </div>
+      );
+    }
     throw e;
   }
 

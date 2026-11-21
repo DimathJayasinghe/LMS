@@ -79,7 +79,7 @@ Enforcement has three layers, and the gaps are always between them:
 | Timetable slots, generate sessions | ✔ | ✔ own course | ✔ | – | read |
 | Schedule Zoom, host live class | ✔ | ✔ own | – | – | join (paid) |
 | Upload recording, materials | ✔ | ✔ own | – | – | – |
-| Play recording | ✔ | ✔ own | scope gap (F-04) | scope gap (F-04) | ✔ if enrolled + current month paid |
+| Play recording | ✔ | ✔ own | – (refused, F-04 fixed) | – (refused, F-04 fixed) | ✔ if enrolled + current month paid |
 | Enroll a student | ✔ | – | ✔ API, **no UI (F-11)** | – | self |
 | Collect fee at entrance, bulk upload | ✔ | – | ✔ | – | – |
 | Override or refund a payment | ✔ | – | – | – | – |
@@ -136,8 +136,8 @@ Today, per route:
 | Route family | Student rule | Staff rule |
 |---|---|---|
 | Live token | active enrollment **and** current-UTC-month `SUCCESS` payment on any enrollment of the course | host/owner path via `assertCourseAccess`; host credentials come from the shared owner Zoom account (F-56) |
-| Recording stream | same as live | not uniformly scoped across roles (F-04, `live`; detail kept in the private audit notes) |
-| Recording list/get | enrollment check on the list only; metadata reads need tightening (F-06, `live`) | – |
+| Recording stream | same as live | restricted to enrolled students, the owning teacher and the owner (F-04 fixed in Wave 0) |
+| Recording list/get | enrollment required for students on both; list and metadata omit the provider video id for students (F-06 fixed in Wave 0) | – |
 | Modules and materials | enrollment, payment for downloads | owner/teacher scope |
 | Exams | enrollment only (no payment) (F-23) | marker assigned only |
 | Attendance scan | none: enrollment, mode and payment are not checked (F-12) | – |
@@ -181,7 +181,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 The audit recommends ordering by **blast radius, then by how cheaply a fix removes a daily dead end.** Effort
 letters are S (hours), M (days), L (a week or more).
 
-- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, status per finding in doc 18):** F-01 session
+- **Wave 0 — stop the bleeding (all S/M; confirmations settled in D-ACCESS-8 and D-ACCESS-4; progress: F-01 merged in #96, F-04 and F-06 in #97, status per finding in doc 18):** F-01 session
   lifetime; F-04 scope recording stream and metadata reads to enrolled students and the owning teacher; F-06
   enrollment check on recording metadata reads; F-09 scope attendance reads
   to the course or the student; F-54 Zoom webhook hardening; F-55 production boot check for the keys actually
@@ -239,7 +239,7 @@ These changed what gets built and could not be settled from code. The product ow
 11. Carried over (settled: D-MONEY-2 per-mode fees, D-ACCESS-4 QR scheme, D-IDENTITY-13 export/restore, D-IDENTITY-3 languages): per-mode fees, the QR value scheme versus random tokens (F-08), a tenant export/restore
     tool, Sinhala and Tamil at launch.
 12. **Wave 0 confirmations (F-04, F-07).** May front-desk or marker accounts ever open recordings (for support or
-    marking)? The proposed default is no. And is scan identity required to be unique across both code kinds?
+    marking)? Decided no (D-ACCESS-8) and implemented in Wave 0 PR 2. And is scan identity required to be unique across both code kinds?
     The proposed default is yes.
 13. **Commercial model (F-91, F-92, F-93, F-94, F-95, F-96, F-97, F-99, F-101, F-102, F-110).** Teacher revenue share and
     who bears concessions, class medium and capacity, which fee products exist beyond the monthly fee, whether

@@ -93,7 +93,7 @@ export const createRateLimiters = (): {
   ),
 
   /**
-   * Stream limiter: applied to the IP-bound video token endpoint.
+   * Stream limiter: applied to the signed video-token endpoint.
    * 30 requests per minute per IP — a legit student watches a handful of
    * videos; this blocks scripted harvesting of stream tokens (§7.1).
    */

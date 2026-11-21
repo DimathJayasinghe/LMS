@@ -16,6 +16,9 @@ import {
 
 export const videoRoutes = Router();
 
+// Who may open recordings at all; the service narrows to enrolled / owning (video.service.ts).
+const RECORDING_READER_ROLES = [Role.STUDENT, Role.TEACHER, Role.SUPER_ADMIN];
+
 // ─── POST /api/videos/uploads ──────────────────────────────────
 // Teacher/Super Admin starts a direct-to-Bunny upload (TUS). Registered
 // before the other literal/`:id` routes for clarity; no path conflict exists
@@ -67,32 +70,36 @@ videoRoutes.delete(
 );
 
 // ─── GET /api/videos/class/:classId ──────────────────────────
-// Any authenticated user lists all videos for a course
+// Enrolled students, the owning teacher and the owner list a course's videos
+// (front desk and markers are refused; see D-ACCESS-8). The service re-checks.
 // MUST be registered before /:id to prevent route conflict
 videoRoutes.get(
   '/class/:classId',
   verifyToken,
+  requireRole(...RECORDING_READER_ROLES),
   validateParams(classIdParamSchema),
   validateQuery(videoListQuerySchema),
   VideoController.listVideosForClass,
 );
 
 // ─── GET /api/videos/:id/stream ──────────────────────────────
-// Student requests an IP-bound signed Bunny stream URL
+// Enrolled and paid student, owning teacher or owner requests a signed Bunny
+// embed URL (token-authenticated, 4-hour TTL, not IP-bound)
 // MUST be registered before /:id to avoid /:id matching "stream"
 videoRoutes.get(
   '/:id/stream',
   verifyToken,
-  requireRole(Role.STUDENT, Role.SUPER_ADMIN, Role.ADMIN, Role.MARKER, Role.TEACHER),
+  requireRole(...RECORDING_READER_ROLES),
   validateParams(videoIdParamSchema),
   VideoController.getStreamUrl,
 );
 
 // ─── GET /api/videos/:id ─────────────────────────────────────
-// Any authenticated user fetches video metadata (no stream URL)
+// Enrolled student, owning teacher or owner fetches video metadata (no stream URL)
 videoRoutes.get(
   '/:id',
   verifyToken,
+  requireRole(...RECORDING_READER_ROLES),
   validateParams(videoIdParamSchema),
   VideoController.getVideo,
 );
