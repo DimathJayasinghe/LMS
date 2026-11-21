@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import jwt from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 
 const { userFindUnique, refreshTokenCreate } = vi.hoisted(() => ({
@@ -36,6 +37,8 @@ const activeUser = {
 	city: null,
 	deletedAt: null,
 	createdAt: new Date('2026-01-01'),
+	tokenVersion: 0,
+	mustChangePassword: false,
 };
 
 beforeEach(() => {
@@ -90,5 +93,32 @@ describe('getMe organization', () => {
     userFindUnique.mockResolvedValueOnce({ ...activeUser, organization });
     const { getMe } = await import('./auth.service');
     expect(await getMe(activeUser.id)).toMatchObject({ organization });
+  });
+});
+
+describe('login — session version', () => {
+  it('issues tokens at the version read with the credential, so a revocation that lands mid-login leaves them dead', async () => {
+    userFindUnique.mockResolvedValueOnce({ ...activeUser, tokenVersion: 3 });
+    const { tokens } = await login({ email: activeUser.email, password: 'whatever1' });
+    expect(jwt.decode(tokens.accessToken)).toMatchObject({ userId: activeUser.id, tokenVersion: 3 });
+    expect(jwt.decode(tokens.refreshToken)).toMatchObject({ tokenVersion: 3 });
+  });
+
+  it('tells the client when a staff reset requires a new password', async () => {
+    userFindUnique.mockResolvedValueOnce({ ...activeUser, mustChangePassword: true });
+    const { user } = await login({ email: activeUser.email, password: 'whatever1' });
+    expect(user).toMatchObject({ mustChangePassword: true });
+  });
+});
+
+describe('getSessionState', () => {
+  it('reads only the fields the per-request check needs, by primary key', async () => {
+    userFindUnique.mockResolvedValueOnce({ role: Role.TEACHER, deletedAt: null, tokenVersion: 1, mustChangePassword: false });
+    const { getSessionState } = await import('./auth.service');
+    expect(await getSessionState('user-9')).toEqual({ role: Role.TEACHER, deletedAt: null, tokenVersion: 1, mustChangePassword: false });
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: 'user-9' },
+      select: { role: true, deletedAt: true, tokenVersion: true, mustChangePassword: true },
+    });
   });
 });

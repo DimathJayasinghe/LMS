@@ -1,8 +1,9 @@
 import bcrypt from 'bcryptjs';
-import { PrismaClient, Role } from '@prisma/client';
+import { Prisma, PrismaClient, Role } from '@prisma/client';
 import { AUDIT_ACTION, DEFAULT_ORGANIZATION_ID } from '../utils/constants';
 import { withAdvisoryLock } from '../utils/advisory-lock';
 import { loginSchema } from '../schemas/auth.schema';
+import { settingsRegistry } from '../config/settings-registry';
 
 const organizationId = DEFAULT_ORGANIZATION_ID;
 
@@ -34,9 +35,21 @@ export const seedOwner = async (db: PrismaClient, email: string, password: strin
   });
 };
 
+// Read straight from the client this command was given: `settings.service` would load the whole application environment into a standalone command.
+const readOwnerCap = async (tx: Prisma.TransactionClient): Promise<number> => {
+  const key = 'identity.maxOwners';
+  const row = await tx.organizationSetting.findUnique({ where: { organizationId_key: { organizationId, key } } });
+  const parsed = settingsRegistry[key].schema.safeParse(row?.value);
+  return parsed.success ? parsed.data : settingsRegistry[key].default;
+};
+
 export const addOwner = async (db: PrismaClient, email: string, password: string): Promise<void> => {
   await db.$transaction(async (tx) => {
     await withAdvisoryLock(tx, 'owner', organizationId, 'owner');
+    const cap = await readOwnerCap(tx);
+    if ((await tx.user.count({ where: { organizationId, role: Role.SUPER_ADMIN, deletedAt: null } })) >= cap) {
+      throw new Error(`Owner limit reached (${cap}). Raise identity.maxOwners in the organization settings first.`);
+    }
     if (await tx.user.findUnique({ where: { email } })) throw new Error('Email already belongs to an account.');
     const owner = await tx.user.create({ data: { email, name: 'Super Admin', password: await bcrypt.hash(password, 10), role: Role.SUPER_ADMIN, setupCompleted: true, organizationId } });
     await tx.auditLog.create({ data: { action: AUDIT_ACTION.OWNER_ADDED, actorId: owner.id, actorRole: Role.SUPER_ADMIN, targetType: 'User', targetId: owner.id, organizationId, metadata: { via: 'operator-cli' } } });
@@ -50,7 +63,7 @@ export const resetOwnerPassword = async (db: PrismaClient, email: string, passwo
     await withAdvisoryLock(tx, 'owner', initial.organizationId ?? organizationId, 'owner');
     const owner = await tx.user.findUnique({ where: { email } });
     if (!owner || owner.role !== Role.SUPER_ADMIN) throw new Error('Owner account not found.');
-    await tx.user.update({ where: { id: owner.id }, data: { password: await bcrypt.hash(password, 10), ...(reactivate ? { deletedAt: null } : {}) } });
+    await tx.user.update({ where: { id: owner.id }, data: { password: await bcrypt.hash(password, 10), tokenVersion: { increment: 1 }, ...(reactivate ? { deletedAt: null } : {}) } });
     await tx.refreshToken.deleteMany({ where: { userId: owner.id } });
     await tx.auditLog.create({ data: { action: AUDIT_ACTION.OWNER_PASSWORD_RESET, actorId: owner.id, actorRole: Role.SUPER_ADMIN, targetType: 'User', targetId: owner.id, organizationId: owner.organizationId, metadata: { via: 'operator-cli' } } });
   });

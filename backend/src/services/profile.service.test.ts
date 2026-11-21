@@ -155,6 +155,7 @@ describe('changePassword', () => {
 		password: 'h',
 		role: 'STUDENT',
 		passwordChangedAt: null,
+		mustChangePassword: false,
 		...over,
 	});
 
@@ -182,15 +183,35 @@ describe('changePassword', () => {
 		expect(userUpdate).not.toHaveBeenCalled();
 	});
 
-	it('hashes, sets passwordChangedAt, revokes tokens, reissues on success', async () => {
+	it('hashes, sets passwordChangedAt, bumps the session version, revokes tokens, reissues at the new version', async () => {
 		userFindUnique.mockResolvedValueOnce(user({ passwordChangedAt: OLD }));
 		compare.mockResolvedValueOnce(true).mockResolvedValueOnce(false); // current ok, new != current
+		userUpdate.mockResolvedValueOnce({ tokenVersion: 5 });
 		const res = await changePassword('u1', { currentPassword: 'ok', newPassword: 'brand-new-pass' });
 		const data = userUpdate.mock.calls[0]![0].data;
 		expect(data.password).toBe('new-hash');
 		expect(data.passwordChangedAt).toBeInstanceOf(Date);
+		expect(data.tokenVersion).toEqual({ increment: 1 });
+		expect(data.mustChangePassword).toBe(false);
 		expect(revokeAll).toHaveBeenCalledWith('u1');
-		expect(issuePair).toHaveBeenCalledWith('u1', 'STUDENT');
+		expect(issuePair).toHaveBeenCalledWith('u1', 'STUDENT', 5);
 		expect(res).toEqual({ tokens: { accessToken: 'a', refreshToken: 'r' } });
+	});
+
+	it('a forced change after a staff reset is not blocked by the cooldown and clears the flag', async () => {
+		userFindUnique.mockResolvedValueOnce(user({ passwordChangedAt: new Date(), mustChangePassword: true }));
+		compare.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+		userUpdate.mockResolvedValueOnce({ tokenVersion: 2 });
+		await expect(changePassword('u1', { currentPassword: 'temp', newPassword: 'brand-new-pass' })).resolves.toBeTruthy();
+		expect(userUpdate.mock.calls[0]![0].data.mustChangePassword).toBe(false);
+	});
+
+	it('a forced change still needs the temporary password and a different new one', async () => {
+		userFindUnique.mockResolvedValue(user({ mustChangePassword: true }));
+		compare.mockResolvedValueOnce(false);
+		await expect(changePassword('u1', { currentPassword: 'guess', newPassword: 'brand-new-pass' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+		compare.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+		await expect(changePassword('u1', { currentPassword: 'temp', newPassword: 'temp' })).rejects.toMatchObject({ code: 'SAME_PASSWORD' });
+		expect(userUpdate).not.toHaveBeenCalled();
 	});
 });

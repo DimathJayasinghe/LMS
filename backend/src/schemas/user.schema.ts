@@ -85,3 +85,14 @@ export const resolveBarcodeQuerySchema = z.object({
 });
 
 export type ResolveBarcodeQuery = z.infer<typeof resolveBarcodeQuerySchema>;
+
+// ─── Staff-assisted password reset ──────────────────────────
+export const IDENTITY_CHECKS = ['IN_PERSON_CARD', 'GUARDIAN_PHONE', 'OWNER_KNOWS'] as const;
+
+export const resetPasswordSchema = z.object({
+	identityCheck: z.enum(IDENTITY_CHECKS),
+	/** The acting staff member's own password; required when the target is a staff account. */
+	currentPassword: z.string().min(1).max(72).optional(),
+});
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

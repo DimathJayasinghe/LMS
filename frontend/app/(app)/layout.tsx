@@ -25,6 +25,11 @@ export default async function AppLayout({
 
   const user = await requireUser(cookie);
 
+  // A staff-assisted reset leaves only the change-password screen usable (the API refuses everything else).
+  if (user.mustChangePassword) {
+    redirect("/auth/change-password");
+  }
+
   // Mandatory one-time onboarding (NIC photos) before any other screen —
   // see context/api_endpoints/account-setup.endpoints.md.
   if (user.role === "STUDENT" && !user.setupCompleted) {

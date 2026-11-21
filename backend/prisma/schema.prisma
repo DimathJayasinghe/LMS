@@ -198,6 +198,10 @@ model User {
   emailChangedAt    DateTime? // cooldown anchor — self email changes
   passwordChangedAt DateTime? // cooldown anchor — self password changes
 
+  // Session control. Every bump invalidates all access and refresh tokens issued at an older version, at once.
+  tokenVersion       Int     @default(0)
+  mustChangePassword Boolean @default(false) // set by a staff-assisted reset; only the password change flow works until cleared
+
   permission                        Permission?                  @relation("UserPermission")
   enrollments                       Enrollment[]
   taughtCourses                     Course[]                     @relation("CourseTeacher") // courses this TEACHER teaches

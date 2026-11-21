@@ -42,4 +42,19 @@ describe('request logger credential redaction', () => {
     expect(output).not.toContain('refresh-secret-value');
     expect(output).toContain('[Redacted]');
   });
+
+  it('redacts password fields in a logged request or response body', () => {
+    const lines: string[] = [];
+    const destination = new Writable({ write(chunk, _encoding, callback) { lines.push(chunk.toString()); callback(); } });
+    const middleware = createRequestLogger(pino({ level: 'info' }, destination) as unknown as Options['logger']);
+    middleware.logger.info(
+      {
+        req: { body: { currentPassword: 'current-secret-value', newPassword: 'new-secret-value' } },
+        res: { body: { data: { temporaryPassword: 'temporary-secret-value' } } },
+      },
+      'request completed',
+    );
+    const output = lines.join('');
+    for (const secret of ['current-secret-value', 'new-secret-value', 'temporary-secret-value']) expect(output).not.toContain(secret);
+  });
 });

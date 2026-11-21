@@ -8,7 +8,7 @@ import { Role } from '@prisma/client';
 const { db, signed, cache } = vi.hoisted(() => ({
   db: {
     exam: { findUnique: vi.fn() }, course: { findUnique: vi.fn() },
-    user: { findMany: vi.fn() }, markerGroup: { findMany: vi.fn() },
+    user: { findMany: vi.fn(), findUnique: vi.fn() }, markerGroup: { findMany: vi.fn() },
     markerAssignment: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
     markerAssignmentAudience: { createMany: vi.fn(), deleteMany: vi.fn() },
     markerAllocationRevision: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn() },
@@ -109,6 +109,7 @@ afterEach(async () => { server.closeAllConnections(); await new Promise<void>((r
 
 const request = async (path: string, role: Role, method = 'GET', body?: unknown, key?: string, userId = role === Role.MARKER ? ids.marker : ids.teacher) => {
   const token = jwt.sign({ userId, role }, 'http-test-secret');
+  db.user.findUnique.mockResolvedValue({ role, deletedAt: null, tokenVersion: 0, mustChangePassword: false });
   const response = await fetch(`${base}${path}`, { method, headers: { Cookie: `${COOKIE_ACCESS_TOKEN}=${token}`, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   return { status: response.status, body: await response.json() as { data: { [key: string]: unknown } & Array<{ id: string; marks: unknown; feedback: unknown; gradedAt: unknown }>; count: number } };
 };

@@ -7,16 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { roleLabel } from "@/lib/roles";
+import { canResetPassword } from "@/lib/password-reset";
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
 import type { Role, User } from "@/lib/types";
 
 interface Props {
   users: User[];
   canChangeRole: boolean;
   viewerId: string;
+  viewerRole: Role;
   roles: Role[];
 }
 
-export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
+export function UsersTable({ users, canChangeRole, viewerId, viewerRole, roles }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<{ id: string; msg: string } | null>(null);
@@ -134,7 +137,7 @@ export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
                 </td>
 
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant="outline"
                       className={
@@ -145,6 +148,7 @@ export function UsersTable({ users, canChangeRole, viewerId, roles }: Props) {
                     >
                       {active ? "Active" : "Inactive"}
                     </Badge>
+                    {canResetPassword({ id: viewerId, role: viewerRole }, u) && <ResetPasswordDialog user={u} />}
                     {!isSelf && (
                       <Button
                         size="sm"

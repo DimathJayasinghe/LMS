@@ -8,6 +8,14 @@ export const BCRYPT_SALT_ROUNDS = 12;
 
 /** Cookie names for access and refresh tokens */
 export const COOKIE_ACCESS_TOKEN = 'access_token';
+
+/** Requests a user with `mustChangePassword` may still make (method and path without query or trailing slash). */
+export const MUST_CHANGE_PASSWORD_ALLOWED_ROUTES: ReadonlyArray<readonly [method: string, path: string]> = [
+	['GET', '/api/auth/me'],
+	['POST', '/api/auth/logout'],
+	['POST', '/api/auth/refresh'],
+	['PATCH', '/api/users/me/password'],
+];
 export const COOKIE_REFRESH_TOKEN = 'refresh_token';
 
 /** Cookie config shared between set and clear operations */
@@ -242,6 +250,7 @@ export const AUDIT_ACTION = {
 	ROLE_CHANGED: 'ROLE_CHANGED',
 	OWNER_ADDED: 'OWNER_ADDED',
 	OWNER_PASSWORD_RESET: 'OWNER_PASSWORD_RESET',
+	PASSWORD_RESET_BY_STAFF: 'PASSWORD_RESET_BY_STAFF',
 	USER_ACTIVATED: 'USER_ACTIVATED',
 	USER_DEACTIVATED: 'USER_DEACTIVATED',
 	BARCODE_ASSIGNED: 'BARCODE_ASSIGNED',

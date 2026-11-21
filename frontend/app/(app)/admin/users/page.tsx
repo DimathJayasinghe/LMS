@@ -63,6 +63,7 @@ export default async function UsersPage({
         users={res.data}
         canChangeRole={viewer.role === "SUPER_ADMIN"}
         viewerId={viewer.id}
+        viewerRole={viewer.role}
         roles={ROLES}
       />
 

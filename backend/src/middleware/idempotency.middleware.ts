@@ -49,6 +49,8 @@ const runIdempotency = async (
   res: Response,
   next: NextFunction,
   namespace?: string,
+  /** Maps a response to what is stored for replay; lets a route keep a one-time secret out of the record. */
+  storedBody?: (statusCode: number, body: unknown) => unknown,
 ): Promise<void> => {
   const requestKey = req.headers[IDEMPOTENCY_KEY_HEADER];
 
@@ -132,7 +134,7 @@ const runIdempotency = async (
               key,
               route: req.originalUrl,
               responseCode: res.statusCode,
-              responseBody: body as object,
+              responseBody: (storedBody ? storedBody(res.statusCode, body) : body) as object,
             },
           })
           .catch((err: Error) => {
@@ -174,3 +176,24 @@ export const checkIdempotency = (req: Request, res: Response, next: NextFunction
 /** Answer-bearing responses must never replay across actors or resources. */
 export const checkActorIdempotency = (req: Request, res: Response, next: NextFunction): Promise<void> =>
   runIdempotency(req, res, next, JSON.stringify([req.user!.userId, req.method, req.originalUrl]));
+
+const ONE_TIME_SECRET_REPLAY = {
+  status: 'success',
+  message: 'Already processed; the one-time password was shown once.',
+};
+
+/**
+ * For routes that return a one-time secret (a temporary password). Same lock and replay rules as
+ * `checkActorIdempotency`, but the stored record for a successful response is a placeholder, so a replayed key
+ * can never return the secret, and responses are `no-store`.
+ */
+export const checkOneTimeSecretIdempotency = (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  res.set('Cache-Control', 'no-store');
+  return runIdempotency(
+    req,
+    res,
+    next,
+    JSON.stringify([req.user!.userId, req.method, req.originalUrl]),
+    (statusCode, body) => (statusCode < 400 ? ONE_TIME_SECRET_REPLAY : body),
+  );
+};

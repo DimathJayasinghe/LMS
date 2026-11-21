@@ -108,7 +108,7 @@ describe('updateStatus — privileged-target guard', () => {
 
 		await updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.ADMIN });
 		expect(update).toHaveBeenCalledWith(
-			expect.objectContaining({ data: { deletedAt: expect.any(Date) } }),
+			expect.objectContaining({ data: { deletedAt: expect.any(Date), tokenVersion: { increment: 1 } } }),
 		);
 	});
 
@@ -346,6 +346,20 @@ describe('owner account safeguards', () => {
 		update.mockResolvedValue(baseUser());
 		await updateRole('target-id', { role: Role.TEACHER }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
 		expect(deleteMany).toHaveBeenCalledWith({ where: { userId: 'target-id' } });
+	});
+	it('ends every session at once on a role change by bumping the session version', async () => {
+		findUnique.mockResolvedValue(baseUser());
+		update.mockResolvedValue(baseUser());
+		await updateRole('target-id', { role: Role.TEACHER }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
+		expect(update.mock.calls[0]![0].data).toEqual({ role: Role.TEACHER, tokenVersion: { increment: 1 } });
+	});
+	it('ends every session at once on deactivation but leaves a reactivation alone', async () => {
+		findUnique.mockResolvedValue(baseUser());
+		update.mockResolvedValue(baseUser());
+		await updateStatus('target-id', { isActive: false }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
+		await updateStatus('target-id', { isActive: true }, { userId: 'actor-id', role: Role.SUPER_ADMIN });
+		expect(update.mock.calls[0]![0].data).toEqual({ deletedAt: expect.any(Date), tokenVersion: { increment: 1 } });
+		expect(update.mock.calls[1]![0].data).toEqual({ deletedAt: null });
 	});
 });
 
