@@ -34,7 +34,7 @@ function monthsFrom(startMonth: string, endMonth: string): string[] {
   return months;
 }
 
-export function CollectPayment() {
+export function CollectPayment({ timezone }: { timezone: string }) {
   const router = useRouter();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -125,13 +125,13 @@ export function CollectPayment() {
   const outstandingMonths = useMemo(() => {
     if (!selectedEnrollment) return [];
     const paid = new Set(history.filter((p) => p.status === "SUCCESS").map((p) => p.paymentMonth));
-    const start = selectedEnrollment.createdAt.slice(0, 7);
-    const end = currentPaymentMonth();
+    const start = currentPaymentMonth(timezone, new Date(selectedEnrollment.createdAt));
+    const end = currentPaymentMonth(timezone);
     return monthsFrom(start, end).filter((m) => !paid.has(m));
-  }, [selectedEnrollment, history]);
+  }, [selectedEnrollment, history, timezone]);
 
-  const defaultMonth = outstandingMonths.includes(currentPaymentMonth())
-    ? currentPaymentMonth()
+  const defaultMonth = outstandingMonths.includes(currentPaymentMonth(timezone))
+    ? currentPaymentMonth(timezone)
     : (outstandingMonths[0] ?? "");
   const month = outstandingMonths.includes(selectedMonth) ? selectedMonth : defaultMonth;
 
@@ -313,7 +313,7 @@ export function CollectPayment() {
                         {outstandingMonths.map((m) => (
                           <option key={m} value={m}>
                             {m}
-                            {m === currentPaymentMonth() ? " (this month)" : ""}
+                            {m === currentPaymentMonth(timezone) ? " (this month)" : ""}
                           </option>
                         ))}
                       </select>

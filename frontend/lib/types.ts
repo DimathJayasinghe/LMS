@@ -41,6 +41,7 @@ export interface FieldError {
 export interface User {
   id: string;
   indexNumber: number;
+  organization?: { id: string; name: string; timezone: string } | null;
   email: string;
   name: string;
   role: Role;

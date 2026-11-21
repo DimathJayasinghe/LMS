@@ -28,7 +28,7 @@ describe('tenant registry (ADR 14 M1)', () => {
 			if (name === 'Organization') continue;
 			expect(body, `${name} index`).toMatch(/@@index\(\[organizationId\]\)/);
 			expect(body, `${name} relation`).toMatch(
-				/organization\s+Organization\?\s+@relation\(fields: \[organizationId\], references: \[id\], onDelete: Restrict\)/,
+				/organization\s+Organization\??\s+@relation\(fields: \[organizationId\], references: \[id\], onDelete: Restrict\)/,
 			);
 		}
 	});
@@ -71,7 +71,7 @@ model Loose {
 	it('derives a check for every tenant-to-tenant foreign key in the real schema', () => {
 		// Every `fields:` relation except the organization link must yield a check, so a relation line the
 		// parser cannot read (for example a future multi-line @relation) fails here instead of being skipped.
-		const relations = schema.split('\n').filter((line) => /@relation\(.*fields:/.test(line) && !/organization\s+Organization\?/.test(line));
+		const relations = schema.split('\n').filter((line) => /@relation\(.*fields:/.test(line) && !/organization\s+Organization\??\s+@relation/.test(line));
 		const selfOrOwnerless = relations.length - buildIntegrityChecks(schema).length;
 		expect(selfOrOwnerless).toBe(0);
 	});
@@ -80,6 +80,6 @@ model Loose {
 		const checks = buildIntegrityChecks(schema);
 		expect(checks.length).toBeGreaterThan(30);
 		expect(checks.map((c) => c.name)).toContain('Payment.enrollment -> Enrollment');
-		expect(checks.every((c) => !c.name.includes('Organization'))).toBe(true);
+		expect(checks.every((c) => !c.name.endsWith(' -> Organization'))).toBe(true);
 	});
 });

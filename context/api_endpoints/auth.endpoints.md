@@ -235,3 +235,5 @@ Returns the authenticated user's profile. Requires `access_token` cookie.
 ### Request limits
 
 Defaults per minute: global 100 per anonymous address or 200 per authenticated user; login 10 per normalized email and address plus 60 per address; registration 30 per address; refresh 20 per verified user or anonymous address. Operators can adjust these values with the `RATE_LIMIT_*` environment variables.
+
+`GET /auth/me` additionally returns `organization: { id, name, timezone }` for the caller (or null where the organization relation is absent).

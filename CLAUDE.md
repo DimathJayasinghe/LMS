@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not; delivery order is audit Wave 0, Wave 1 (two plans), then M2–M3 as one one-to-two-week stretch where only hotfixes merge, then Wave 2 (2a enrollment migration with HYBRID, 2b money core and single gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money), with M4–M7 waiting for a second organization**: the `Organization` table and a nullable `organizationId` on every model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
+A Learning Management System for Sri Lankan tuition institutes, **deployed for one organization first** (~1,200 students) and being made **multi-tenant ready** (decided 2026-11-19; **step M1 is implemented, M2–M7 are not; delivery order is audit Wave 0, Wave 1 (two plans), then M2–M3 as one one-to-two-week stretch where only hotfixes merge, then Wave 2 (2a enrollment migration with HYBRID, 2b money core and single gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money), with M4–M7 waiting for a second organization**: the `Organization` table and an `organizationId` on every tenant model — see `context/documents/14-multi-tenancy-readiness.md`). Two independent apps —
 `frontend/` (Next.js) and `backend/` (Express) — no npm workspace, no root `package.json`; `cd` into
 each separately. Designed to run on **one small VPS** via Docker Compose: no Kubernetes, no
 auto-scaling, no multi-instance anything. The backend API is deliberately kept **stateless** anyway
@@ -122,8 +122,7 @@ collected; don't rely on prior Zoom SDK knowledge here.
 ### Content protection
 
 For a `STUDENT`, recorded video and live-class access both require: authenticated, an active `Enrollment`,
-and the current month's `Payment.status = SUCCESS` — checked in the service layer before any
-token/signature is issued. **Known gaps (audit 2026-11-19, `context/documents/18-flow-audit-findings-register.md` F-05, F-23):** the gate looks only at the current month and ignores `classType` (planned fix). Recording reads are already restricted to enrolled students, the owning teacher and the owner. VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
+and coverage for the organization billing month — checked in the service layer before any token/signature is issued. The owner can configure grace in organization settings; by default it covers the first 10 days when the previous month is paid. The gate still ignores `classType` (planned fix). Recording reads are already restricted to enrolled students, the owning teacher and the owner. VOD playback uses Bunny's token-authenticated embed (signed URL, 4-hour TTL, **not** IP-bound) + a per-student watermark (MediaCage DRM is a library-level Bunny setting); live
 classes get the same watermark treatment but the Web Meeting SDK has no OS-level capture-blocking
 (that's a documented, accepted limitation, not a bug to fix).
 
@@ -132,8 +131,7 @@ classes get the same watermark treatment but the Web Meeting SDK has no OS-level
 - **Organization** is the tenant (a tuition institute as a customer). **Institute** means a *physical
   branch* inside an organization and is not a tenant. `SUPER_ADMIN` owns one organization; the name
   `PLATFORM_ADMIN` is reserved for a future SaaS operator and is not in the `Role` enum.
-- The `Organization` table and a nullable `organizationId` (default: the one `default`/`DEF` organization) exist
-  on every model since M1; the scoped Prisma client, JWT context and `NOT NULL` constraints (M2–M3) do not yet.
+- The `Organization` table and an `organizationId` exist on every tenant model since M1 (older models are nullable and default to `default`/`DEF`); the scoped Prisma client, JWT context and `NOT NULL` constraints (M2–M3) do not yet.
   Until M3 lands (per-organization uniques), do not add new global uniques on user-visible values; until M5 do not add hand-built R2/Redis keys; until M4 do not add new provider-credential reads from `env` (M4–M7 wait for a second organization; `14-multi-tenancy-readiness.md §11`). Every new model must declare
   `organizationId` + the `Organization` relation + `@@index([organizationId])` (the registry test in
   `backend/src/utils/tenant-integrity.test.ts` fails otherwise), and CI runs the tenant integrity check.

@@ -25,6 +25,7 @@ import { submissionRoutes } from './routes/submission.routes';
 import { paymentRoutes } from './routes/payment.routes';
 import { streamRoutes } from './routes/stream.routes';
 import { auditRoutes } from './routes/audit.routes';
+import { settingsRoutes } from './routes/settings.routes';
 import { notificationRoutes } from './routes/notification.routes';
 import { notificationSettingRoutes } from './routes/notification-setting.routes';
 import { markerGroupRoutes } from './routes/marker-group.routes';
@@ -97,6 +98,7 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/marker-groups', markerGroupRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/payments', paymentRoutes);
+  app.use('/api/settings', settingsRoutes);
   app.use('/api/stream', streamRoutes);
   app.use('/api/audit-logs', auditRoutes);
   app.use('/api/notifications', notificationRoutes);

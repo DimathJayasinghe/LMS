@@ -17,6 +17,7 @@ interface ActiveEnrollment {
 
 interface EnrollPanelProps {
   courseId: string;
+  timezone: string;
   monthlyFee: string;
   /** The viewer's active enrollment for this course, if any. */
   active: ActiveEnrollment | null;
@@ -31,6 +32,7 @@ const MODES: { value: EnrollmentMode; label: string; icon: typeof Monitor }[] = 
 
 export default function EnrollPanel({
   courseId,
+  timezone,
   monthlyFee,
   active,
   isStudent,
@@ -61,7 +63,7 @@ export default function EnrollPanel({
   const handlePay = () =>
     run("pay", async () => {
       if (!active) return;
-      const res = await initiatePayherePayment(active.id, currentPaymentMonth());
+      const res = await initiatePayherePayment(active.id, currentPaymentMonth(timezone));
       // Onsite modal on this page (falls back to redirect if payhere.js is blocked).
       startPayherePayment(res.data, {
         onCompleted: () => router.refresh(),

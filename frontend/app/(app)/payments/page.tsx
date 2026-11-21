@@ -30,6 +30,7 @@ export default async function PaymentsPage({
   const sp = await searchParams;
 
   const viewer = await requireUser(cookie);
+  const timezone = viewer.organization?.timezone ?? "Asia/Colombo";
 
   // ── Student view ─────────────────────────────────────────
   if (viewer.role === "STUDENT") {
@@ -50,7 +51,7 @@ export default async function PaymentsPage({
         <StudentPayments
           enrollments={enrollments.filter((e) => e.isActive)}
           payments={payments}
-          currentMonth={currentPaymentMonth()}
+          currentMonth={currentPaymentMonth(timezone)}
         />
       </div>
     );
@@ -63,7 +64,7 @@ export default async function PaymentsPage({
   const status = STATUSES.includes(sp.status as PaymentStatus)
     ? (sp.status as PaymentStatus)
     : undefined;
-  const month = MONTH_RE.test(sp.month ?? "") ? (sp.month as string) : currentPaymentMonth();
+  const month = MONTH_RE.test(sp.month ?? "") ? (sp.month as string) : currentPaymentMonth(timezone);
 
   const query = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
   if (status) query.set("status", status);
@@ -92,6 +93,7 @@ export default async function PaymentsPage({
         statuses={STATUSES}
         summary={summary}
         canOverride={viewer.role === "SUPER_ADMIN"}
+        timezone={timezone}
       />
     </div>
   );

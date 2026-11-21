@@ -153,7 +153,7 @@ their own classes; super admins may inspect institution, teacher, or class total
 - **Method:** `GET`
 - **Auth:** Required (Role: `SUPER_ADMIN`, `TEACHER`; front-desk `ADMIN` is bounced with 403)
 - **Query Params:**
-  - `month` (optional, `YYYY-MM`; defaults to the current payment month)
+  - `month` (optional, `YYYY-MM`; defaults to the current payment month in the caller organization timezone)
   - `teacherId` (optional UUID; `SUPER_ADMIN` only in effect)
   - `courseId` (optional UUID; combined with the authenticated teacher's ownership for `TEACHER`)
 - **Success Response (200 OK):**
@@ -301,8 +301,7 @@ confirmed **online** `SUCCESS` (has a `payhereId`) is refused rather than overwr
   `collectedViaBarcode` optional — present only when the student was identified via
   `GET /users/resolve-barcode` (see `users.endpoints.md`) rather than a name/index search.
 - **Success Response (200 OK):** the `Payment` (same shape as `/override`'s response).
-- **Errors:** `404 ENROLLMENT_NOT_FOUND`, `400 ENROLLMENT_NOT_ACTIVE`, `400 FUTURE_MONTH`
-  (cannot collect for a month after the current payment month), `409 ALREADY_PAID_ONLINE`.
+- **Errors:** `404 ENROLLMENT_NOT_FOUND`, `400 ENROLLMENT_NOT_ACTIVE`, `400 FUTURE_MONTH` (cannot collect after the enrollment organization's current billing month), `409 ALREADY_PAID_ONLINE`.
 
 ---
 

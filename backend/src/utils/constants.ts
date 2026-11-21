@@ -328,6 +328,7 @@ export const AUDIT_ACTION = {
 
 	// Notifications
 	NOTIFICATION_SETTING_UPDATED: 'NOTIFICATION_SETTING_UPDATED',
+	SETTING_CHANGED: 'SETTING_CHANGED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];

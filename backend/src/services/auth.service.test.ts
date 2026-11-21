@@ -83,3 +83,12 @@ describe('login — refresh token uniqueness', () => {
 		});
 	});
 });
+
+describe('getMe organization', () => {
+  it('returns the organization and its billing timezone', async () => {
+    const organization = { id: 'org', name: 'School', timezone: 'Asia/Colombo' };
+    userFindUnique.mockResolvedValueOnce({ ...activeUser, organization });
+    const { getMe } = await import('./auth.service');
+    expect(await getMe(activeUser.id)).toMatchObject({ organization });
+  });
+});

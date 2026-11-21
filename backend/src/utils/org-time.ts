@@ -1,0 +1,35 @@
+const partsInTz = (date: Date, tz: string): Record<string, string> =>
+  Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date).map(({ type, value }) => [type, value]));
+
+export const colomboDayOf = (date: Date, tz: string): string => {
+  const p = partsInTz(date, tz);
+  return `${p.year}-${p.month}-${p.day}`;
+};
+export const billingMonthOf = (date: Date, tz: string): string => colomboDayOf(date, tz).slice(0, 7);
+export const dayOfMonthInTz = (date: Date, tz: string): number => Number(partsInTz(date, tz).day);
+
+const midnightInTz = (year: number, month: number, day: number, tz: string): Date => {
+  const local = Date.UTC(year, month - 1, day);
+  let guess = local;
+  for (let i = 0; i < 4; i++) {
+    const p = partsInTz(new Date(guess), tz);
+    const observed = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second));
+    const next = guess + local - observed;
+    if (next === guess) break;
+    guess = next;
+  }
+  return new Date(guess);
+};
+
+/** Start inclusive, end exclusive, in UTC. */
+export const dayRangeInTz = (day: string, tz: string): { start: Date; end: Date } => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new RangeError('Invalid calendar day');
+  const [year, month, date] = day.split('-').map(Number) as [number, number, number];
+  const calendarDate = new Date(Date.UTC(year, month - 1, date));
+  if (calendarDate.toISOString().slice(0, 10) !== day) throw new RangeError('Invalid calendar day');
+  const next = new Date(Date.UTC(year, month - 1, date + 1));
+  return { start: midnightInTz(year, month, date, tz), end: midnightInTz(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), tz) };
+};

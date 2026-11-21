@@ -19,7 +19,6 @@ import {
 	financialReportQuerySchema,
 	refundPaymentSchema,
 } from '@/schemas/payment.schema';
-import { getCurrentPaymentMonth } from '@/services/access.service';
 
 type RequestWithFile = Request & { file?: Express.Multer.File };
 
@@ -75,7 +74,7 @@ export const getPaymentsSummary = asyncHandler(async (req: Request, res: Respons
 export const getFinancialReport = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const query = financialReportQuerySchema.parse(req.query);
 	const data = await PaymentService.getFinancialReport(
-		query.month ?? getCurrentPaymentMonth(),
+		query.month,
 		query,
 		req.user!,
 	);

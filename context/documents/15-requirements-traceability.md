@@ -78,7 +78,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-PAY-04 | **Bank transfer with slip upload and staff approval** | Planned | Payment channels spec §3 (`PaymentSlip`, `BANK_TRANSFER`) |
 | R-PAY-05 | Excel reconciliation | Done | `BULK` method |
 | R-PAY-06 | Other local wallets (LankaQR, FriMi, Genie) | Gap | Only via whatever PayHere exposes |
-| R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | Hard gate in `access.service.ts`; simple grace (`fees.graceDays`=10, Colombo month) in Wave 1 Task 1; full coverage function and `AccessException` in Wave 2b T6 (D-MONEY-1) |
+| R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | The `access.service.ts` coverage gate uses the organization billing month and configurable grace (`fees.graceDays`=10); full coverage function and `AccessException` in Wave 2b T6 (D-MONEY-1) |
 | R-PAY-08 | Refunds and adjustments with an audit trail | Done | `PaymentAdjustment` immutable ledger; provider-executed refunds planned |
 | R-PAY-09 | Defaulter list and automatic reminders | Planned | D-OPS-1 who-owes and manual reminders, Wave 1 Task 5 |
 | R-PAY-10 | Teacher/institute revenue share or commission | Planned | D-MONEY-8, Wave 2f T31. Audit 2026-11-19: F-91. |
@@ -216,7 +216,7 @@ decision stands.
 | 9 | Hard payment lock | Gap analysis flags it as unfair without exceptions | Decided 2026-11-20 (D-MONEY-1): grace in Wave 1; `AccessException` in Wave 2b T6 (default grace 10 days) |
 | 10 | "Super admin can do everything" | Global oversight, not impersonation (gap analysis §2) | Keep |
 | 11 | PHYSICAL-only students and online content | Today the gate ignores `classType` | **Resolved 2026-11-19:** physical-only students lose live/recording access unless `HYBRID` or the session opts in (`onlineForPhysical`); payment/enrollment spec §4.4 |
-| 12 | Which month's fee unlocks which content | Gate = current UTC month `SUCCESS` payment (access.service.ts); doc 02 silent on past months | **Decided 2026-11-20 (D-MONEY-1, D-ACCESS-1, D-ACCESS-9):** one covered-student function, current billing month in Asia/Colombo plus a configurable grace for students who paid last month, per-course gate, one recording window rule. See [19](./19-owner-decisions-2026-11-20.md) |
+| 12 | Which month's fee unlocks which content | Gate = current organization billing month or configured grace with a previous-month `SUCCESS` payment | **Decided 2026-11-20 (D-MONEY-1, D-ACCESS-1, D-ACCESS-9):** one covered-student function, current billing month in Asia/Colombo plus a configurable grace for students who paid last month, per-course gate, one recording window rule. See [19](./19-owner-decisions-2026-11-20.md) |
 | 13 | Who may mark an exam | Assigned markers, owning teachers and owners mark | **Decided 2026-11-20 (D-EXAMS-1):** the owning teacher and the owner may enter marks on their own exams; markers keep their assigned scope |
 | 14 | Branch dimension | Institute = branch (ADR 14), but `Course`, `Enrollment` and `ClassSession` carry no branch | **Decided 2026-11-20 (D-STRUCTURE-1):** each branch runs its own course with its own roster and fee; branch recorded on sessions and scans |
 | 15 | Exams and payment | Exams gated by enrollment only | **Decided 2026-11-20 (D-ACCESS-2):** exam sitting follows the same coverage function, with a per-course owner toggle |

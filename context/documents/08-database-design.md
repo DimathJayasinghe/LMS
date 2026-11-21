@@ -438,7 +438,7 @@ model Enrollment {
 ```
 
 - A student can enroll in **multiple courses** across subjects; each enrollment is paid independently.
-- **Access control**: a student sees a course's sessions/videos only via an **active enrollment**, with video access gated on the **current month being paid**. The gate does not currently look at `classType`.
+- **Access control**: a student sees a course's sessions/videos only via an **active enrollment**, with video access gated on the organization billing month being covered, including configured grace. The gate does not currently look at `classType`.
 - **Planned (HYBRID design §4.2):** add `HYBRID`; replace `@@unique([userId, courseId, classType])` with one **active** enrollment per `(userId, courseId)` (a nullable `activeKey` with a plain `@unique`, set only while `isActive`; Prisma cannot express partial unique indexes) so a student cannot be billed twice for one course; a mode change becomes an audited in-place update so existing payments stay linked. The migration merges existing duplicate active enrollments into one `HYBRID` row and refuses to run if a merge is ambiguous, including when both enrollments already have a payment for the same month (a double-billing case that needs a refund first).
 
 ### 4.8 Payment
@@ -1055,3 +1055,7 @@ Rows 1–11 above are historical and have been applied. The rows below are the *
 | 20 | ~~`generateBunnyStreamUrl` (IP-bound HLS token) still exported but unused~~ | Done 2026-11-19 | Deleted; the `hls.js` frontend dependency was removed in the same change |
 
 > After changing the schema, run `npx prisma migrate dev --name align_to_design_doc`, review the SQL, and update the affected services/guards in the same PR.
+
+### OrganizationSetting
+
+A tenant-owned row stores `organizationId`, `key`, JSON `value`, `updatedById` and `updatedAt`, with a unique organization/key pair and restricted foreign keys. Missing keys use registry defaults; there is no backfill. Reverting the feature leaves the additive table unused.

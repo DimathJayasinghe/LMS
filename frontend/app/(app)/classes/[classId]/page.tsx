@@ -356,6 +356,7 @@ export default async function ClassDetailPage({
 
         <aside className="lg:sticky lg:top-20 lg:self-start">
           <EnrollPanel
+            timezone={user.organization?.timezone ?? "Asia/Colombo"}
             courseId={course.id}
             monthlyFee={course.monthlyFee}
             active={active}
