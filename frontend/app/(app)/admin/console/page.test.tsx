@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ConsolePage from "./page";
 import { NAV_SECTIONS, navForRole } from "@/lib/nav";
@@ -29,6 +30,24 @@ describe("console page", () => {
   it("opens for the owner", async () => {
     asRole("SUPER_ADMIN");
     await expect(ConsolePage()).resolves.toBeTruthy();
+  });
+
+  it("gives every panel its own Suspense boundary, so a slow or failing one never blanks the rest", async () => {
+    asRole("SUPER_ADMIN");
+    const names: string[] = [];
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node || typeof node !== "object" || !("props" in node)) return;
+      const { type, props } = node as { type: unknown; props: { children?: unknown } };
+      if (type === Suspense) {
+        const child = props.children as { type: { name: string } };
+        names.push(child.type.name);
+        return;
+      }
+      walk(props.children);
+    };
+    walk(await ConsolePage());
+    expect(names).toEqual(["CashPanel", "OwingPanel", "MarkingPanel", "AttendancePanel", "SetupPanel", "SmsPanel"]);
   });
 });
 

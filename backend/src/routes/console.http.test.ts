@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import type { Server } from 'node:http';
 import { Role } from '@prisma/client';
 
-const m = vi.hoisted(() => ({ cash: vi.fn(), owing: vi.fn() }));
+const m = vi.hoisted(() => ({ cash: vi.fn(), owing: vi.fn(), marking: vi.fn(), attendance: vi.fn(), setup: vi.fn(), sms: vi.fn() }));
 const db = vi.hoisted(() => ({ user: { findUnique: vi.fn() } }));
 
 vi.mock('@/config/database', () => ({ prisma: db }));
@@ -14,6 +14,10 @@ vi.mock('@/config/redis', () => ({ redis: { set: vi.fn().mockResolvedValue('OK')
 vi.mock('@/config/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 vi.mock('@/config/sentry', () => ({ captureException: vi.fn() }));
 vi.mock('@/services/console.service', () => ({ getCashPanel: m.cash, getOwingPanel: m.owing }));
+vi.mock('@/services/console-marking.service', () => ({ getMarkingPanel: m.marking }));
+vi.mock('@/services/console-attendance.service', () => ({ getAttendancePanel: m.attendance }));
+vi.mock('@/services/console-setup.service', () => ({ getSetupPanel: m.setup }));
+vi.mock('@/services/console-sms.service', () => ({ getSmsPanel: m.sms }));
 
 import { consoleRoutes } from './console.routes';
 import { errorHandler } from '@/middleware/error.middleware';
@@ -26,6 +30,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   m.cash.mockResolvedValue({ date: '2026-11-20', rows: [] });
   m.owing.mockResolvedValue({ month: '2026-11', students: 0 });
+  for (const panel of [m.marking, m.attendance, m.setup, m.sms]) panel.mockResolvedValue({ ok: true });
   const app = express();
   app.use(express.json(), cookieParser());
   app.use('/api/console', consoleRoutes);
@@ -82,6 +87,32 @@ describe.each([['/cash', () => m.cash, 'date=2026-11-20', { date: '2026-11-20' }
   it('answers an empty query too', async () => {
     expect((await call(Role.SUPER_ADMIN, 'GET', path)).status).toBe(200);
     expect(service()).toHaveBeenCalledWith(expect.anything(), {});
+  });
+});
+
+describe.each([['/marking', () => m.marking], ['/attendance-today', () => m.attendance], ['/setup', () => m.setup], ['/sms', () => m.sms]])('GET /console%s', (path, service) => {
+  it('needs a signed-in user', async () => {
+    expect((await call(null, 'GET', path)).status).toBe(401);
+    expect(service()).not.toHaveBeenCalled();
+  });
+
+  it.each([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT])('stops %s at the route', async (role) => {
+    expect((await call(role, 'GET', path)).status).toBe(403);
+    expect(service()).not.toHaveBeenCalled();
+  });
+
+  it('lets the owner read, no-store, in the envelope, passing only the caller', async () => {
+    const response = await call(Role.SUPER_ADMIN, 'GET', path);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.json).toEqual({ status: 'success', data: { ok: true } });
+    expect(service()).toHaveBeenCalledTimes(1);
+    expect(service()).toHaveBeenCalledWith(expect.objectContaining({ role: Role.SUPER_ADMIN }));
+  });
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('answers %s with 404 and runs nothing', async (method) => {
+    expect((await call(Role.SUPER_ADMIN, method, path)).status).toBe(404);
+    expect(service()).not.toHaveBeenCalled();
   });
 });
 
