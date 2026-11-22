@@ -29,17 +29,38 @@ export const outstandingWhere = ({ organizationId, timezone, month, courseWhere 
   payments: { none: { paymentMonth: month, status: PaymentStatus.SUCCESS } },
 });
 
-export const countOutstanding = async (scope: OutstandingScope): Promise<{ count: number; expected: string }> => {
+export interface OwingCourse {
+  courseId: string;
+  name: string;
+  count: number;
+  /** What the owing students would pay for the month, as a fixed(2) string. */
+  expected: string;
+}
+
+/** Who owes, grouped by course and priced through the fee function. Order is not defined. */
+export const owingByCourse = async (scope: OutstandingScope): Promise<OwingCourse[]> => {
   const groups = await prisma.enrollment.groupBy({ by: ['courseId'], where: outstandingWhere(scope), _count: { _all: true } });
-  if (groups.length === 0) return { count: 0, expected: '0.00' };
-  const courses = await prisma.course.findMany({ where: { id: { in: groups.map((g) => g.courseId) } }, select: { id: true, monthlyFee: true } });
-  const feeOf = new Map(courses.map((c) => [c.id, c]));
-  let expected = new Prisma.Decimal(0);
-  for (const group of groups) {
-    const course = feeOf.get(group.courseId);
-    if (course) expected = expected.plus(getMonthFeeForEnrollment({ course }, scope.month).times(group._count._all));
-  }
-  return { count: groups.reduce((sum, g) => sum + g._count._all, 0), expected: expected.toFixed(2) };
+  if (groups.length === 0) return [];
+  const courses = await prisma.course.findMany({ where: { id: { in: groups.map((g) => g.courseId) } }, select: { id: true, name: true, monthlyFee: true } });
+  const courseOf = new Map(courses.map((c) => [c.id, c]));
+  return groups.flatMap((group) => {
+    const course = courseOf.get(group.courseId);
+    if (!course) return [];
+    const expected = getMonthFeeForEnrollment({ course }, scope.month).times(group._count._all).toFixed(2);
+    return [{ courseId: course.id, name: course.name, count: group._count._all, expected }];
+  });
+};
+
+/** How many different students owe, whatever number of their classes they owe for. */
+export const owingStudents = async (scope: OutstandingScope): Promise<number> =>
+  (await prisma.enrollment.groupBy({ by: ['userId'], where: outstandingWhere(scope) })).length;
+
+export const countOutstanding = async (scope: OutstandingScope): Promise<{ count: number; expected: string }> => {
+  const courses = await owingByCourse(scope);
+  return {
+    count: courses.reduce((sum, c) => sum + c.count, 0),
+    expected: courses.reduce((sum, c) => sum.plus(c.expected), new Prisma.Decimal(0)).toFixed(2),
+  };
 };
 
 export interface OutstandingQuery {

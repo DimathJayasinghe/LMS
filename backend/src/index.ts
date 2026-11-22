@@ -23,6 +23,7 @@ import { videoRoutes } from './routes/video.routes';
 import { examRoutes } from './routes/exam.routes';
 import { submissionRoutes } from './routes/submission.routes';
 import { paymentRoutes } from './routes/payment.routes';
+import { consoleRoutes } from '@/routes/console.routes';
 import { streamRoutes } from './routes/stream.routes';
 import { auditRoutes } from './routes/audit.routes';
 import { settingsRoutes } from './routes/settings.routes';
@@ -98,6 +99,7 @@ const bootstrap = async (): Promise<void> => {
   app.use('/api/marker-groups', markerGroupRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/payments', paymentRoutes);
+  app.use('/api/console', consoleRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api/stream', streamRoutes);
   app.use('/api/audit-logs', auditRoutes);

@@ -16,7 +16,7 @@ vi.mock('@/config/database', () => ({
 vi.mock('@/services/settings.service', () => ({ createSettingsReader: () => async (key: string) => m.settings[key] }));
 vi.mock('@/services/organization-clock.service', () => ({ organizationClockForUser: m.clock }));
 
-import { countOutstanding, listOutstanding, outstandingWhere } from './outstanding.service';
+import { countOutstanding, listOutstanding, outstandingWhere, owingByCourse, owingStudents } from './outstanding.service';
 
 const desk = { userId: 'desk', role: Role.ADMIN };
 const owner = { userId: 'owner', role: Role.SUPER_ADMIN };
@@ -216,6 +216,44 @@ describe('grace', () => {
     m.settings['fees.graceDays'] = 31;
     m.paymentFindMany.mockResolvedValue([pay('e1', '2026-01')]);
     expect(await inGraceFor()).toMatchObject({ inGrace: true, graceUntil: '2026-02-28' });
+  });
+});
+
+describe('owingStudents (the console panel)', () => {
+  it('counts each student once, whatever number of classes they owe for, through the one definition', async () => {
+    m.enrollmentGroupBy.mockResolvedValue([{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }]);
+    await expect(owingStudents(scope)).resolves.toBe(3);
+    expect(m.enrollmentGroupBy).toHaveBeenCalledWith({ by: ['userId'], where: outstandingWhere(scope) });
+  });
+
+  it('answers zero when nobody owes', async () => {
+    m.enrollmentGroupBy.mockResolvedValue([]);
+    await expect(owingStudents(scope)).resolves.toBe(0);
+  });
+});
+
+describe('owingByCourse (the console panel)', () => {
+  it('counts and prices each course, with its name', async () => {
+    m.enrollmentGroupBy.mockResolvedValue([{ courseId: 'c1', _count: { _all: 3 } }, { courseId: 'c2', _count: { _all: 2 } }]);
+    m.courseFindMany.mockResolvedValue([
+      { id: 'c1', name: 'Physics', monthlyFee: new Prisma.Decimal('1500.00') }, { id: 'c2', name: 'Chemistry', monthlyFee: new Prisma.Decimal('2000.50') },
+    ]);
+    await expect(owingByCourse(scope)).resolves.toEqual([
+      { courseId: 'c1', name: 'Physics', count: 3, expected: '4500.00' }, { courseId: 'c2', name: 'Chemistry', count: 2, expected: '4001.00' },
+    ]);
+    expect(m.enrollmentGroupBy).toHaveBeenCalledWith(expect.objectContaining({ by: ['courseId'], where: outstandingWhere(scope) }));
+  });
+
+  it('answers an empty list without reading courses when nothing is owing', async () => {
+    m.enrollmentGroupBy.mockResolvedValue([]);
+    await expect(owingByCourse(scope)).resolves.toEqual([]);
+    expect(m.courseFindMany).not.toHaveBeenCalled();
+  });
+
+  it('skips a group whose course row is gone instead of failing the panel', async () => {
+    m.enrollmentGroupBy.mockResolvedValue([{ courseId: 'gone', _count: { _all: 1 } }]);
+    m.courseFindMany.mockResolvedValue([]);
+    await expect(owingByCourse(scope)).resolves.toEqual([]);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  Gauge,
   LineChart,
   LayoutDashboard,
   Library,
@@ -73,6 +74,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Administration",
     items: [
+      { label: "Console", href: "/admin/console", icon: Gauge, roles: ["SUPER_ADMIN"] },
       {
         label: "Users",
         href: "/admin/users",
