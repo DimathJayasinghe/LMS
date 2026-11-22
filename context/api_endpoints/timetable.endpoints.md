@@ -150,7 +150,7 @@ Body:
 ```
 Creates a `ClassSession` for every occurrence of every active slot in the range.
 **Idempotent** — re-running does not duplicate (unique on `(timetableSlotId, date)`)
-and never clobbers a hand-edited session.
+and never clobbers a hand-edited session. Slots of a class whose teacher is deactivated are skipped, in the preview, the manual run and the weekly job alike: nobody can run those sessions until the class is handed over.
 
 The range is bounded to 90 days. Call `POST /generate/preview` with the same body
 first to receive `rows`, `createCount`, and `existingCount`. Generated online and in-hall + live-stream sessions

@@ -217,7 +217,7 @@ docker compose exec -it backend node dist/scripts/owner-add.js --email owner@exa
 docker compose exec -it backend node dist/scripts/owner-reset-password.js --email owner@example.com
 ```
 
-Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset ends every session of that account at once (it bumps the account's session version and revokes refresh tokens) and both commands record an audit event. `owner-add` refuses to create a co-owner beyond the registered `identity.maxOwners` (default 2, read from the organization's settings). Step-up confirmation for role change and deactivation is still deferred.
+Add `--generate` to either command to generate a password. Add `--reactivate` to the reset command only when the owner account should also be reactivated. Reset ends every session of that account at once (it bumps the account's session version and revokes refresh tokens) and both commands record an audit event. `owner-add` refuses to create a co-owner beyond the registered `identity.maxOwners` (default 2, read from the organization's settings). Role changes and staff deactivations ask the owner to confirm with their own password in the app (step-up, `ACTOR_PASSWORD_INVALID` when wrong); a leaving teacher's classes are handed over in the same step (doc 19, D-IDENTITY-6).
 
 ### Creating staff accounts
 

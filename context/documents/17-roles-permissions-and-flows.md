@@ -63,9 +63,9 @@ Enforcement has three layers, and the gaps are always between them:
 
 | Role | Scope as implemented | Where it leaks or is thin |
 |---|---|---|
-| `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28). Both fixed in #102 (unreleased); owner cap and step-up wait for Wave 1 |
+| `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28). Both fixed in #102 (unreleased); owner cap in #108 and step-up for role change and staff deactivation in #121 (unreleased) |
 | `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | Roster of own students since #116 (F-83, unreleased), with a paid mark and recent attendance but no contact details or amounts. Can enter marks on own exams since #105 (F-67, unreleased). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
-| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload moved to the owner in #113 (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
+| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, enroll, student status and barcode (never on staff, `SUPER_ADMIN` or peer `ADMIN` targets, `live`) | Bulk upload moved to the owner in #113 (F-58). Activates and deactivates students only, never staff, and changes no role since #121 (F-32, unreleased). Sees NIC, phone and address in name search |
 | `MARKER` | Assigned exams or audiences only for list, get and grade | Sees full student identity on every script (F-74). Refused on recording and attendance reads (F-04, F-09 fixed in Wave 0) |
 | `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); recording read scoping (F-06); not applied to exams (F-23) |
 
@@ -105,7 +105,7 @@ attendance → upload recording → set monthly test → marker marks → publis
 *Breaks:* rescheduling or disabling a slot leaves ghost or duplicate sessions (F-48, F-49); students are not
 notified of session changes (F-51); no holiday or Poya calendar (F-50); no roster or "who has not paid"
 (F-83, fixed in #116: a Students section on the class page); cannot mark own exam (F-67, fixed in #105); income history follows the *current*
-teacher after reassignment (F-79); the owner cannot cleanly offboard a teacher who owns a course (F-82).
+teacher after reassignment (F-79); the owner could not cleanly offboard a teacher who owns a course (F-82, fixed in #121, unreleased).
 
 **Student: join and learn.** Register → account setup → enroll → pay → watch or join live → attend → sit exam
 → results. *Breaks:* session dies at 15 minutes (F-01); the setup gate demands NIC photos from minors who
@@ -174,7 +174,7 @@ Used as a checklist. Statuses reflect the code on `dev` at 2026-11-19.
 | S8 | Monthly test, paper marking, hall-paper marks, ranking | Partial | MCQ auto-mark and publish work; teacher and owner can mark and enter hall marks since #105 and #109; ranking absent (F-73) |
 | S9 | Parent SMS | Gap | No guardian contact; three events, all to the student (F-25, F-76) |
 | S10 | Low-end phone, bank slip | Planned | Bank slip is in the spec; exam PDF upload retry since #117 (F-22), shared rate limiter (F-02) |
-| S11 | Staff turnover and deactivation | Partial | Sessions end on the next request since #108 (F-15, unreleased); no handover check (F-32, F-82) |
+| S11 | Staff turnover and deactivation | Done | Only the owner deactivates or re-roles staff, with a reason and their own password; a teacher's classes (and a marker's open marking) must be handed over in the same step; sessions end on the next request (F-15 in #108, F-32, F-82, F-107 and F-119 in #121, unreleased) |
 | S12 | Minors' data privacy | Gap | NIC photos mandatory, write-only, no retention policy; registration hardening (F-19, F-30, F-33) |
 | S13 | Teacher settlement, commission and concessions | Gap | No revenue share, statement or concession attribution; teacher income view is gross-only (F-91, F-79) |
 | S14 | Year-end rollover, repeaters and teacher substitution | Gap | No clone-to-new-year, batch end, substitute or make-up session (F-97, F-93, F-96) |

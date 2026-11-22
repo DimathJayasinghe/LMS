@@ -69,7 +69,7 @@ No query. Response `data`: `{ date, sessions, flagged }`.
 
 No query. Response `data`: `{ orphanedClasses, oldBatches, studentsWithoutPhone }`.
 
-- `orphanedClasses` and `oldBatches` are `{ count, rows }` where `rows` holds at most 10 `{ courseId, name, year, teacherName }` ordered by name, and `count` is the true total. Orphaned: active courses whose teacher's account is deactivated. Old batches: active courses whose `year` is before the current year in the organization's zone.
+- `orphanedClasses` and `oldBatches` are `{ count, rows }` where `rows` holds at most 10 `{ courseId, name, year, teacherName }` ordered by name, and `count` is the true total. Orphaned: active courses whose teacher left, that is whose account is deactivated or is no longer a teacher; the same definition as `GET /api/users/orphaned-classes`, which the owner uses to hand them over. Old batches: active courses whose `year` is before the current year in the organization's zone.
 - `studentsWithoutPhone`: active students whose phone is missing or blank.
 
 ### GET `/sms`

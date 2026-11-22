@@ -40,6 +40,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-USR-07 | Platform operator for a future SaaS | Planned | ADR 14 §8–9; `PLATFORM_ADMIN` name reserved |
 | R-USR-08 | Fine-grained RBAC | Partial | Role plus resource and target guards (`assertCourseAccess`, `assertCanManagePrivilegedTarget`); the unused `Permission` model is removed in Wave 1b Task 7 (D-IDENTITY-4); owner-set caps live in their own tables |
 | R-USR-09 | One teacher account working at several organizations | Deferred | ADR 14 §9: accounts are per organization. Teachers across several **branches** of one organization already work |
+| R-USR-10 | Role and status changes are restricted and a leaving teacher's classes are handed over | Done | Decision matrix in `account-change-policy.ts` (front desk: status of students only; owner: status of anyone, role among teacher, front desk and marker, with a reason and the owner's own password); `handover.service.ts` moves classes, sessions, exams and marking to a working teacher in the same transaction; `GET /users/orphaned-classes` and `POST /users/:id/handover` for classes left behind (D-IDENTITY-5, D-IDENTITY-6; F-32, F-82, F-107, F-119) |
 
 ### 1.2 Students and classes
 
