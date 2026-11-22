@@ -504,7 +504,7 @@ export interface LiveClassToken {
 // ── Payments & attendance ────────────────────────────────────────────────────
 export type PaymentMethod = "ONLINE" | "ENTRANCE" | "BULK" | "MANUAL";
 export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
-export type AttendanceSource = "QR" | "BARCODE" | "ZOOM_WEBHOOK" | "MANUAL";
+export type AttendanceSource = "QR" | "BARCODE" | "ZOOM_WEBHOOK" | "MANUAL" | "VIDEO";
 export type PaymentAdjustmentType = "OVERRIDE" | "REFUND";
 
 /** A payment row (see payments.endpoints.md). Matches the service's `paymentSelect`. */
