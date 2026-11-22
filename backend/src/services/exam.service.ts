@@ -17,6 +17,8 @@ import {
 	type UpdateExamInput,
 } from '@/schemas/exam.schema';
 import { resolveStudentExamAudience, studentAudienceSelect, toMyAudience, toStudentAudience, type MyAudience } from '@/services/exam-audience-access.service';
+import { organizationClockForUser } from '@/services/organization-clock.service';
+import { createSettingsReader } from '@/services/settings.service';
 import * as StreamService from '@/services/stream.service';
 
 // ─── Types ────────────────────────────────────────────────
@@ -61,6 +63,8 @@ interface ExamListItem {
 }
 
 interface ExamDetail extends ExamListItem {
+	/** Students only: how the browser should behave while sitting (the owner's settings). */
+	sitting?: { autoSubmitLeadSeconds: number };
 	paperPdfUrl: string | null;
 	mcqPayload: McqPayload | StudentMcqPayload | null;
 }
@@ -193,6 +197,12 @@ const stripMcqAnswers = (payload: McqPayload): StudentMcqPayload => ({
 		})),
 	})),
 });
+
+/** The browser submits typed work this long before the end, because the server refuses any start after it. */
+const sittingFor = async (userId: string): Promise<{ autoSubmitLeadSeconds: number }> => {
+	const { organizationId } = await organizationClockForUser(userId);
+	return { autoSubmitLeadSeconds: await createSettingsReader(organizationId)('exams.autoSubmitLeadSeconds') };
+};
 
 // ─── CRUD ──────────────────────────────────────────────────
 
@@ -364,7 +374,9 @@ export const getExamById = async (
 		...exam,
 		paperPdfUrl,
 		mcqPayload,
-		...(role === Role.STUDENT ? { myAudience: audience ? toMyAudience(audience) : null } : {}),
+		...(role === Role.STUDENT
+			? { myAudience: audience ? toMyAudience(audience) : null, sitting: await sittingFor(actor.userId) }
+			: {}),
 	};
 };
 

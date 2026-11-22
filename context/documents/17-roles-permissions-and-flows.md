@@ -37,7 +37,7 @@ content is one coarse rule applied differently depending on the route.
 | T4 No branch dimension | A course, enrollment and session carry no branch; one class per branch at a time; scanner not branch-aware | F-52, F-53, F-37 |
 | T5 Identity and attendance integrity | Scan identity resolution, QR integrity, Zoom webhook hardening, SDK joins that very likely cannot match students, attendance reads that are not scoped | F-07, F-08, F-09, F-14, F-54 |
 | T6 Money edges | Bulk upload is an unaudited front-desk money edit; cash and PayHere can double-settle; chargebacks ignored; no free/half card or proration | F-58, F-61, F-63, F-64 |
-| T7 Exams cannot be run end to end | Teacher cannot mark; hall (`INCLASS`) marks have no entry path; scoped exams cannot be sat (fixed in #117); non-MCQ work is not autosaved | F-13, F-17, F-22, F-67, F-86 |
+| T7 Exams cannot be run end to end | Teacher cannot mark; hall (`INCLASS`) marks have no entry path; scoped exams cannot be sat (fixed in #117); non-MCQ work is not autosaved (fixed in #118) | F-13, F-17, F-22, F-67, F-86 |
 | T8 Communication | Three SMS events, all to the student's own phone; none for absence, fee due or timetable change | F-25, F-76, F-72 |
 | T9 Documentation drift | Doc 01 contradicts itself and the code; CLAUDE.md and doc 15 overstated the content gate and the attendance channels | F-14, F-26, F-34, F-66 |
 | T10 Commercial and lifecycle model | No teacher settlement, class medium or capacity, drop and transfer lifecycle, non-monthly products, assistant role, substitutes, year rollover, minors' consent and retention | F-91 to F-102 |
@@ -112,8 +112,8 @@ teacher after reassignment (F-79); the owner cannot cleanly offboard a teacher w
 mostly have no NIC (F-19) and is enforced by the browser only (F-29); enroll hides branch and mode meaning;
 a `PENDING` PayHere payment looks unpaid with the Pay button showing again (F-85); recordings look playable
 until tapped (F-88); on the 1st of the month the whole library, including old recordings, locks until the new
-fee is paid (F-05); scoped exams could not be sat from the UI (F-17, fixed in #117); non-MCQ answers are not autosaved and the
-Submit button disables at 0:00 (F-86); a failed PDF upload left a dead submission that rejected the retry
+fee is paid (F-05); scoped exams could not be sat from the UI (F-17, fixed in #117); non-MCQ answers were not autosaved and the
+Submit button disabled at 0:00 (F-86, fixed in #118: drafts are kept on the device and sent automatically shortly before the end); a failed PDF upload left a dead submission that rejected the retry
 (F-22, fixed in #117: the same row resumes while the window is open).
 
 **Front desk: the day at the counter.** Register or find a walk-in → enroll → take cash → scan in → chase
@@ -192,7 +192,7 @@ letters are S (hours), M (days), L (a week or more).
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
 - **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
   and F-12 scanner context for the front desk (warning half done, #115); F-83 teacher roster (done, #116); F-67 teacher marking (done, #105) and F-13 hall-mark
-  entry (done, #109); F-17 scoped-exam sitting and F-22 upload retry (done, #117); F-86 answer autosave; F-03 password reset (done, #108) and F-21 staff creation (done, #110); F-10 who owes with CSV and manual reminders and F-78 (done, #111); F-11 front-desk enrolment and the F-65 second-mode block (done, #114); F-104 timetable-generated classes
+  entry (done, #109); F-17 scoped-exam sitting and F-22 upload retry (done, #117); F-86 answer autosave (done, #118); F-03 password reset (done, #108) and F-21 staff creation (done, #110); F-10 who owes with CSV and manual reminders and F-78 (done, #111); F-11 front-desk enrolment and the F-65 second-mode block (done, #114); F-104 timetable-generated classes
   that can go live (a live-checked S fix; done in #107, unreleased); F-127 read-only owner console.
 - **Wave 2 — make access coherent (decisions made, doc 19; sub-order 2a enrollment migration with HYBRID, 2b money core and single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority):** the single content gate with mode and
   payment rules (F-05, F-23, HYBRID), the branch dimension (F-52, F-53, F-37, F-105 residual: session branch), money and enrollment lifecycle (F-59 to F-65, F-91, F-93, F-94),

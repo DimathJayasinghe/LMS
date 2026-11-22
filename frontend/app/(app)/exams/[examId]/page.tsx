@@ -151,11 +151,11 @@ export default async function ExamDetailPage({
           title="Not started yet"
           message={`This exam opens ${opensAtFmt.format(new Date(exam.startTime))}.`}
         >
-          <CountdownTimer target={exam.startTime} className="text-lg" />
+          <CountdownTimer target={exam.startTime} label="Time until the exam opens" className="text-lg" />
         </ExamNotice>
       );
     } else if (view === "sit") {
-      content = <ExamSit exam={exam} resume={mySub} />;
+      content = <ExamSit exam={exam} resume={mySub} userId={user.id} />;
     } else {
       content = (
         <ExamNotice

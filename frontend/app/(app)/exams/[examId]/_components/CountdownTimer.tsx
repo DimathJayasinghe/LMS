@@ -10,10 +10,12 @@ interface CountdownTimerProps {
   target: string;
   /** Fired once when the countdown reaches zero. */
   onExpire?: () => void;
+  /** Accessible name; the clock itself is not announced every second. */
+  label?: string;
   className?: string;
 }
 
-export function CountdownTimer({ target, onExpire, className }: CountdownTimerProps) {
+export function CountdownTimer({ target, onExpire, label = "Time remaining", className }: CountdownTimerProps) {
   const end = new Date(target).getTime();
   const [remaining, setRemaining] = useState<number>(() => end - Date.now());
   const expired = useRef(false);
@@ -36,6 +38,8 @@ export function CountdownTimer({ target, onExpire, className }: CountdownTimerPr
 
   return (
     <span
+      role="timer"
+      aria-label={label}
       className={cn(
         "inline-flex items-center gap-1.5 font-mono tabular-nums",
         urgent ? "text-destructive" : "text-foreground",

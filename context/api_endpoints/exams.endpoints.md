@@ -99,6 +99,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 - `paperPdfUrl` is returned as a presigned URL for `STUDENT` only within the exam time window (`SUPER_ADMIN`/`TEACHER`/`MARKER` receive it at any time — see line below).
 - `mcqPayload` for students excludes `isCorrect` and is returned only inside the exam window.
 - `myAudience` (students only, list and detail, #117): `{ label, deliveryMode: "ONLINE" | "PHYSICAL", instituteName }` for a scoped exam (one with a paper revision), `null` for a course-wide exam; absent for every other role. The audience id is never returned.
+- `sitting` (students only, detail only, #118): `{ autoSubmitLeadSeconds }`, the organization's `exams.autoSubmitLeadSeconds` setting (0 to 300 seconds, default 15). The exam page sends the typed answers that many seconds before the end, counted on the server clock (the `GET /health` timestamp), so the submission starts before the server refuses it; absent for every other role.
 - `SUPER_ADMIN`/`TEACHER` always receive full MCQ payloads and can access paper URLs at any time (`MARKER` receives the paper but has `isCorrect` stripped; front-desk `ADMIN` has no exam access — see GET `/`/`/:id` below).
 
 ## Endpoint Summary

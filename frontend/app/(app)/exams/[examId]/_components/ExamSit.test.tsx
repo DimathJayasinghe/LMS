@@ -38,14 +38,14 @@ beforeEach(() => {
 
 describe("ExamSit, first attempt", () => {
   it("shows no resume notice", () => {
-    render(<ExamSit exam={exam()} />);
+    render(<ExamSit userId="u1" exam={exam()} />);
     expect(screen.queryByText("Your earlier upload did not finish")).not.toBeInTheDocument();
   });
 
   it("never sends an audience: the server derives it", async () => {
     m.post.mockResolvedValue(started);
     const user = userEvent.setup();
-    render(<ExamSit exam={exam()} />);
+    render(<ExamSit userId="u1" exam={exam()} />);
     await choosePdf(user);
     await user.click(screen.getByRole("button", { name: /submit exam/i }));
     expect(m.post).toHaveBeenCalledWith("/submissions", {
@@ -59,7 +59,7 @@ describe("ExamSit, first attempt", () => {
     m.post.mockResolvedValue(started);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true }));
     const user = userEvent.setup();
-    render(<ExamSit exam={exam()} />);
+    render(<ExamSit userId="u1" exam={exam()} />);
     await choosePdf(user);
     await user.click(screen.getByRole("button", { name: /submit exam/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Upload failed");
@@ -74,7 +74,7 @@ describe("ExamSit, first attempt", () => {
 
 describe("ExamSit, resuming an unfinished upload", () => {
   it("explains that the earlier upload did not finish and what to do", () => {
-    render(<ExamSit exam={exam()} resume={unfinished()} />);
+    render(<ExamSit userId="u1" exam={exam()} resume={unfinished()} />);
     expect(screen.getByText("Your earlier upload did not finish")).toBeInTheDocument();
     expect(screen.getByText(/choose your pdf again or type your answers/i)).toBeInTheDocument();
   });
@@ -82,7 +82,7 @@ describe("ExamSit, resuming an unfinished upload", () => {
   it("starts again with a fresh upload and completes it", async () => {
     m.post.mockResolvedValue(started);
     const user = userEvent.setup();
-    render(<ExamSit exam={exam()} resume={unfinished()} />);
+    render(<ExamSit userId="u1" exam={exam()} resume={unfinished()} />);
     await choosePdf(user);
     await user.click(screen.getByRole("button", { name: /submit exam/i }));
     expect(m.post).toHaveBeenCalledWith("/submissions", expect.not.objectContaining({ audienceId: expect.anything() }));
@@ -92,7 +92,7 @@ describe("ExamSit, resuming an unfinished upload", () => {
   it("lets the student switch to typed answers instead", async () => {
     m.post.mockResolvedValue({ data: { submission: { id: "s1" } } });
     const user = userEvent.setup();
-    render(<ExamSit exam={exam()} resume={unfinished()} />);
+    render(<ExamSit userId="u1" exam={exam()} resume={unfinished()} />);
     await user.click(screen.getByRole("tab", { name: "Type answers" }));
     await user.type(screen.getByLabelText("Answer 1"), "Because of the lever");
     await user.click(screen.getByRole("button", { name: /submit exam/i }));
@@ -105,7 +105,7 @@ describe("ExamSit, resuming an unfinished upload", () => {
       type: "HYBRID",
       mcqPayload: { questions: [{ id: "q1", text: "Two plus two?", order: 1, marks: 5, options: [{ id: "a", text: "4" }, { id: "b", text: "5" }] }] },
     });
-    render(<ExamSit exam={hybrid} resume={unfinished({ answers: { q1: ["a"] } })} />);
+    render(<ExamSit userId="u1" exam={hybrid} resume={unfinished({ answers: { q1: ["a"] } })} />);
     expect(screen.getByRole("checkbox", { name: "4" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "5" })).not.toBeChecked();
   });

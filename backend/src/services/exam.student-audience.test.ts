@@ -5,6 +5,7 @@ import { AppError } from '@/utils/app-error';
 const m = vi.hoisted(() => ({
   findMany: vi.fn(), findUnique: vi.fn(), participantFindUnique: vi.fn(),
   assertStudentContentAccess: vi.fn(), assertMarkerAssignedToExam: vi.fn(), assertCourseAccess: vi.fn(), presign: vi.fn(),
+  clock: vi.fn(), readerFor: vi.fn(), settings: {} as Record<string, unknown>,
 }));
 vi.mock('@/config/database', () => ({
   prisma: { exam: { findMany: m.findMany, findUnique: m.findUnique }, examParticipant: { findUnique: m.participantFindUnique } },
@@ -12,6 +13,10 @@ vi.mock('@/config/database', () => ({
 vi.mock('@/services/access.service', () => ({ assertStudentContentAccess: m.assertStudentContentAccess, assertMarkerAssignedToExam: m.assertMarkerAssignedToExam }));
 vi.mock('@/services/class.service', () => ({ assertCourseAccess: m.assertCourseAccess }));
 vi.mock('@/services/stream.service', () => ({}));
+vi.mock('@/services/organization-clock.service', () => ({ organizationClockForUser: m.clock }));
+vi.mock('@/services/settings.service', () => ({
+  createSettingsReader: (organizationId: string) => { m.readerFor(organizationId); return async (key: string) => m.settings[key]; },
+}));
 vi.mock('@/utils/r2', () => ({ createR2PresignedGetUrl: m.presign, createR2PresignedPutUrl: vi.fn(), r2HeadObject: vi.fn() }));
 
 import { getExamById, listExams } from './exam.service';
@@ -36,6 +41,8 @@ beforeEach(() => {
   m.presign.mockResolvedValue('https://signed.example/paper.pdf');
   m.findUnique.mockResolvedValue(scoped);
   m.participantFindUnique.mockResolvedValue(audience('ONLINE'));
+  m.clock.mockResolvedValue({ organizationId: 'org-1', timezone: 'Asia/Colombo' });
+  m.settings = { 'exams.autoSubmitLeadSeconds': 15 };
 });
 
 describe('listExams for a student', () => {
@@ -148,5 +155,37 @@ describe('getExamById for staff is unchanged', () => {
     m.assertCourseAccess.mockRejectedValue(new AppError('FORBIDDEN_COURSE', 403, 'You can only manage your own courses.'));
     await expect(getExamById('exam-1', { userId: 'teacher-2', role: Role.TEACHER })).rejects.toMatchObject({ code: 'FORBIDDEN_COURSE' });
     expect(m.participantFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('getExamById tells a student how early the browser submits', () => {
+  it('returns the owner setting as sitting.autoSubmitLeadSeconds', async () => {
+    m.settings['exams.autoSubmitLeadSeconds'] = 40;
+    const exam = await getExamById('exam-1', student);
+    expect(exam.sitting).toEqual({ autoSubmitLeadSeconds: 40 });
+  });
+
+  it("reads the setting of the student's own organization", async () => {
+    await getExamById('exam-1', student);
+    expect(m.clock).toHaveBeenCalledWith('student-1');
+    expect(m.readerFor).toHaveBeenCalledWith('org-1');
+  });
+
+  it('is also returned for a legacy exam', async () => {
+    m.findUnique.mockResolvedValue(base);
+    const exam = await getExamById('exam-1', student);
+    expect(exam.sitting).toEqual({ autoSubmitLeadSeconds: 15 });
+  });
+
+  it.each([Role.TEACHER, Role.SUPER_ADMIN])('is not returned to %s and costs them no setting read', async (role) => {
+    const exam = await getExamById('exam-1', { userId: 'staff-1', role });
+    expect(exam).not.toHaveProperty('sitting');
+    expect(m.clock).not.toHaveBeenCalled();
+  });
+
+  it('is not read for a student who is refused', async () => {
+    m.participantFindUnique.mockResolvedValue(null);
+    await expect(getExamById('exam-1', student)).rejects.toMatchObject({ code: 'EXAM_NOT_FOUND' });
+    expect(m.clock).not.toHaveBeenCalled();
   });
 });

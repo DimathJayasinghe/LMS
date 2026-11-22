@@ -177,7 +177,7 @@ These rules **must never be violated**. Every code review checks against this li
 
 ### 5.3 Server-Authoritative Time
 - All exam timers, deadlines, and expiration checks use **server time**, never `Date.now()` from the client.
-- Frontend timers are purely visual countdowns.
+- Frontend timers are purely visual countdowns. The exam page measures how far the device clock is from the server (the public `GET /health` timestamp, refreshed every five minutes) and shows the countdown and fires the early submit on server time, so a fast or slow device clock moves neither.
 
 ### 5.4 Idempotent Mutations
 - All high-stakes `POST` routes (payments, mark finalization, account activation) require an `Idempotency-Key` header.
