@@ -922,3 +922,78 @@ export interface ConsoleOwing {
   courses: ConsoleOwingCourse[];
   otherCourses: number;
 }
+
+export interface ConsoleMarkingExam {
+  examId: string;
+  title: string;
+  courseName: string;
+  type: ExamType;
+  endedAt: string;
+  submitted: number;
+  graded: number;
+  ungraded: number;
+  /** Uploads started but never completed. */
+  incomplete: number;
+  /** Finished submissions entered from the hall. */
+  hall: number;
+}
+
+/** GET /console/marking: ended, unpublished exams, newest first. */
+export interface ConsoleMarking {
+  lookbackDays: number;
+  /** Every exam waiting, not only those listed. */
+  total: number;
+  exams: ConsoleMarkingExam[];
+}
+
+export interface ConsoleAttendanceSession {
+  sessionId: string;
+  title: string;
+  courseName: string;
+  startsAt: string;
+  durationMinutes: number;
+  classType: ClassType;
+  instituteName: string | null;
+  scanned: number;
+  enrolled: number;
+}
+
+/** GET /console/attendance-today. */
+export interface ConsoleAttendance {
+  date: string;
+  sessions: ConsoleAttendanceSession[];
+  /** Scans from `from` to `to` that broke the enrollment or payment rule. */
+  flagged: { from: string; to: string; withoutEnrollment: number; onlineOnly: number; unpaid: number };
+}
+
+export interface ConsoleSetupClass {
+  courseId: string;
+  name: string;
+  year: number;
+  teacherName: string;
+}
+
+export interface ConsoleSetupList {
+  count: number;
+  rows: ConsoleSetupClass[];
+}
+
+/** GET /console/setup. */
+export interface ConsoleSetup {
+  orphanedClasses: ConsoleSetupList;
+  oldBatches: ConsoleSetupList;
+  studentsWithoutPhone: number;
+}
+
+export interface ConsoleSmsCounts {
+  sent: number;
+  failed: number;
+  pending: number;
+}
+
+/** GET /console/sms: numbers arrive masked and message text is never sent. */
+export interface ConsoleSms {
+  week: ConsoleSmsCounts & { from: string };
+  month: ConsoleSmsCounts & { month: string };
+  failures: { id: string; at: string; phone: string; reason: string | null }[];
+}

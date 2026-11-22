@@ -1,7 +1,8 @@
-import { Prisma, Role } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { AppError } from '@/utils/app-error';
 import { billingMonthOf, colomboDayOf, shiftDay } from '@/utils/org-time';
 import { CASH_MAX_RANGE_DAYS, listCashDays, listCashTallies } from '@/services/cash-list.service';
+import { assertOwner } from '@/services/console-access';
 import { organizationClockForUser } from '@/services/organization-clock.service';
 import { assertMonthStarted, owingByCourse, owingStudents, type OwingCourse } from '@/services/outstanding.service';
 import { getFinancialReport, type FinancialReport } from '@/services/payment.service';
@@ -15,10 +16,6 @@ import type { AuthenticatedUser } from '@/types/auth.types';
  */
 const WAITING_DAYS_SHOWN = 20;
 const OWING_COURSES_SHOWN = 5;
-
-const assertOwner = (actor: AuthenticatedUser): void => {
-  if (actor.role !== Role.SUPER_ADMIN) throw new AppError('FORBIDDEN', 403, 'Only the owner can open the console.');
-};
 
 export interface CashPanel {
   date: string;

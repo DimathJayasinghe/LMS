@@ -1,6 +1,7 @@
-import { AttendanceStatus, ClassType, PaymentStatus, Role } from '@prisma/client';
+import { ClassType, PaymentStatus, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import { ATTENDED_STATUSES } from '@/utils/attendance-status';
 import { billingMonthOf } from '@/utils/org-time';
 import { assertCourseAccess } from '@/services/class.service';
 import { organizationClockForUser } from '@/services/organization-clock.service';
@@ -31,7 +32,6 @@ export interface RosterPage {
 }
 
 const ROSTER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER];
-const ATTENDED: AttendanceStatus[] = [AttendanceStatus.PRESENT, AttendanceStatus.LATE];
 
 /** The last `window` sessions this class has already held, and how many of them each listed student attended. */
 const attendanceByStudent = async (courseId: string, studentIds: string[], window: number, now: Date) => {
@@ -42,7 +42,7 @@ const attendanceByStudent = async (courseId: string, studentIds: string[], windo
   if (sessions.length === 0) return { held: 0, attended: new Map<string, number>() };
   const groups = await prisma.attendance.groupBy({
     by: ['userId'],
-    where: { classSessionId: { in: sessions.map((s) => s.id) }, userId: { in: studentIds }, voidedAt: null, status: { in: ATTENDED } },
+    where: { classSessionId: { in: sessions.map((s) => s.id) }, userId: { in: studentIds }, voidedAt: null, status: { in: ATTENDED_STATUSES } },
     _count: { _all: true },
   });
   return { held: sessions.length, attended: new Map(groups.map((g) => [g.userId, g._count._all])) };
