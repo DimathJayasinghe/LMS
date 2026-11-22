@@ -23,6 +23,7 @@ import {
     updateStatusSchema,
     userIdParamSchema,
 } from '@/schemas/user.schema';
+import { createStudentSchema } from '@/schemas/student-registration.schema';
 import {
     updateProfileSchema,
     avatarUploadUrlSchema,
@@ -235,6 +236,16 @@ userRoutes.post(
     validateBody(createStaffSchema),
     checkOneTimeSecretIdempotency,
     UserController.createStaff,
+);
+
+// POST /api/users/students — Register a walk-in student with a card and a one-time password (Admin + Super Admin)
+userRoutes.post(
+    '/students',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+    validateBody(createStudentSchema),
+    checkOneTimeSecretIdempotency,
+    UserController.createStudent,
 );
 
 // POST /api/users/:id/reset-password — Staff-assisted reset: one-time temporary password, shown once (Admin + Super Admin)

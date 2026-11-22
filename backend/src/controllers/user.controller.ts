@@ -5,6 +5,7 @@ import * as UserService from '@/services/user.service';
 import * as StudentLookupService from '@/services/student-lookup.service';
 import * as PasswordResetService from '@/services/password-reset.service';
 import * as StaffAccountService from '@/services/staff-account.service';
+import * as StudentRegistrationService from '@/services/student-registration.service';
 import * as AccountChangeService from '@/services/account-change.service';
 import * as HandoverService from '@/services/handover.service';
 import * as AuditService from '@/services/audit.service';
@@ -26,6 +27,7 @@ import {
 	type UpdateRoleInput,
 	type UpdateStatusInput,
 } from '@/schemas/user.schema';
+import type { CreateStudentInput } from '@/schemas/student-registration.schema';
 
 export const listUsers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const query = listUsersQuerySchema.parse(req.query);
@@ -230,6 +232,18 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response): P
 		status: 'success',
 		data: { temporaryPassword, mustChangePassword: true },
 		message: 'Password reset. Give the temporary password to the account holder; it is not shown again.',
+	});
+});
+
+export const createStudent = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { user, temporaryPassword } = await StudentRegistrationService.createStudentAsStaff(req.body as CreateStudentInput, req.user!, extractAuditContext(req));
+
+	// The password is in this response only: no-store, and the idempotency record keeps a placeholder instead of this body.
+	res.set('Cache-Control', 'no-store');
+	res.status(201).json({
+		status: 'success',
+		data: { user, temporaryPassword, mustChangePassword: true },
+		message: 'Student registered. Give the temporary password to the student; it is not shown again.',
 	});
 });
 
