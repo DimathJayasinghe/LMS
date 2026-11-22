@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import { api, ApiError } from "@/lib/api";
+import { clearAllExamDrafts } from "@/lib/exam-draft";
 import type { ApiSuccess, User } from "@/lib/types";
 
 interface AuthContextValue {
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post("/auth/logout");
     } finally {
+      clearAllExamDrafts(); // the next person on this device must not find the last one's unsent answers
       setUser(null);
     }
   }, []);

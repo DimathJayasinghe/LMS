@@ -3,12 +3,9 @@
 import { FileText, Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { WrittenChannel, WrittenPart } from "@/lib/exam-draft";
 
-export type WrittenChannel = "typed" | "pdf";
-export interface WrittenPart {
-  key: string;
-  text: string;
-}
+export type { WrittenChannel, WrittenPart };
 
 interface WrittenAnswerPanelProps {
   allowTyped: boolean;

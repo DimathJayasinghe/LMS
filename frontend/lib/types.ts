@@ -338,6 +338,8 @@ export interface Exam {
 export interface ExamDetail extends Exam {
   paperPdfUrl: string | null;
   mcqPayload: McqPayload | null;
+  /** Student only: how early the browser sends typed answers before the end. */
+  sitting?: { autoSubmitLeadSeconds: number };
 }
 
 export interface ExamMarkerAssignment {
