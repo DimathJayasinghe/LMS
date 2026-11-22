@@ -247,15 +247,15 @@ A deactivated or non-student holder is still returned, as before.
 
 ### GET `/lookup`
 
-Student search for the front-desk screens (collect payment, enrol a student). It replaces the
-full-profile `GET /users?search=` call those screens used, so the desk no longer receives email,
-phone, NIC or address for every match (F-118 direction). Roles: `SUPER_ADMIN`, `ADMIN`; any other
-role gets `403 FORBIDDEN`.
+Student search for the front-desk screens (collect payment, enrol a student); it returns only what
+is needed to pick the right student. Roles: `SUPER_ADMIN`, `ADMIN`; any other role gets `403 FORBIDDEN`.
 
 Searches **active students of the caller's organization** only (staff and deactivated accounts never
 appear). A match is any of: name contains the text (case-insensitive); the text is 1–9 digits and
-equals the index number; the text looks like a phone number (3+ digits, optional leading `+`, spaces and
-dashes ignored) and is contained in the stored phone. The phone is searched but never returned.
+equals the index number (that student is always listed first, even when many phone numbers contain the
+same digits); the text looks like a phone number (3+ digits, optional leading `+`, spaces and dashes
+ignored) and is contained in the stored phone. The phone is searched but never returned, and is
+matched as stored, so a number typed with `+94` does not match one stored as `07…`.
 
 **Query params**
 

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@prisma/client';
 
-const m = vi.hoisted(() => ({ findMany: vi.fn(), org: vi.fn() }));
-vi.mock('@/config/database', () => ({ prisma: { user: { findMany: m.findMany } } }));
+const m = vi.hoisted(() => ({ findMany: vi.fn(), findFirst: vi.fn(), org: vi.fn() }));
+vi.mock('@/config/database', () => ({ prisma: { user: { findMany: m.findMany, findFirst: m.findFirst } } }));
 vi.mock('@/services/settings.service', () => ({ organizationForUser: m.org }));
 
 import { lookupStudents } from './student-lookup.service';
@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.org.mockResolvedValue('org-1');
   m.findMany.mockResolvedValue([row]);
+  m.findFirst.mockResolvedValue(null);
 });
 
 describe('lookupStudents — who may look', () => {
@@ -42,14 +43,38 @@ describe('lookupStudents — what it can find', () => {
     expect(whereOf().OR).toEqual([{ name: { contains: 'nimal', mode: 'insensitive' } }]);
   });
 
-  it('also matches an index number written as digits', async () => {
+  it('looks for the index number first when the text is digits, in the same organization', async () => {
     await lookupStudents(desk, { q: '4021' });
-    expect(whereOf().OR).toContainEqual({ indexNumber: 4021 });
+    expect(m.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: 'org-1', role: Role.STUDENT, deletedAt: null, indexNumber: 4021 },
+    }));
+    expect(m.findFirst.mock.calls[0]![0].select).toEqual({ id: true, name: true, indexNumber: true, profileImage: true });
   });
 
-  it('does not ask for an index number too large for the column', async () => {
+  it('does not look for an index number in a name or in digits too large for the column', async () => {
+    await lookupStudents(desk, { q: 'nimal' });
     await lookupStudents(desk, { q: '12345678901' });
-    expect(whereOf().OR).not.toContainEqual(expect.objectContaining({ indexNumber: expect.anything() }));
+    expect(m.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('puts the exact index match first and leaves room for seven others, even when phones contain the digits', async () => {
+    const exact = { id: 'exact', name: 'Zed Last', indexNumber: 123, profileImage: null };
+    const phoneHits = Array.from({ length: 7 }, (_, i) => ({ id: `p${i}`, name: `Aaa ${i}`, indexNumber: 9000 + i, profileImage: null }));
+    m.findFirst.mockResolvedValue(exact);
+    m.findMany.mockResolvedValue(phoneHits);
+
+    const found = await lookupStudents(desk, { q: '123' });
+
+    expect(found[0]).toEqual(exact);
+    expect(found).toHaveLength(8);
+    expect(m.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 7 }));
+    expect(whereOf()).toMatchObject({ id: { not: 'exact' } });
+  });
+
+  it('asks for all eight when no student has that index number', async () => {
+    await lookupStudents(desk, { q: '123' });
+    expect(m.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 8 }));
+    expect(whereOf()).not.toHaveProperty('id');
   });
 
   it('matches a phone number without spaces or dashes, only when it looks like one', async () => {

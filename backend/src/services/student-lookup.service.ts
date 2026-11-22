@@ -14,22 +14,28 @@ export type StudentLookupRow = Prisma.UserGetPayload<{ select: typeof lookupSele
 
 /**
  * Finds active students of the caller's organization by name, index number or phone, for the front desk to enrol or collect for.
- * The phone is searched but never returned, so the desk can match a parent's number to a child without seeing contact data
- * for everyone. Replaces the full-profile `GET /users` search that the desk used for this.
+ * The phone is searched but never returned.
  */
 export const lookupStudents = async (actor: AuthenticatedUser, { q }: StudentLookupQuery): Promise<StudentLookupRow[]> => {
   if (actor.role !== Role.SUPER_ADMIN && actor.role !== Role.ADMIN) throw new AppError('FORBIDDEN', 403, 'Only front desk and the owner can look up students.');
   const organizationId = await organizationForUser(actor.userId);
 
-  const matches: Prisma.UserWhereInput[] = [{ name: { contains: q, mode: 'insensitive' } }];
+  const students: Prisma.UserWhereInput = { organizationId, role: Role.STUDENT, deletedAt: null };
+
+  // The index number is the desk's quickest key, so its owner leads the list however many phone numbers happen to contain the same digits.
   // Nine digits is the most an Int index number can hold without overflowing the column.
-  if (/^\d{1,9}$/.test(q)) matches.push({ indexNumber: Number(q) });
+  const exact = /^\d{1,9}$/.test(q)
+    ? await prisma.user.findFirst({ where: { ...students, indexNumber: Number(q) }, select: lookupSelect })
+    : null;
+
+  const matches: Prisma.UserWhereInput[] = [{ name: { contains: q, mode: 'insensitive' } }];
   if (/^\+?[\d\s-]{3,}$/.test(q)) matches.push({ phone: { contains: q.replace(/[\s-]/g, '') } });
 
-  return prisma.user.findMany({
-    where: { organizationId, role: Role.STUDENT, deletedAt: null, OR: matches },
+  const others = await prisma.user.findMany({
+    where: { ...students, ...(exact ? { id: { not: exact.id } } : {}), OR: matches },
     select: lookupSelect,
     orderBy: [{ name: 'asc' }, { indexNumber: 'asc' }],
-    take: MAX_RESULTS,
+    take: MAX_RESULTS - (exact ? 1 : 0),
   });
+  return exact ? [exact, ...others] : others;
 };
