@@ -51,7 +51,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 ### Teacher assignment endpoints
 
 `PUT /api/subjects/:id/teachers` accepts `{ "teacherIds": ["uuid"] }` and requires an
-`Idempotency-Key`. IDs must belong to active TEACHER accounts. Removing a teacher who still owns a
+`Idempotency-Key`. A teacher being **added** must be an active TEACHER account; a teacher already on the subject may stay in the list after they are deactivated, so a leaver's link never stops the owner from freeing their classes (F-82). Removing a teacher who still owns a
 class in the subject returns `409 TEACHER_OWNS_SUBJECT_COURSE`; reassign the class first. Successful
 replacement emits `SUBJECT_TEACHERS_ASSIGNED`. `GET /mine` is the source for the teacher class form.
 

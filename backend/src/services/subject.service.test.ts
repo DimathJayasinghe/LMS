@@ -58,6 +58,25 @@ describe('replaceSubjectTeachers', () => {
     expect(transaction).not.toHaveBeenCalled();
   });
 
+  it('keeps a teacher who is already on the subject even after their account was deactivated', async () => {
+    assignmentFindMany.mockResolvedValueOnce([{ teacherId: 'teacher-left' }]);
+
+    await replaceSubjectTeachers('subject-1', { teacherIds: ['teacher-left', 'teacher-new'] });
+
+    expect(userFindMany).toHaveBeenCalledTimes(1);
+    expect(userFindMany.mock.calls[0]![0].where.id.in).toEqual(['teacher-new']);
+    expect(assignmentCreateMany).toHaveBeenCalled();
+  });
+
+  it('still refuses to add a deactivated teacher that is not on the subject yet', async () => {
+    assignmentFindMany.mockResolvedValueOnce([{ teacherId: 'teacher-left' }]);
+    userFindMany.mockResolvedValueOnce([]);
+
+    await expect(
+      replaceSubjectTeachers('subject-1', { teacherIds: ['teacher-left', 'teacher-gone'] }),
+    ).rejects.toMatchObject({ code: 'INVALID_TEACHER_IDS', statusCode: 400 });
+  });
+
   it('prevents removing a teacher who still owns a class in the subject', async () => {
     courseFindFirst.mockResolvedValueOnce({
       id: 'course-1',

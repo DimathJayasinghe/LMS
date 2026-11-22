@@ -159,6 +159,19 @@ describe('session preview, generation, and upcoming access', () => {
 		expect(data.timetableSlotId).toBe('slot-1');
 	});
 
+	it('skips the slots of a class whose teacher left, for the weekly job and for the preview alike', async () => {
+		timetableSlotFindMany.mockResolvedValue([]);
+		const from = new Date('2026-08-24T00:00:00.000Z');
+		const to = new Date('2026-08-24T23:59:59.000Z');
+
+		await generateSessions(from, to);
+		await previewGeneration(from, to, { userId: 'owner-1', role: Role.SUPER_ADMIN });
+
+		for (const call of timetableSlotFindMany.mock.calls) {
+			expect(call[0].where).toMatchObject({ isActive: true, course: { teacher: { deletedAt: null, role: Role.TEACHER } } });
+		}
+	});
+
 	it('returns only enrolled upcoming sessions to a student and exposes only scheduled state', async () => {
 		classSessionFindMany.mockResolvedValue([{ id: 'session-1', zoomMeetingId: 'secret-id', title: 'Class' }]);
 		const result = await listUpcomingSessions(

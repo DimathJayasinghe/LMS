@@ -33,17 +33,48 @@ export const userIdParamSchema = z.object({
 });
 
 // ─── Mutations ─────────────────────────────────────────────
+// Hand-over of a leaving teacher's classes, applied in the same transaction as the change. One new teacher for every
+// class, or one per class (an entry wins over the single teacher); the service checks who may receive.
+const handoverFields = {
+	handover: z
+		.array(z.object({ courseId: z.string().uuid(), toTeacherId: z.string().uuid() }))
+		.max(200)
+		.refine((entries) => new Set(entries.map((entry) => entry.courseId)).size === entries.length, 'Name each class once.')
+		.optional(),
+	handoverAllTo: z.string().uuid().optional(),
+	/** When the new teacher's income share starts; only recorded in the audit row until the income share exists. */
+	effectiveMonth: z.enum(['NEXT', 'CURRENT']).optional(),
+};
+
+/** The acting owner's confirmation: why, and their own password while the step-up is on. */
+const confirmationFields = {
+	reason: z.string().trim().min(3).max(300).optional(),
+	currentPassword: z.string().min(1).max(72).optional(),
+};
+
+// The owner role and the student role are never targets: owners are added by an operator, and a student is never promoted.
 export const updateRoleSchema = z.object({
-	role: z.enum([Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT]),
+	role: z.enum([Role.ADMIN, Role.TEACHER, Role.MARKER]),
+	...confirmationFields,
+	...handoverFields,
 });
 
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 
 export const updateStatusSchema = z.object({
 	isActive: z.boolean(),
+	...confirmationFields,
+	...handoverFields,
 });
 
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
+
+/** `POST /users/:id/handover`: hands the classes of an account that already left to teachers who are working. */
+export const handoverOrphanedSchema = z
+	.object({ handover: handoverFields.handover, handoverAllTo: handoverFields.handoverAllTo, effectiveMonth: handoverFields.effectiveMonth })
+	.refine((body) => body.handoverAllTo !== undefined || (body.handover?.length ?? 0) > 0, 'Choose who takes the classes over.');
+
+export type HandoverOrphanedInput = z.infer<typeof handoverOrphanedSchema>;
 
 export const assignBarcodeSchema = z.object({
 	barcode: scanCodeSchema.min(3).max(50),

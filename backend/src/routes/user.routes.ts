@@ -11,6 +11,7 @@ import {
     academicStaffQuerySchema,
     createStaffSchema,
     createStudentBarcodeSchema,
+    handoverOrphanedSchema,
     listUsersQuerySchema,
     nicUploadUrlSchema,
     nicConfirmSchema,
@@ -164,6 +165,15 @@ userRoutes.get(
     UserController.listAcademicStaff,
 );
 
+// GET /api/users/orphaned-classes — Active classes whose teacher left, grouped by teacher (Super Admin)
+// Registered before '/:id' so "orphaned-classes" isn't read as an id.
+userRoutes.get(
+    '/orphaned-classes',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN),
+    UserController.getOrphanedClasses,
+);
+
 // GET /api/users/:id — Get user by id (Admin + Staff)
 userRoutes.get(
     '/:id',
@@ -173,7 +183,7 @@ userRoutes.get(
     UserController.getUserById,
 );
 
-// PATCH /api/users/:id/role — Update role (Admin only)
+// PATCH /api/users/:id/role — Change a staff member's role, with a reason, the owner's password and a hand-over (Super Admin)
 userRoutes.patch(
     '/:id/role',
     verifyToken,
@@ -184,7 +194,7 @@ userRoutes.patch(
     UserController.updateRole,
 );
 
-// PATCH /api/users/:id/status — Activate/deactivate (Admin + Staff)
+// PATCH /api/users/:id/status — Activate/deactivate: the front desk for students only, the owner for any account (Admin + Super Admin)
 userRoutes.patch(
     '/:id/status',
     verifyToken,
@@ -193,6 +203,17 @@ userRoutes.patch(
     validateBody(updateStatusSchema),
     checkIdempotency,
     UserController.updateStatus,
+);
+
+// POST /api/users/:id/handover — Hand the classes of an account that already left to working teachers (Super Admin)
+userRoutes.post(
+    '/:id/handover',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN),
+    validateParams(userIdParamSchema),
+    validateBody(handoverOrphanedSchema),
+    checkIdempotency,
+    UserController.handOverOrphaned,
 );
 
 // PATCH /api/users/:id/barcode — Assign barcode (Admin + Staff)

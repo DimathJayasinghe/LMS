@@ -142,11 +142,18 @@ export const replaceSubjectTeachers = async (
   }
 
   const teacherIds = Array.from(new Set(input.teacherIds));
-  const teachers = await prisma.user.findMany({
-    where: { id: { in: teacherIds }, role: Role.TEACHER, deletedAt: null },
-    select: { id: true },
-  });
-  if (teachers.length !== teacherIds.length) {
+  // Teachers already on the subject stay listable even after they are deactivated: a leaver's link must not stop the
+  // owner from freeing their classes (F-82). Only a teacher being added has to be an active TEACHER.
+  const current = await prisma.subjectTeacher.findMany({ where: { subjectId }, select: { teacherId: true } });
+  const alreadyAssigned = new Set(current.map((assignment) => assignment.teacherId));
+  const additions = teacherIds.filter((id) => !alreadyAssigned.has(id));
+  const teachers = additions.length === 0
+    ? []
+    : await prisma.user.findMany({
+        where: { id: { in: additions }, role: Role.TEACHER, deletedAt: null },
+        select: { id: true },
+      });
+  if (teachers.length !== additions.length) {
     throw new AppError(
       'INVALID_TEACHER_IDS',
       400,

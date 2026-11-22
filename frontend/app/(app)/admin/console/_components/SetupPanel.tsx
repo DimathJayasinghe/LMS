@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { loadPanel } from "@/lib/console";
 import { plural } from "@/lib/console-format";
 import type { ConsoleSetup, ConsoleSetupList } from "@/lib/types";
@@ -35,7 +36,12 @@ export async function SetupPanel({ cookie }: { cookie: string }) {
         <Stat label="Students without a phone" value={String(studentsWithoutPhone)} />
       </StatRow>
       {clear && <p className="text-sm text-muted-foreground">Nothing needs fixing.</p>}
-      <ClassList title="Teacher deactivated, class still active" list={orphanedClasses} detail={(teacher) => `Teacher: ${teacher}`} />
+      <ClassList title="Teacher left, class still active" list={orphanedClasses} detail={(teacher) => `Teacher: ${teacher}`} />
+      {orphanedClasses.count > 0 && (
+        <p className="mt-2 text-sm">
+          <Link href="/admin/users" className="font-medium underline underline-offset-2">Hand these classes to a working teacher</Link>
+        </p>
+      )}
       <ClassList title="From an earlier year, still active" list={oldBatches} detail={(_teacher, year) => String(year)} />
       {studentsWithoutPhone > 0 && (
         <p className="mt-4 text-sm text-muted-foreground">{plural(studentsWithoutPhone, "active student")} cannot be sent an SMS because there is no phone number on file.</p>

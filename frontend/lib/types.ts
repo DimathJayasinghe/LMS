@@ -115,6 +115,12 @@ export interface AcademicStaff {
   role: "TEACHER" | "MARKER";
 }
 
+/** One teacher who left and the active classes they still own (`GET /users/orphaned-classes`). */
+export interface OrphanedClassGroup {
+  teacher: { id: string; name: string; role: Role; deactivated: boolean };
+  courses: { id: string; name: string; year: number }[];
+}
+
 export interface SubjectTeacherAssignment {
   teacherId: string;
   assignedAt: string;

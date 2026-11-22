@@ -1,15 +1,14 @@
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
-import { withAdvisoryLock } from '@/utils/advisory-lock';
 import { AppError } from '@/utils/app-error';
-import { DEFAULT_ORGANIZATION_ID, NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
+import { NIC_IMAGE_KEY_PREFIX, NIC_IMAGE_URL_TTL_SECONDS } from '@/utils/constants';
 import { createR2PresignedPutUrl, r2HeadObject } from '@/utils/r2';
 import { assertScanCodeFree, resolveStudentByCode } from '@/services/scan-code.service';
 import { formatLmsBarcode } from '@/utils/scan-code';
+import { assertCanManagePrivilegedTarget } from '@/services/account-change-policy';
+import { userSelect, type SafeUser } from '@/services/user-select';
 import type {
 	ListUsersQuery,
-	UpdateRoleInput,
-	UpdateStatusInput,
 	AssignBarcodeInput,
 	AcademicStaffQuery,
 	NicUploadUrlInput,
@@ -17,40 +16,10 @@ import type {
 	CreateStudentBarcodeInput,
 } from '@/schemas/user.schema';
 
-interface SafeUser {
-	id: string;
-	indexNumber: number;
-	email: string;
-	name: string;
-	role: Role;
-	phone: string | null;
-	nic: string | null;
-	address: string | null;
-	city: string | null;
-	barcode: string | null;
-	deletedAt: Date | null;
-	createdAt: Date;
-}
-
 interface PaginatedResult<T> {
 	data: T[];
 	count: number;
 }
-
-const userSelect = {
-	id: true,
-	indexNumber: true,
-	email: true,
-	name: true,
-	role: true,
-	phone: true,
-	nic: true,
-	address: true,
-	city: true,
-	barcode: true,
-	deletedAt: true,
-	createdAt: true,
-} satisfies Prisma.UserSelect;
 
 const buildSearchFilter = (search: string): Prisma.UserWhereInput => {
 	const numericValue = Number(search);
@@ -129,51 +98,6 @@ export const getUserById = async (id: string): Promise<SafeUser> => {
 
 	return user;
 };
-
-// Front-desk (ADMIN) manages day-to-day accounts but must never be able to touch a
-// privileged peer/superior account (ADMIN or SUPER_ADMIN) — only SUPER_ADMIN can.
-const assertCanManagePrivilegedTarget = (actorRole: Role, targetRole: Role): void => {
-	const targetIsPrivileged = targetRole === Role.SUPER_ADMIN || targetRole === Role.ADMIN;
-
-	if (targetIsPrivileged && actorRole !== Role.SUPER_ADMIN) {
-		throw new AppError(
-			'FORBIDDEN',
-			403,
-			'Only a super admin can modify an admin or super admin account.',
-		);
-	}
-};
-
-type Actor = { userId: string; role: Role };
-
-const changeUser = async (id: string, actor: Actor, change: { role: Role } | { isActive: boolean }): Promise<SafeUser> => {
-	return prisma.$transaction(async (tx) => {
-		const initial = await tx.user.findUnique({ where: { id } });
-		if (!initial) throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
-		const organizationId = initial.organizationId ?? DEFAULT_ORGANIZATION_ID;
-		await withAdvisoryLock(tx, 'owner', organizationId, 'owner');
-		const user = await tx.user.findUnique({ where: { id } });
-		if (!user) throw new AppError('USER_NOT_FOUND', 404, 'User not found.');
-		assertCanManagePrivilegedTarget(actor.role, user.role);
-		if (actor.userId === id) throw new AppError('FORBIDDEN', 403, 'Cannot change your own role or status.');
-		if ('role' in change && change.role === Role.SUPER_ADMIN) throw new AppError('FORBIDDEN', 403, 'Owner accounts are managed by an operator.');
-		const removesOwner = user.role === Role.SUPER_ADMIN && user.deletedAt === null && ('role' in change ? change.role !== Role.SUPER_ADMIN : !change.isActive);
-		if (removesOwner && await tx.user.count({ where: { organizationId: user.organizationId, role: Role.SUPER_ADMIN, deletedAt: null } }) <= 1) {
-			throw new AppError('LAST_OWNER', 409, 'The last active owner cannot be changed.');
-		}
-		// A role change or deactivation ends every session at once: the version bump kills access tokens on their next request, the delete kills refresh tokens.
-		const endsSessions = 'role' in change || !change.isActive;
-		const data: Prisma.UserUpdateInput = 'role' in change ? { role: change.role } : { deletedAt: change.isActive ? null : new Date() };
-		if (endsSessions) data.tokenVersion = { increment: 1 };
-		const updated = await tx.user.update({ where: { id }, data, select: userSelect });
-		if (endsSessions) await tx.refreshToken.deleteMany({ where: { userId: id } });
-		return updated;
-	});
-};
-
-export const updateRole = async (id: string, input: UpdateRoleInput, actor: Actor): Promise<SafeUser> => changeUser(id, actor, input);
-
-export const updateStatus = async (id: string, input: UpdateStatusInput, actor: Actor): Promise<SafeUser> => changeUser(id, actor, input);
 
 export const assignBarcode = async (
 	id: string,

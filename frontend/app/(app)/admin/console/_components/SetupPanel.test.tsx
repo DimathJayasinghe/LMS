@@ -30,13 +30,19 @@ describe("SetupPanel", () => {
     expect(screen.queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
   });
 
-  it("lists a class whose teacher is deactivated, with the teacher's name", async () => {
+  it("lists a class whose teacher left, with the teacher's name", async () => {
     await show({ orphanedClasses: { count: 1, rows: [{ courseId: "c1", name: "Physics 2026", year: 2026, teacherName: "Ms Perera" }] } });
-    expect(screen.getByRole("heading", { name: "Teacher deactivated, class still active" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Teacher left, class still active" })).toBeInTheDocument();
     expect(screen.getByText("Physics 2026")).toBeInTheDocument();
     expect(screen.getByText("Teacher: Ms Perera")).toBeInTheDocument();
     expect(screen.getByText("Classes without a teacher").nextSibling).toHaveTextContent("1");
     expect(screen.queryByText("Nothing needs fixing.")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Hand these classes to a working teacher" })).toHaveAttribute("href", "/admin/users");
+  });
+
+  it("offers no hand-over link when no class is without a teacher", async () => {
+    await show({ oldBatches: { count: 1, rows: [{ courseId: "c2", name: "Chemistry 2025", year: 2025, teacherName: "Mr Silva" }] } });
+    expect(screen.queryByRole("link", { name: /Hand these classes/ })).not.toBeInTheDocument();
   });
 
   it("lists batches from an earlier year and says how many more there are", async () => {

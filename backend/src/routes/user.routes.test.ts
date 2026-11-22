@@ -24,6 +24,8 @@ vi.mock('@/controllers/user.controller', () => ({
   assignBarcode: vi.fn(),
   resetPassword: vi.fn(),
   createStaff: vi.fn(),
+  getOrphanedClasses: vi.fn(),
+  handOverOrphaned: vi.fn(),
 }));
 vi.mock('@/controllers/profile.controller', () => ({
   updateProfile: vi.fn(),
@@ -175,5 +177,35 @@ describe('user routes — student lookup wiring', () => {
 
   it('wires /lookup to its controller', () => {
     expect(handlesFor(userRoutes, 'get', '/lookup')).toContain(UserController.lookupStudents);
+  });
+});
+
+describe('user routes — class hand-over', () => {
+  const index = (method: string, path: string) =>
+    (userRoutes as unknown as { stack: RouterLayer[] }).stack.findIndex((l) => l.route?.path === path && l.route.methods[method]);
+  const gate = (method: string, path: string, role: Role) => {
+    const next = vi.fn();
+    const status = vi.fn().mockReturnValue({ json: vi.fn() });
+    (handlesFor(userRoutes, method, path)[1] as (req: Request, res: Response, next: () => void) => void)({ user: { userId: 'u', role } } as Request, { status } as unknown as Response, next);
+    return { next, status };
+  };
+
+  it('registers /orphaned-classes before /:id so it is not read as an id', () => {
+    expect(index('get', '/orphaned-classes')).toBeGreaterThanOrEqual(0);
+    expect(index('get', '/orphaned-classes')).toBeLessThan(index('get', '/:id'));
+  });
+
+  it.each([['get', '/orphaned-classes'], ['post', '/:id/handover']])('lets only the owner through %s %s', (method, path) => {
+    expect(gate(method, path, Role.SUPER_ADMIN).next).toHaveBeenCalled();
+    for (const role of [Role.ADMIN, Role.TEACHER, Role.MARKER, Role.STUDENT]) {
+      const { next, status } = gate(method, path, role);
+      expect(status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it('wires the hand-over to its controller, behind idempotency', () => {
+    const handles = handlesFor(userRoutes, 'post', '/:id/handover');
+    expect(handles.indexOf(checkIdempotency)).toBe(handles.indexOf(UserController.handOverOrphaned) - 1);
   });
 });

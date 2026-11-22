@@ -16,8 +16,8 @@ All users endpoints require the `access_token` cookie.
 
 Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 
-- Only `SUPER_ADMIN` changes roles (`PATCH /:id/role`).
-- `SUPER_ADMIN` + `ADMIN` (front-desk) may list users and set status/barcode.
+- Only `SUPER_ADMIN` changes roles (`PATCH /:id/role`), and only among `TEACHER`, `ADMIN` and `MARKER`: a student is never promoted, staff are never demoted to student, and the owner role is never assigned through the API.
+- `SUPER_ADMIN` + `ADMIN` (front-desk) may list users and set barcode. `ADMIN` may set the **status of a student only** (never of staff, never their own); `SUPER_ADMIN` may set the status of any account other than their own, with the owner rules below. One policy decides this (`backend/src/services/account-change-policy.ts`) and runs before any password check or hand-over, so a refused caller learns nothing about the target.
 
 > **Reading older tables below**: `ADMIN` now means **`SUPER_ADMIN`**, `STAFF` now means **`ADMIN`**.
 
@@ -127,8 +127,10 @@ Returned in list and detail endpoints:
 | GET | `/` | ADMIN, STAFF | List users (paginated, filterable). |
 | GET | `/me` | Any authenticated | Get current user profile. |
 | GET | `/:id` | ADMIN, STAFF | Get a user by id. |
-| PATCH | `/:id/role` | ADMIN | Update user role. |
-| PATCH | `/:id/status` | ADMIN, STAFF | Activate or deactivate a user. |
+| PATCH | `/:id/role` | SUPER_ADMIN | Change a staff member's role, with a reason, the owner's password and a class hand-over. |
+| PATCH | `/:id/status` | SUPER_ADMIN; ADMIN for students only | Activate or deactivate a user. |
+| GET | `/orphaned-classes` | SUPER_ADMIN | Running classes whose teacher left, grouped by teacher. |
+| POST | `/:id/handover` | SUPER_ADMIN | Hand the classes of an account that already left to working teachers. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
 | POST | `/staff` | SUPER_ADMIN | Create a teacher, front-desk or marker account with a one-time temporary password, shown once. |
 | POST | `/:id/reset-password` | SUPER_ADMIN, ADMIN | Staff-assisted reset: one-time temporary password, shown once. |
@@ -279,18 +281,28 @@ matched as stored, so a number typed with `+94` does not match one stored as `07
 
 ### PATCH `/:id/role`
 
-Updates the user's role. Only SUPER_ADMIN may call this endpoint. The API cannot assign SUPER_ADMIN. A caller cannot change their own role, and the last active owner cannot be demoted. A role change revokes refresh sessions; existing access tokens expire normally until per-request revocation is implemented.
+Changes a staff member's role among `TEACHER`, `ADMIN` (front desk) and `MARKER`. Only SUPER_ADMIN may call this endpoint. The API cannot assign SUPER_ADMIN or STUDENT, and a student account is never a target. A caller cannot change their own role, and the last active owner cannot be demoted. A role change ends every session of the account at once (`tokenVersion` bump plus refresh-token deletion); the next request of an existing session answers `401 SESSION_REVOKED`. A role change to the same role succeeds and changes, ends and records nothing.
 
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
-keys return 400; replaying the same key returns the original stored response.
+keys return 400; replaying the same key returns the original stored response, including a stored 4xx, so each attempt needs a new key.
 
 **Request body**
 
 ```json
 {
-	"role": "MARKER"
+	"role": "MARKER",
+	"reason": "Moved to marking after the term ended",
+	"currentPassword": "<the acting owner's own password>",
+	"handover": [{ "courseId": "<uuid>", "toTeacherId": "<uuid>" }],
+	"handoverAllTo": "<uuid>",
+	"effectiveMonth": "NEXT"
 }
 ```
+
+- `role` is required. `reason` (3 to 300 characters) is required while the owner setting `identity.roleChange.reasonRequired` is on (default on).
+- `currentPassword` is the acting owner's own password (step-up, while `identity.stepUp.required` is on and its actions include `ROLE_CHANGE`). Missing is `403 STEP_UP_REQUIRED`; wrong is `403 ACTOR_PASSWORD_INVALID`.
+- `handover` or `handoverAllTo` name who takes the classes of a teacher who stops being a teacher: one new teacher per class, or one new teacher for all (an entry in `handover` wins over `handoverAllTo`). Each class is named once. `effectiveMonth` (`NEXT` or `CURRENT`, default from `handover.defaultEffectiveMonth`) is recorded in the audit row until the income share exists.
+- Leaving the `TEACHER` role needs every class in the hand-over list (see Hand-over below); leaving `MARKER` needs the marker to have no open marking.
 
 **Success (200)**
 
@@ -304,11 +316,15 @@ keys return 400; replaying the same key returns the original stored response.
 
 **Errors**
 
-- 400 validation error, including attempted owner assignment
+- 400 validation error, including an attempted owner or student role
+- 400 `INVALID_HANDOVER_TARGET` (the new teacher is not an active teacher of this organization, or is the leaver), 400 `HANDOVER_COURSE_NOT_OWNED` (a named class is not the leaver's), 400 `REASON_REQUIRED`
 - 401 auth middleware error
 - 403 forbidden (role guard)
-- 403 `FORBIDDEN` for self changes
+- 403 `FORBIDDEN` for a self change or a caller who is not the owner
+- 403 `STEP_UP_REQUIRED`, 403 `ACTOR_PASSWORD_INVALID`
 - 409 `LAST_OWNER` when the last active owner would be demoted
+- 409 `ROLE_CHANGE_NOT_ALLOWED` (a student account as the target)
+- 409 `TEACHER_HAS_CLASSES`, `MARKER_HAS_ALLOCATIONS`, `HANDOVER_SLOT_CONFLICT`: see Hand-over below
 - 404 `USER_NOT_FOUND` (service error shape)
 
 ### PATCH `/:id/status`
@@ -318,15 +334,24 @@ Activates or deactivates a user.
 **Required header:** `Idempotency-Key: <uuid>` — a fresh v4 UUID per request. Missing or malformed
 keys return 400; replaying the same key returns the original stored response.
 
-> An ADMIN cannot change an ADMIN or SUPER_ADMIN target. Nobody can change their own status; the last active SUPER_ADMIN cannot be deactivated. Deactivation and role changes end every session at once (`tokenVersion` bump plus refresh-token deletion); the next request of an existing session answers `401 SESSION_REVOKED`.
+> The front desk (`ADMIN`) may change the status of a **student** only: never a teacher, marker, front-desk or owner account. The owner may change any account but their own. Nobody can change their own status; the last active SUPER_ADMIN cannot be deactivated. Deactivation and role changes end every session at once (`tokenVersion` bump plus refresh-token deletion); the next request of an existing session answers `401 SESSION_REVOKED`. A deactivation, reactivation or same-state request that changes nothing succeeds and ends and records nothing.
 
 **Request body**
 
 ```json
 {
-	"isActive": true
+	"isActive": false,
+	"reason": "Left the institute",
+	"currentPassword": "<the acting owner's own password>",
+	"handover": [{ "courseId": "<uuid>", "toTeacherId": "<uuid>" }],
+	"handoverAllTo": "<uuid>",
+	"effectiveMonth": "NEXT"
 }
 ```
+
+- `reason` is optional on a status change and is recorded in the audit row.
+- `currentPassword` is required (step-up) when the owner deactivates a **staff** account (teacher, front desk or marker) while `identity.stepUp.required` is on and its actions include `STAFF_DEACTIVATE`; activating an account and any change to a student's status need no password.
+- `handover`, `handoverAllTo` and `effectiveMonth` work as on the role change, and are needed when the account is a teacher with classes in the way (setting `identity.staffDeactivate.requireHandover`, default on).
 
 **Success (200)**
 
@@ -340,12 +365,71 @@ keys return 400; replaying the same key returns the original stored response.
 
 **Errors**
 
-- 400 validation error
+- 400 validation error, 400 `INVALID_HANDOVER_TARGET`, 400 `HANDOVER_COURSE_NOT_OWNED`
 - 401 auth middleware error
 - 403 forbidden (role guard)
-- 403 `FORBIDDEN` — actor is `ADMIN` and target is `ADMIN`/`SUPER_ADMIN`, or the target is the actor
+- 403 `FORBIDDEN` — `ADMIN` acting on any account that is not a student, or the target is the actor
+- 403 `STEP_UP_REQUIRED`, 403 `ACTOR_PASSWORD_INVALID`
 - 409 `LAST_OWNER` when the last active owner would be deactivated
+- 409 `TEACHER_HAS_CLASSES`, `MARKER_HAS_ALLOCATIONS`, `HANDOVER_SLOT_CONFLICT`: see Hand-over below
 - 404 `USER_NOT_FOUND` (service error shape)
+
+### Hand-over of a leaving teacher's classes
+
+A teacher cannot be deactivated or moved to another role while a class they run still needs a person. The classes in the way are the active ones, those with a session in the look-ahead window (`identity.handoverLookaheadDays`, default 14, 1 to 60) and those with an exam waiting for results; an ended class with nothing pending stays with its teacher as the record of who taught it. Sessions, exams and marking follow a class to its new teacher on their own. The new teacher is given the subject's teaching scope if they lack it, and the old teacher loses access straight away. The move happens in the same transaction as the account change, so a refusal leaves everything as it was.
+
+Without a complete hand-over the request answers **409** with the structured list in `data`, which the users screen turns into the hand-over list:
+
+```json
+{
+	"status": "error",
+	"code": "TEACHER_HAS_CLASSES",
+	"message": "This teacher still has classes. Choose who takes them over.",
+	"data": {
+		"courses": [
+			{ "id": "<uuid>", "name": "Physics", "year": 2026, "subjectName": "Science", "isActive": true, "upcomingSessions": 1, "openExams": 1 }
+		],
+		"markerAllocations": []
+	}
+}
+```
+
+- `TEACHER_HAS_CLASSES`: classes still need a teacher (`data.courses`).
+- `MARKER_HAS_ALLOCATIONS`: a marker with open marking is refused with the exams listed in `data.markerAllocations`; there is no hand-over for marking (release or reassign it first).
+- `HANDOVER_SLOT_CONFLICT`: the new teacher already teaches at an overlapping time in the look-ahead window; `data.conflicts` lists each clash (`courseName`, `dayOfWeek`, `startTime`, `clashesWith`). Choose another teacher or split the classes between several.
+
+The audit row (`ROLE_CHANGED`, `USER_DEACTIVATED` or `USER_ACTIVATED`) carries the reason, the before and after role, and, only when classes moved, the list of moves with the effective month.
+
+### GET `/orphaned-classes`
+
+SUPER_ADMIN only (`Cache-Control: no-store`). Running classes whose teacher has left: deactivated before a leaving teacher had to hand over, or moved to another role. The list uses the same definition as the setup panel of the owner console.
+
+**Success (200)**
+
+```json
+{
+	"status": "success",
+	"data": [
+		{
+			"teacher": { "id": "<uuid>", "name": "Teacher C", "role": "TEACHER", "deactivated": true },
+			"courses": [{ "id": "<uuid>", "name": "Orphan C", "year": 2026 }]
+		}
+	],
+	"count": 1
+}
+```
+
+### POST `/:id/handover`
+
+SUPER_ADMIN only. Hands the classes of an account that already left to working teachers, the one-click fix for classes left behind.
+
+**Required header:** `Idempotency-Key: <uuid>`.
+
+**Request body:** `{ "handoverAllTo": "<uuid>" }` or `{ "handover": [{ "courseId", "toTeacherId" }] }`, with optional `effectiveMonth`. One of the two is required (400 otherwise).
+
+**Success (200)**: `{ "status": "success", "data": { "handedOver": [{ "courseId", "courseName", "toTeacherId" }] }, "message": "Classes handed over." }`. Doing it again, when nothing is left, succeeds and writes nothing more; one audit row `CLASSES_HANDED_OVER` is written when classes moved.
+
+**Errors**: 404 `USER_NOT_FOUND`; 409 `TEACHER_STILL_ACTIVE` (an active teacher's classes move with the deactivation or role change, not here); 400 `INVALID_HANDOVER_TARGET`, `HANDOVER_COURSE_NOT_OWNED`; 409 `HANDOVER_SLOT_CONFLICT`.
 
 ### POST `/staff`
 

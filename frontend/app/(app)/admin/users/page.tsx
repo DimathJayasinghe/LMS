@@ -7,8 +7,9 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { UserFilters } from "./_components/UserFilters";
 import { UsersTable } from "./_components/UsersTable";
 import { CreateStaffDialog } from "./_components/CreateStaffDialog";
+import { OrphanedClassesCard } from "./_components/OrphanedClassesCard";
 import { api } from "@/lib/api-server";
-import type { ApiList, Role, User } from "@/lib/types";
+import type { AcademicStaff, ApiList, OrphanedClassGroup, Role, User } from "@/lib/types";
 
 export const metadata = { title: "Users · LMS" };
 
@@ -40,6 +41,14 @@ export default async function UsersPage({
     .get<ApiList<User>>(`/users?${query.toString()}`, { cookie }))
     .catch((error) => { unstable_rethrow(error); return ({ data: [] as User[], count: 0 }) as ApiList<User>; });
 
+  // The owner also sees classes left without a teacher, with the working teachers who could take them.
+  const [orphaned, teachers] = viewer.role === "SUPER_ADMIN"
+    ? await Promise.all([
+        guard401(api.get<ApiList<OrphanedClassGroup>>("/users/orphaned-classes", { cookie })).then((r) => r.data),
+        guard401(api.get<ApiList<AcademicStaff>>("/users/academic-staff?role=TEACHER", { cookie })).then((r) => r.data),
+      ]).catch((error) => { unstable_rethrow(error); return [[], []] as [OrphanedClassGroup[], AcademicStaff[]]; })
+    : [[] as OrphanedClassGroup[], [] as AcademicStaff[]];
+
   const total = res.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -62,15 +71,11 @@ export default async function UsersPage({
         action={viewer.role === "SUPER_ADMIN" ? <CreateStaffDialog /> : undefined}
       />
 
+      <OrphanedClassesCard groups={orphaned} teachers={teachers} />
+
       <UserFilters search={sp.search ?? ""} role={role ?? "all"} status={status} roles={ROLES} />
 
-      <UsersTable
-        users={res.data}
-        canChangeRole={viewer.role === "SUPER_ADMIN"}
-        viewerId={viewer.id}
-        viewerRole={viewer.role}
-        roles={ROLES}
-      />
+      <UsersTable users={res.data} viewerId={viewer.id} viewerRole={viewer.role} />
 
       {total > 0 && (
         <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
