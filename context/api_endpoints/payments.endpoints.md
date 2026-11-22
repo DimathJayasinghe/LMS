@@ -381,16 +381,49 @@ a bank, or a cash-payment provider.
 - Errors: `PAYMENT_NOT_FOUND` (404), `PAYMENT_NOT_REFUNDABLE` (409),
   `REFUND_EXCEEDS_REMAINING` (409), `REFUND_CONFLICT` (409).
 
-### 7. Bulk Upload Payments (Admin)
-Upload an Excel file to process multiple payments at once. Sets `method: BULK` on every row
-written or updated.
+### 7. Bulk Upload Payments (Owner)
+A migration and recovery tool for fees that were paid outside the system. Only `SUPER_ADMIN` may use it (since Wave 1, F-58; front desk
+collects one payment at a time through endpoint 8). Every row is checked, and the file is **all or nothing**: one refused row, or a
+failure part way, saves nothing. Rows that pass become `SUCCESS` payments with `method: BULK`, `collectedById` set to the owner and the
+course fee as the amount. `collectedAt` stays empty, so bulk rows never count as desk cash.
 
-- **URL:** `/bulk-upload`
+- **URL:** `/bulk-upload?dryRun=true|false` (`dryRun` defaults to `false`; with `true` the file is checked and **nothing is written**)
 - **Method:** `POST`
-- **Auth:** Required (Role: `ADMIN`, `STAFF`)
+- **Auth:** Required (Role: `SUPER_ADMIN`)
 - **Headers:** `Idempotency-Key: <uuid>` **required** — a fresh v4 UUID per request. Missing or
-  malformed keys return 400; replaying the same key returns the original stored response.
-- **Body:** `multipart/form-data` with `file` field.
+  malformed keys return 400; replaying the same key returns the original stored response, so a check and the apply that follows it need
+  different keys (the screen does this).
+- **Body:** `multipart/form-data` with `file` field: an `.xlsx` (the first sheet; row 1 is the header). Columns, in any case or spacing:
+  `enrollmentId` **or** `indexNumber` + `courseId` + `classType`, plus `paymentMonth` (`YYYY-MM` or `YYYYMM`), optional `amount`, optional `note`.
+- **Row rules, checked in this order (the first one a row breaks is reported):** the enrollment exists in the caller's organization; the student
+  account is not deactivated; the enrollment is active; the course is active; `paymentMonth` is not later than the current billing month plus
+  `fees.advanceMonthsAllowed` (default 1; earlier months are allowed so past fees can be recovered); `amount`, when given, equals the course
+  `monthlyFee` (it is never an override); the month has no `SUCCESS` payment (never overwritten) and no `REFUNDED` one (immutable); no earlier row
+  of the same file covers the same enrollment and month. An existing `PENDING` or `FAILED` row is converted to `SUCCESS`.
+- **Limit:** at most `bulk.maxRows` data rows (default 300; blank rows are not counted).
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "dryRun": true,
+      "applied": false,
+      "total": 3,
+      "created": 2,
+      "updated": 1,
+      "errors": [{ "row": 5, "message": "This month is already paid." }]
+    },
+    "message": "Preview only. Nothing was saved."
+  }
+  ```
+  `row` is the spreadsheet row number. `applied` is `true` only when the payments were saved: a check, or a real run with any entry in
+  `errors`, saves nothing. `created` counts rows that become new payments and `updated` rows that convert an unpaid or failed one. The response
+  is `Cache-Control: no-store`.
+- **Audit:** one `PAYMENT_BULK_ROW_APPLIED` row per applied row (target: the payment; row number, kind, enrollment, month, amount) and one
+  `PAYMENT_BULK_UPLOAD` summary row, all written in the same transaction as the payments. A check writes no audit row.
+- **Errors:** `400 BULK_UPLOAD_INVALID_FILE`, `400 BULK_UPLOAD_EMPTY`, `400 BULK_UPLOAD_TOO_MANY_ROWS`, `400` for a bad `dryRun` value or a missing `file`,
+  `403 FORBIDDEN` for any other role, and `409 BULK_UPLOAD_CONFLICT` when a payment for one of the months appeared between the check and the
+  write (nothing is saved; run the check again).
 
 ### 8. Collect Entrance Payment (Admin/Staff)
 Records a cash/in-person payment collected at the physical center, without going through

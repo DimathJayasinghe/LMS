@@ -648,12 +648,15 @@ export interface FinancialReport {
   outstanding: { count: number; expected: string };
 }
 
-/** POST /payments/bulk-upload result envelope. */
+/** POST /payments/bulk-upload result. `applied` is true only when the payments were saved; a check (`dryRun`) or a file with any refused row saves nothing. */
 export interface BulkUploadResult {
+  dryRun: boolean;
+  applied: boolean;
   total: number;
+  /** Rows that become new payments (or would, in a check). */
   created: number;
+  /** Rows that turn an unpaid or failed payment into a paid one. */
   updated: number;
-  skipped: number;
   errors: { row: number; message: string }[];
 }
 

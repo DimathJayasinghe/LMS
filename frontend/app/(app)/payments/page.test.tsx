@@ -30,8 +30,8 @@ describe("payments session", () => {
 
 describe("payments admin view", () => {
   const cashList = (over: Record<string, unknown> = {}) => ({ status: "success", data: [], count: 0, from: "", to: "", tallyEnabled: true, ...over });
-  const asAdmin = (cash: () => Promise<unknown>) => get.mockImplementation((path: string) => {
-    if (path === "/auth/me") return Promise.resolve({ data: { id: "clerk", role: "ADMIN", organization: { timezone: "Asia/Colombo" } } });
+  const asAdmin = (cash: () => Promise<unknown>, role = "ADMIN") => get.mockImplementation((path: string) => {
+    if (path === "/auth/me") return Promise.resolve({ data: { id: "clerk", role, organization: { timezone: "Asia/Colombo" } } });
     if (path.startsWith("/payments/cash")) return cash();
     if (path === "/institutes") return Promise.resolve({ status: "success", data: [{ id: "i1", name: "Kandy" }], count: 1 });
     return Promise.resolve({ status: "success", data: [], count: 0 });
@@ -63,5 +63,12 @@ describe("payments admin view", () => {
   it("still shows the page, without the strip, when the cash cannot be read", async () => {
     asAdmin(() => Promise.reject(new ApiError(500, "boom", "INTERNAL")));
     expect((await adminProps()).todaysCash).toBeNull();
+  });
+
+  it("offers the bulk upload tool to the owner and not to front desk", async () => {
+    asAdmin(() => Promise.resolve(cashList()));
+    expect((await adminProps()).canBulkUpload).toBe(false);
+    asAdmin(() => Promise.resolve(cashList()), "SUPER_ADMIN");
+    expect((await adminProps()).canBulkUpload).toBe(true);
   });
 });

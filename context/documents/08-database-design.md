@@ -475,7 +475,7 @@ model Payment {
 ```
 
 - **`enrollmentId`, not `userId`** — payment is tied to a specific enrollment (student + course + mode).
-- **`method`** — records the channel. `ENTRANCE` payments are taken at the front desk; `collectedById` records which staff member took the cash. `ONLINE` = PayHere; `BULK` = Excel import; `MANUAL` = owner/admin adjustment.
+- **`method`** — records the channel. `ENTRANCE` payments are taken at the front desk; `collectedById` records which staff member took the cash. `ONLINE` = PayHere; `BULK` = Excel import (owner only; stamps `collectedById`, leaves `collectedAt` empty so it is not desk cash); `MANUAL` = owner/admin adjustment.
 - **`@@unique([enrollmentId, paymentMonth])`** — prevents double-paying the same month for the same enrollment (whether online, at the entrance or by bank transfer). It deliberately stays one row per month; slip attempts live in `PaymentSlip` (below) so reject → re-upload does not need to break it.
 - **`collectedAt`** — the instant a desk took the money (set by `collect-entrance`; nullable, backfilled from `updatedAt` for desk cash that pre-dates it). `createdAt` is wrong for a PENDING row converted at the desk and `updatedAt` moves on a refund or override, so the cash tally needs its own time. Indexed with `collectedById`.
 - **`CashTally`** (Wave 1, F-77) — one end-of-day count per collector, Colombo `day` (`YYYY-MM-DD` text) and optional branch: `countedAmount` typed by the clerk, `systemAmount` and `paymentCount` computed at the count, `variance` (counted minus system), `note`, `reconciledAt`/`reconciledById` set by the owner. A record, not a lock: later cash leaves the stored figures alone and the read side reports the row stale. One row per (collector, day, branch) is guaranteed by the service under an advisory lock and backed by two partial unique indexes that exist only in the migration SQL (Prisma cannot express partial indexes, and a nullable branch needs two; `prisma migrate diff` stays clean). Tenant model: `organizationId`, relation and index.
@@ -976,7 +976,7 @@ Controllers never import Prisma. Services scope every query by the authenticated
 | **Subject** | CRUD | Read | Read | Read | Read active |
 | **Course** | CRUD | CRUD **own** | Read all | Read assigned | Read enrolled |
 | **Enrollment** | CRUD | Read (own courses) | Create + Read all | ❌ | Read own |
-| **Payment** | CRUD + override | Aggregates for own courses only | Read all, bulk/entrance collect | ❌ | Read own |
+| **Payment** | CRUD + override | Aggregates for own courses only | Read all, entrance collect | ❌ | Read own |
 | **PaymentSlip** (planned) | Read all, approve/reject | ❌ | Read all, approve/reject | ❌ | Create/read own |
 | **ClassSession** | CRUD | CRUD **own courses** | Read all | Read | Read enrolled (non-deleted) |
 | **CourseModule / CourseMaterial** | CRUD | CRUD **own courses** | ❌ | ❌ | Read released when enrolled; download when current fee paid |

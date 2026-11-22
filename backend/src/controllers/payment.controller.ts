@@ -5,8 +5,6 @@ import * as PaymentService from '@/services/payment.service';
 import * as PaymentAdjustmentService from '@/services/payment-adjustment.service';
 import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
-import { env } from '@/config/env';
-import { logger } from '@/config/logger';
 import {
 	collectEntrancePaymentSchema,
 	initiatePaymentSchema,
@@ -19,8 +17,6 @@ import {
 	financialReportQuerySchema,
 	refundPaymentSchema,
 } from '@/schemas/payment.schema';
-
-type RequestWithFile = Request & { file?: Express.Multer.File };
 
 export const initiatePayherePayment = asyncHandler(
 	async (req: Request, res: Response): Promise<void> => {
@@ -193,45 +189,6 @@ export const refundPayment = asyncHandler(
 	},
 );
 
-export const bulkUploadPayments = asyncHandler(
-	async (req: Request, res: Response): Promise<void> => {
-		const file = (req as RequestWithFile).file;
-		if (!file) {
-			res.status(400).json({
-				status: 'error',
-				message: 'Bulk upload file is required.',
-			});
-			return;
-		}
-
-		const result = await PaymentService.bulkUploadPayments(file);
-
-		void AuditService.log({
-			action: AUDIT_ACTION.PAYMENT_BULK_UPLOAD,
-			description: `Bulk upload: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors.length} errors`,
-			metadata: {
-				total: result.total,
-				created: result.created,
-				updated: result.updated,
-				skipped: result.skipped,
-				errorCount: result.errors.length,
-			},
-			context: extractAuditContext(req),
-		});
-
-		// SMS for bulk uploads is toggleable via env var
-		if (env.SMS_BULK_PAYMENT_ENABLED && result.created + result.updated > 0) {
-			void sendBulkPaymentSms();
-		}
-
-		res.status(200).json({
-			status: 'success',
-			data: result,
-			message: 'Bulk upload processed successfully.',
-		});
-	},
-);
-
 export const collectEntrancePayment = asyncHandler(
 	async (req: Request, res: Response): Promise<void> => {
 		const input = collectEntrancePaymentSchema.parse(req.body);
@@ -266,15 +223,3 @@ export const collectEntrancePayment = asyncHandler(
 // — see handlePayhereNotify/overridePayment in payment.service.ts. That
 // consolidation also means they now respect the super-admin's
 // NotificationSetting toggle, which these old per-controller calls didn't.
-
-/**
- * Placeholder for bulk payment SMS.
- * Called only when SMS_BULK_PAYMENT_ENABLED is true.
- * In a production scenario, this would need to track which specific
- * students were affected by the upload. Currently logs intent.
- */
-const sendBulkPaymentSms = async (): Promise<void> => {
-	logger.info('Bulk payment SMS trigger — would send per-student notifications');
-	// Future: Track affected enrollment IDs during bulkUploadPayments
-	// and send SMS to each student with their payment details.
-};

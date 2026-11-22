@@ -65,7 +65,7 @@ Enforcement has three layers, and the gaps are always between them:
 |---|---|---|
 | `SUPER_ADMIN` | Whole organization; sole holder of refund, override, role change, audit log, institutes, subjects, notification settings | Owner invariants missing: can mint more owners, demote the last, deactivate self (F-31). Seed script resets the owner password on every start (F-28). Both fixed in #102 (unreleased); owner cap and step-up wait for Wave 1 |
 | `TEACHER` | Own courses via `assertCourseAccess` on writes and, since 2026-07-15, most reads; own exams and income | No roster of own students (F-83). Can enter marks on own exams since #105 (F-67, unreleased). Attendance reads limited to own courses (F-09 fixed in Wave 0) |
-| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, bulk upload, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload is an unaudited money edit (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
+| `ADMIN` (front desk) | Organization-wide, **not scoped to a branch**; scan, manual attendance, collect entrance fee, enroll, user status/barcode (never on `SUPER_ADMIN`/peer `ADMIN` targets, `live`) | Bulk upload moved to the owner in #113 (F-58). Can deactivate any teacher or marker (F-32). Sees NIC, phone and address in name search |
 | `MARKER` | Assigned exams or audiences only for list, get and grade | Sees full student identity on every script (F-74). Refused on recording and attendance reads (F-04, F-09 fixed in Wave 0) |
 | `STUDENT` | Own enrollments, payments, submissions; content gate = active enrollment + current-month `SUCCESS` payment | Gate ignores `classType` today (planned fix, §5); recording read scoping (F-06); not applied to exams (F-23) |
 
@@ -82,7 +82,8 @@ Enforcement has three layers, and the gaps are always between them:
 | Upload recording, materials | ✔ | ✔ own | – | – | – |
 | Play recording | ✔ | ✔ own | – (refused, F-04 fixed) | – (refused, F-04 fixed) | ✔ if enrolled + current month paid |
 | Enroll a student | ✔ | – | ✔ API, **no UI (F-11)** | – | self |
-| Collect fee at entrance, bulk upload | ✔ | – | ✔ | – | – |
+| Collect fee at entrance | ✔ | – | ✔ | – | – |
+| Bulk payment upload (checked first, all or nothing) | ✔ | – | – (F-58, #113) | – | – |
 | Override or refund a payment | ✔ | – | – | – | – |
 | Who owes this month | ✔ list, CSV export, reminders (F-10, #111) | – | ✔ list and reminders, no CSV (#111) | – | – |
 | End-of-day cash count | ✔ every collector, reconcile (F-77, #112) | – | ✔ own cash and own count only (#112) | – | – |
@@ -118,7 +119,7 @@ Submit button disables at 0:00 (F-86); a failed PDF upload leaves a dead submiss
 **Front desk: the day at the counter.** Register or find a walk-in → enroll → take cash → scan in → chase
 unpaid → end-of-day tally. *Breaks:* no enroll UI (F-11; UI only, the API allows it and the student can self-enroll on a phone meanwhile), no bulk "who owes" list (F-10, fixed in #111: Payments, Who owes, with reminders), scanner marks any active
 student present and shows nothing about enrollment, payment or mode (F-12), the scanner and cash desk resolve
-the same card with different rules (F-39), scan identity resolution was hardened in Wave 0 (F-07), the bulk Excel upload can set any month `SUCCESS` without a per-row trail (F-58),
+the same card with different rules (F-39), scan identity resolution was hardened in Wave 0 (F-07), the bulk Excel upload could set any month `SUCCESS` without a per-row trail (F-58, fixed in #113: owner only, checked first, all or nothing, audited per row),
 cash collection could silently overwrite an existing `SUCCESS` row (F-59, fixed in #112: it is now refused with `ALREADY_PAID`), and there was no end-of-day cash tally
 (F-77, fixed in #112: Payments, Cash).
 

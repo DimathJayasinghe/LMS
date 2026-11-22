@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import * as PaymentController from '@/controllers/payment.controller';
 import * as OutstandingController from '@/controllers/outstanding.controller';
 import * as CashController from '@/controllers/cash.controller';
+import * as PaymentBulkController from '@/controllers/payment-bulk.controller';
 import { verifyToken } from '@/middleware/auth.middleware';
 import { requireRole } from '@/middleware/role.middleware';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validate.middleware';
@@ -18,6 +19,7 @@ import {
 	paymentIdParamSchema,
 	paymentsSummaryQuerySchema,
 	financialReportQuerySchema,
+	bulkUploadQuerySchema,
 } from '@/schemas/payment.schema';
 import { cashQuerySchema, cashTallyIdParamSchema, cashTallyQuerySchema, closeCashDaySchema } from '@/schemas/cash.schema';
 import { outstandingExportQuerySchema, outstandingQuerySchema, sendFeeRemindersSchema } from '@/schemas/outstanding.schema';
@@ -209,12 +211,14 @@ paymentRoutes.patch(
 	PaymentController.overridePayment,
 );
 
-// ─── Bulk Upload (Admin/Staff) ────────────────────────────
+// ─── Bulk Upload (owner only: migration and recovery tool) ─
+// The query is checked first so a bad `dryRun` is refused before an idempotency key is spent.
 paymentRoutes.post(
 	'/bulk-upload',
 	verifyToken,
-	requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+	requireRole(Role.SUPER_ADMIN),
+	validateQuery(bulkUploadQuerySchema),
 	checkIdempotency,
 	upload.single('file'),
-	PaymentController.bulkUploadPayments,
+	PaymentBulkController.bulkUploadPayments,
 );

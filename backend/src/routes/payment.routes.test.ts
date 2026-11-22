@@ -18,7 +18,6 @@ vi.mock('@/controllers/payment.controller', () => ({
   overridePayment: vi.fn(),
   listPaymentAdjustments: vi.fn(),
   refundPayment: vi.fn(),
-  bulkUploadPayments: vi.fn(),
 }));
 
 vi.mock('@/controllers/outstanding.controller', () => ({
@@ -26,6 +25,8 @@ vi.mock('@/controllers/outstanding.controller', () => ({
   exportOutstanding: vi.fn(),
   sendFeeReminders: vi.fn(),
 }));
+
+vi.mock('@/controllers/payment-bulk.controller', () => ({ bulkUploadPayments: vi.fn() }));
 
 vi.mock('@/controllers/cash.controller', () => ({
   listCash: vi.fn(),
@@ -39,6 +40,7 @@ import { checkIdempotency } from '@/middleware/idempotency.middleware';
 import * as PaymentController from '@/controllers/payment.controller';
 import * as OutstandingController from '@/controllers/outstanding.controller';
 import * as CashController from '@/controllers/cash.controller';
+import * as PaymentBulkController from '@/controllers/payment-bulk.controller';
 
 interface RouterLayer {
   route?: {
@@ -86,10 +88,10 @@ describe('payment routes — idempotency wiring', () => {
   it('POST /bulk-upload runs checkIdempotency before multer (not merely before the controller)', () => {
     const stack = handlesFor(paymentRoutes, 'post', '/bulk-upload');
     const idempotencyIndex = stack.indexOf(checkIdempotency);
-    const controllerIndex = stack.indexOf(PaymentController.bulkUploadPayments);
+    const controllerIndex = stack.indexOf(PaymentBulkController.bulkUploadPayments);
     expect(idempotencyIndex).toBeGreaterThanOrEqual(0);
     expect(controllerIndex).toBeGreaterThanOrEqual(0);
-    // The stack is: verifyToken, requireRole(...), checkIdempotency, upload.single('file'), controller.
+    // The stack is: verifyToken, requireRole(...), validateQuery, checkIdempotency, upload.single('file'), controller.
     // Multer's handler isn't independently importable, so pin checkIdempotency two slots
     // before the controller (multer is between idempotency and controller) — this fails if
     // checkIdempotency and multer are swapped.
