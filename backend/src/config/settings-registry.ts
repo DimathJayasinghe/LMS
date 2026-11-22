@@ -33,6 +33,10 @@ export const settingsRegistry = {
   'identity.stepUp.required': bool(true),
   'identity.stepUp.actions': { schema: z.array(z.enum(actions)).max(actions.length).refine((items) => new Set(items).size === items.length), default: [...actions] },
   'identity.maxOwners': int(1, 100, 2),
+  'identity.roleChange.reasonRequired': bool(true),
+  'identity.staffDeactivate.requireHandover': bool(true),
+  'identity.handoverLookaheadDays': int(1, 60, 14),
+  'handover.defaultEffectiveMonth': { schema: z.enum(['NEXT', 'CURRENT']), default: 'NEXT' as const },
   'console.lookbackDays': int(1, 3650, 30),
 } as const;
 

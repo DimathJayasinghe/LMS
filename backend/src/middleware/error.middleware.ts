@@ -27,6 +27,7 @@ export const errorHandler: ErrorRequestHandler = (
       status: 'error',
       message: err.message,
       code: err.code,
+      ...(err.details === undefined ? {} : { data: err.details }),
     });
     return;
   }

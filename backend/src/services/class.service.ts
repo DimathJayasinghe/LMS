@@ -140,6 +140,28 @@ const assertTeacherAssignedToSubject = async (
 	}
 };
 
+/**
+ * Moves a class to another teacher inside the caller's transaction (the hand-over when a teacher leaves). The new
+ * teacher also gets the subject's teaching scope if they lack it: the owner choosing them is the grant, and without it
+ * a class could never be freed from a leaver whose subject links are stale (F-82). The caller validates the teacher.
+ */
+export const reassignCourseTeacher = async (
+	tx: Pick<Prisma.TransactionClient, 'course' | 'subjectTeacher'>,
+	courseId: string,
+	toTeacherId: string,
+): Promise<void> => {
+	const { subjectId } = await tx.course.update({
+		where: { id: courseId },
+		data: { teacherId: toTeacherId },
+		select: { subjectId: true },
+	});
+	await tx.subjectTeacher.upsert({
+		where: { subjectId_teacherId: { subjectId, teacherId: toTeacherId } },
+		create: { subjectId, teacherId: toTeacherId },
+		update: {},
+	});
+};
+
 export const createClass = async (
 	input: CreateClassInput,
 	actor: AuthenticatedUser,

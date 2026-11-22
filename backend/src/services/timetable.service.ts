@@ -2,6 +2,7 @@ import { ClassType, Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { COLOMBO_UTC_OFFSET_MIN } from '@/utils/constants';
+import { minutesFromMidnight, timeRangesOverlap } from '@/utils/time-range';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import { assertCourseAccess } from '@/services/class.service';
 import type {
@@ -57,11 +58,6 @@ const slotScope = (actor: AuthenticatedUser): Prisma.TimetableSlotWhereInput => 
   };
 };
 
-const minutesFromMidnight = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number) as [number, number];
-  return hours * 60 + minutes;
-};
-
 const assertFitsWithinDay = (startTime: string, durationMinutes: number): void => {
   if (minutesFromMidnight(startTime) + durationMinutes > 24 * 60) {
     throw new AppError('INVALID_SLOT_RANGE', 400, 'A timetable slot cannot continue past midnight.');
@@ -98,11 +94,8 @@ const assertNoConflict = async (candidate: {
       course: { select: { teacherId: true } },
     },
   });
-  const start = minutesFromMidnight(candidate.startTime);
-  const end = start + candidate.durationMinutes;
   const conflict = slots.find((slot) => {
-    const otherStart = minutesFromMidnight(slot.startTime);
-    const overlaps = start < otherStart + slot.durationMinutes && otherStart < end;
+    const overlaps = timeRangesOverlap(candidate.startTime, candidate.durationMinutes, slot.startTime, slot.durationMinutes);
     return overlaps && (
       slot.courseId === candidate.courseId ||
       slot.course.teacherId === candidate.teacherId ||
@@ -327,6 +320,9 @@ const occurrences = (from: Date, to: Date, dayOfWeek: number, startTime: string)
   return result;
 };
 
+/** A class whose teacher is deactivated has nobody to run it, so no sessions are generated for it. */
+const ACTIVE_TEACHER = { teacher: { deletedAt: null } } satisfies Prisma.CourseWhereInput;
+
 /**
  * Materialize dated ClassSessions from every active slot for the range.
  * Idempotent: upsert on (timetableSlotId, date) and never clobbers a session
@@ -341,7 +337,7 @@ export const generateSessions = async (
   const slots = await prisma.timetableSlot.findMany({
     where: {
       isActive: true,
-      ...(actor?.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
+      ...(actor?.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : { course: ACTIVE_TEACHER }),
     },
     select: {
       id: true,
@@ -390,7 +386,7 @@ export const previewGeneration = async (from: Date, to: Date, actor: Authenticat
   const slots = await prisma.timetableSlot.findMany({
     where: {
       isActive: true,
-      ...(actor.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : {}),
+      ...(actor.role === Role.TEACHER ? { course: { teacherId: actor.userId } } : { course: ACTIVE_TEACHER }),
     },
     select: {
       id: true, title: true, dayOfWeek: true, startTime: true, courseId: true,

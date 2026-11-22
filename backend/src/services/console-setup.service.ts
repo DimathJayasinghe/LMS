@@ -1,6 +1,7 @@
 import { Role, type Prisma } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { assertOwner } from '@/services/console-access';
+import { orphanedCourseWhere } from '@/services/handover-dependencies.service';
 import { organizationClockForUser } from '@/services/organization-clock.service';
 import { colomboDayOf } from '@/utils/org-time';
 import type { AuthenticatedUser } from '@/types/auth.types';
@@ -21,7 +22,7 @@ export interface SetupList {
 }
 
 export interface SetupPanel {
-  /** Active classes whose teacher's account is deactivated: students pay for a class nobody can run. */
+  /** Active classes whose teacher left (deactivated, or moved to another role): students pay for a class nobody can run. */
   orphanedClasses: SetupList;
   /** Active classes from an earlier year than the current one. */
   oldBatches: SetupList;
@@ -47,7 +48,7 @@ export const getSetupPanel = async (actor: AuthenticatedUser): Promise<SetupPane
   const year = Number(colomboDayOf(new Date(), timezone).slice(0, 4));
 
   const [orphanedClasses, oldBatches, studentsWithoutPhone] = await Promise.all([
-    classes({ organizationId, isActive: true, teacher: { deletedAt: { not: null } } }),
+    classes(orphanedCourseWhere(organizationId)),
     classes({ organizationId, isActive: true, year: { lt: year } }),
     prisma.user.count({ where: { organizationId, role: Role.STUDENT, deletedAt: null, OR: [{ phone: null }, { phone: '' }] } }),
   ]);

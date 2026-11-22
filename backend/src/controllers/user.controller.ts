@@ -5,6 +5,8 @@ import * as UserService from '@/services/user.service';
 import * as StudentLookupService from '@/services/student-lookup.service';
 import * as PasswordResetService from '@/services/password-reset.service';
 import * as StaffAccountService from '@/services/staff-account.service';
+import * as AccountChangeService from '@/services/account-change.service';
+import * as HandoverService from '@/services/handover.service';
 import * as AuditService from '@/services/audit.service';
 import { AUDIT_ACTION } from '@/utils/constants';
 import {
@@ -19,6 +21,7 @@ import {
 	studentLookupQuerySchema,
 	type AssignBarcodeInput,
 	type CreateStaffInput,
+	type HandoverOrphanedInput,
 	type ResetPasswordInput,
 	type UpdateRoleInput,
 	type UpdateStatusInput,
@@ -54,20 +57,7 @@ export const getUserById = asyncHandler(async (req: Request, res: Response): Pro
 
 export const updateRole = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = userIdParamSchema.parse(req.params);
-	const input = req.body as UpdateRoleInput;
-
-	// Fetch before state for audit metadata
-	const before = await UserService.getUserById(id);
-	const user = await UserService.updateRole(id, input, req.user!);
-
-	void AuditService.log({
-		action: AUDIT_ACTION.ROLE_CHANGED,
-		description: `Role changed from ${before.role} to ${input.role}`,
-		targetType: 'User',
-		targetId: id,
-		metadata: { before: { role: before.role }, after: { role: input.role } },
-		context: extractAuditContext(req),
-	});
+	const { user } = await AccountChangeService.updateRole(id, req.body as UpdateRoleInput, req.user!, extractAuditContext(req));
 
 	res.status(200).json({
 		status: 'success',
@@ -79,21 +69,27 @@ export const updateRole = asyncHandler(async (req: Request, res: Response): Prom
 export const updateStatus = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 	const { id } = userIdParamSchema.parse(req.params);
 	const input = req.body as UpdateStatusInput;
-	const user = await UserService.updateStatus(id, input, req.user!);
-
-	void AuditService.log({
-		action: input.isActive ? AUDIT_ACTION.USER_ACTIVATED : AUDIT_ACTION.USER_DEACTIVATED,
-		description: input.isActive ? 'Account activated' : 'Account deactivated',
-		targetType: 'User',
-		targetId: id,
-		context: extractAuditContext(req),
-	});
+	const { user } = await AccountChangeService.updateStatus(id, input, req.user!, extractAuditContext(req));
 
 	res.status(200).json({
 		status: 'success',
 		data: user,
 		message: input.isActive ? 'User activated successfully.' : 'User deactivated successfully.',
 	});
+});
+
+export const getOrphanedClasses = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const groups = await HandoverService.getOrphanedClasses(req.user!);
+
+	res.set('Cache-Control', 'no-store');
+	res.status(200).json({ status: 'success', data: groups, count: groups.length });
+});
+
+export const handOverOrphaned = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const { id } = userIdParamSchema.parse(req.params);
+	const result = await HandoverService.handOverOrphaned(id, req.body as HandoverOrphanedInput, req.user!, extractAuditContext(req));
+
+	res.status(200).json({ status: 'success', data: result, message: 'Classes handed over.' });
 });
 
 export const assignBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {

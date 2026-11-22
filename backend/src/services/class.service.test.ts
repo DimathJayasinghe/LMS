@@ -54,6 +54,7 @@ import {
 	getClassById,
 	listClasses,
 	listPublicClasses,
+	reassignCourseTeacher,
 	removeCourseAsset,
 	updateCourseAssetAlt,
 } from './class.service';
@@ -229,5 +230,32 @@ describe('listPublicClasses — public marketing-page course listing', () => {
 			{ name: { contains: 'physics', mode: 'insensitive' } },
 			{ description: { contains: 'physics', mode: 'insensitive' } },
 		]);
+	});
+});
+
+describe('reassignCourseTeacher', () => {
+	const txUpdate = vi.fn();
+	const upsert = vi.fn();
+	const tx = { course: { update: txUpdate }, subjectTeacher: { upsert } } as never;
+
+	beforeEach(() => {
+		txUpdate.mockReset().mockResolvedValue({ subjectId: 'subject-1' });
+		upsert.mockReset().mockResolvedValue({});
+	});
+
+	it('moves the class to the new teacher at once', async () => {
+		await reassignCourseTeacher(tx, 'course-1', 'teacher-2');
+
+		expect(txUpdate).toHaveBeenCalledWith({ where: { id: 'course-1' }, data: { teacherId: 'teacher-2' }, select: { subjectId: true } });
+	});
+
+	it('gives the new teacher the subject scope when they lack it, so a class can always be freed', async () => {
+		await reassignCourseTeacher(tx, 'course-1', 'teacher-2');
+
+		expect(upsert).toHaveBeenCalledWith({
+			where: { subjectId_teacherId: { subjectId: 'subject-1', teacherId: 'teacher-2' } },
+			create: { subjectId: 'subject-1', teacherId: 'teacher-2' },
+			update: {},
+		});
 	});
 });
