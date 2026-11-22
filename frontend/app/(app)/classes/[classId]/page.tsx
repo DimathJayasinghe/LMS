@@ -6,6 +6,7 @@ import { ArrowLeft, CalendarDays, Clock, Lock, Pencil, PlayCircle, Plus } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
+import { StaffEnrollPanel } from "./_components/StaffEnrollPanel";
 import { LiveClassAction } from "./_components/LiveClassAction";
 import { SessionEditDialog } from "./_components/SessionEditDialog";
 import { canGoLive, classModeLabel } from "@/lib/class-mode";
@@ -142,6 +143,8 @@ export default async function ClassDetailPage({
   const { modules, gated: modulesGated } = modulesResult;
   const banner = course.backdropUrl ?? course.bannerUrl;
   const isStaff = user.role === "TEACHER" || user.role === "SUPER_ADMIN";
+  // The desk (and the owner) enrol existing students; an inactive class takes no new enrolments.
+  const canEnrolStudents = (user.role === "ADMIN" || user.role === "SUPER_ADMIN") && course.isActive;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -356,13 +359,17 @@ export default async function ClassDetailPage({
         </div>
 
         <aside className="lg:sticky lg:top-20 lg:self-start">
-          <EnrollPanel
-            timezone={user.organization?.timezone ?? "Asia/Colombo"}
-            courseId={course.id}
-            monthlyFee={course.monthlyFee}
-            active={active}
-            isStudent={user.role === "STUDENT"}
-          />
+          {canEnrolStudents ? (
+            <StaffEnrollPanel course={{ id: course.id, name: course.name, monthlyFee: course.monthlyFee }} />
+          ) : (
+            <EnrollPanel
+              timezone={user.organization?.timezone ?? "Asia/Colombo"}
+              courseId={course.id}
+              monthlyFee={course.monthlyFee}
+              active={active}
+              isStudent={user.role === "STUDENT"}
+            />
+          )}
         </aside>
       </div>
     </div>

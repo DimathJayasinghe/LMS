@@ -14,6 +14,13 @@ export const listUsersQuerySchema = z.object({
 
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 
+/** `GET /users/lookup?q=`: the front desk's slim student search. Two characters is the least that narrows anything. */
+export const studentLookupQuerySchema = z.object({
+	q: z.string().trim().min(2).max(60),
+});
+
+export type StudentLookupQuery = z.infer<typeof studentLookupQuerySchema>;
+
 export const academicStaffQuerySchema = z.object({
 	role: z.enum([Role.TEACHER, Role.MARKER]),
 });

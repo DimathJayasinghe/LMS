@@ -54,6 +54,8 @@ const enrollment: Enrollment = {
   },
 };
 
+const chemistry = { id: "c2", name: "Chemistry", year: 2026, monthlyFee: "3000.00", isActive: true };
+
 const paymentFixture = (overrides: Partial<Payment> = {}): Payment => ({
   id: "p1",
   amount: "2500.00",
@@ -75,7 +77,7 @@ const paymentFixture = (overrides: Partial<Payment> = {}): Payment => ({
 
 function mockGet(paymentsHistory: Payment[] = []) {
   get.mockReset().mockImplementation((path: string) => {
-    if (path.startsWith("/users?search=")) return Promise.resolve({ data: [student], count: 1 });
+    if (path.startsWith("/users/lookup")) return Promise.resolve({ data: [student], count: 1 });
     if (path.startsWith("/enrollments?userId=")) return Promise.resolve({ data: [enrollment], count: 1 });
     if (path.startsWith("/payments?enrollmentId=")) return Promise.resolve({ data: paymentsHistory, count: paymentsHistory.length });
     if (path.startsWith("/users/resolve-barcode")) {
@@ -86,6 +88,7 @@ function mockGet(paymentsHistory: Payment[] = []) {
       };
       return Promise.resolve({ data: resolved });
     }
+    if (path === "/classes") return Promise.resolve({ data: [chemistry], count: 1 });
     return Promise.resolve({ data: [], count: 0 });
   });
 }
@@ -272,7 +275,7 @@ describe("CollectPayment — receipt link survives an exhausted outstanding list
     // nested inside that branch, or it disappears exactly when it matters.
     const singleMonthEnrollment = { ...enrollment, createdAt: "2026-07-01T00:00:00.000Z" };
     get.mockReset().mockImplementation((path: string) => {
-      if (path.startsWith("/users?search=")) return Promise.resolve({ data: [student], count: 1 });
+      if (path.startsWith("/users/lookup")) return Promise.resolve({ data: [student], count: 1 });
       if (path.startsWith("/enrollments?userId=")) return Promise.resolve({ data: [singleMonthEnrollment], count: 1 });
       if (path.startsWith("/payments?enrollmentId=")) {
         return Promise.resolve({ data: [], count: 0 });
@@ -321,5 +324,56 @@ describe("CollectPayment — session summary", () => {
     const list = screen.getByText("Collected this session").closest("div")!.parentElement!;
     expect(within(list).getAllByText(/Nimal Perera/)).toHaveLength(2);
     expect(within(list).getByText(formatCurrency(5000))).toBeInTheDocument();
+  });
+});
+
+describe("CollectPayment — lookup and desk enrolment", () => {
+  it("searches students through the lookup route", async () => {
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" />);
+
+    await selectStudentByName(user);
+
+    expect(get).toHaveBeenCalledWith("/users/lookup?q=Nimal");
+  });
+
+  it("enrols the chosen student in a class and goes straight to collecting its first fee", async () => {
+    const enrolled: Enrollment = {
+      ...enrollment,
+      id: "e2",
+      courseId: "c2",
+      createdAt: "2026-07-13T00:00:00.000Z",
+      course: { ...enrollment.course, id: "c2", name: "Chemistry", monthlyFee: "3000.00" },
+    };
+    post.mockResolvedValueOnce({ data: enrolled });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" />);
+
+    await selectStudentByName(user);
+    await user.click(await screen.findByRole("button", { name: /enrol in a class/i }));
+    await screen.findByRole("option", { name: /Chemistry/ });
+    await user.selectOptions(screen.getByLabelText("Class"), "c2");
+    await user.click(screen.getByRole("button", { name: /enrol student/i }));
+
+    expect(post).toHaveBeenCalledWith("/enrollments", { userId: "u1", courseId: "c2", classType: "PHYSICAL" });
+    expect(await screen.findByLabelText<HTMLInputElement>("Amount")).toHaveValue(3000);
+    expect(screen.getByLabelText<HTMLSelectElement>("Select enrollment")).toHaveValue("e2");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open with the reason when the enrolment is refused", async () => {
+    post.mockRejectedValueOnce(new ApiError(409, "Already enrolled in this class in the other mode. Cancel that enrollment first.", "ALREADY_ENROLLED_OTHER_MODE"));
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<CollectPayment timezone="Asia/Colombo" />);
+
+    await selectStudentByName(user);
+    await user.click(await screen.findByRole("button", { name: /enrol in a class/i }));
+    await screen.findByRole("option", { name: /Chemistry/ });
+    await user.selectOptions(screen.getByLabelText("Class"), "c2");
+    await user.click(screen.getByRole("button", { name: /enrol student/i }));
+
+    expect(await screen.findByText("Already enrolled in this class in the other mode. Cancel that enrollment first.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText<HTMLSelectElement>("Select enrollment")).toHaveValue("");
   });
 });

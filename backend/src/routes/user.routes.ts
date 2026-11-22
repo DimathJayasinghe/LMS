@@ -17,6 +17,7 @@ import {
     resetPasswordSchema,
     resolveBarcodeQuerySchema,
     studentBarcodeIdParamSchema,
+    studentLookupQuerySchema,
     updateRoleSchema,
     updateStatusSchema,
     userIdParamSchema,
@@ -132,6 +133,16 @@ userRoutes.delete(
     requireRole(Role.STUDENT),
     validateParams(studentBarcodeIdParamSchema),
     UserController.deleteMyInstituteBarcode,
+);
+
+// GET /api/users/lookup — Slim student search for the desk: id, name, index number, photo (Admin + Super Admin)
+// Registered before '/:id' so "lookup" isn't read as an id.
+userRoutes.get(
+    '/lookup',
+    verifyToken,
+    requireRole(Role.SUPER_ADMIN, Role.ADMIN),
+    validateQuery(studentLookupQuerySchema),
+    UserController.lookupStudents,
 );
 
 // GET /api/users/resolve-barcode — Resolve a scanned barcode to a student (Admin + Staff)

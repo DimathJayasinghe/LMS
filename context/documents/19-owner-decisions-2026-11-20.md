@@ -142,6 +142,8 @@
 
 **Code impact:** Verified: Enrollment has only createdAt; reactivation flips isActive (enrollment.service.ts). Add activatedAt and nextClassType (part of the single enrollment migration, D-STRUCTURE-10). computeMonthFee applies the rule; changeEnrollmentMode service; fee-month-roll applies nextClassType. Size M (3 days). Tests: join day 15 vs 16, month end, reactivation in paid month vs after gap, upgrade next-month vs immediate-if-not-higher, downgrade immediate, duplicate-mode block, Colombo midnight.
 
+**Wave 1 implementation (#114, unreleased):** only the interim of F-65 is built: a second active enrollment of one course in the other mode is refused with `409 ALREADY_ENROLLED_OTHER_MODE`, under a per-student-and-course advisory lock so two desks cannot both succeed. Mode change, `activatedAt`, `nextClassType` and the switch endpoint stay in Wave 2a with HYBRID.
+
 ### D-MONEY-5: PayHere chargebacks and reversals
 
 **Settles:** F-61, doc 17 §9 item 8, F-66

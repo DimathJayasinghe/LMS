@@ -133,6 +133,7 @@ Returned in list and detail endpoints:
 | POST | `/staff` | SUPER_ADMIN | Create a teacher, front-desk or marker account with a one-time temporary password, shown once. |
 | POST | `/:id/reset-password` | SUPER_ADMIN, ADMIN | Staff-assisted reset: one-time temporary password, shown once. |
 | GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
+| GET | `/lookup?q=` | SUPER_ADMIN, ADMIN | Find students by name, index number or phone, returning only what the desk needs to pick one. |
 | GET | `/academic-staff?role=TEACHER|MARKER` | SUPER_ADMIN; TEACHER for MARKER only | Minimal active staff directory (id/name/role only). |
 
 `GET /academic-staff` intentionally excludes email, phone, NIC, account status metadata, and other
@@ -243,6 +244,38 @@ A deactivated or non-student holder is still returned, as before.
 - 403 forbidden (role guard)
 - 404 `BARCODE_NOT_FOUND` — no `StudentBarcode` or `User.barcode` matches the code.
 - 409 `AMBIGUOUS_CODE` — the code matches more than one student.
+
+### GET `/lookup`
+
+Student search for the front-desk screens (collect payment, enrol a student); it returns only what
+is needed to pick the right student. Roles: `SUPER_ADMIN`, `ADMIN`; any other role gets `403 FORBIDDEN`.
+
+Searches **active students of the caller's organization** only (staff and deactivated accounts never
+appear). A match is any of: name contains the text (case-insensitive); the text is 1–9 digits and
+equals the index number (that student is always listed first, even when many phone numbers contain the
+same digits); the text looks like a phone number (3+ digits, optional leading `+`, spaces and dashes
+ignored) and is contained in the stored phone. The phone is searched but never returned, and is
+matched as stored, so a number typed with `+94` does not match one stored as `07…`.
+
+**Query params**
+
+- `q`: string, required, 2–60 characters after trimming.
+
+**Success (200)** — at most 8 rows, ordered by name then index number; `Cache-Control: no-store`.
+
+```json
+{
+	"status": "success",
+	"data": [{ "id": "uuid", "name": "Nimal Perera", "indexNumber": 42, "profileImage": null }],
+	"count": 1
+}
+```
+
+**Errors**
+
+- 400 validation error (`q` missing, shorter than 2 or longer than 60 characters)
+- 401 auth middleware error
+- 403 forbidden (role guard)
 
 ### PATCH `/:id/role`
 

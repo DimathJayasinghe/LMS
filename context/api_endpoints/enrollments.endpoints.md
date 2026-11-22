@@ -94,6 +94,13 @@ Re-enrolling into a `(course, classType)` you previously cancelled **reactivates
 the existing row (does not duplicate). Enrolling into one you already hold
 actively is a `409`.
 
+A student holds **one active enrollment per course**: while one mode is active, enrolling in
+the other mode of the same course is refused with `409 ALREADY_ENROLLED_OTHER_MODE` (cancel the
+first, or wait for `HYBRID`; F-65). Two desks enrolling the same student in the same course at
+once run one after the other (per-organization advisory lock on student and course), so the
+second sees the first. The front desk screens (Payments, Collect payment, and the class page)
+call this endpoint with the student's `userId`; both default the mode to `PHYSICAL`.
+
 **Request body**
 
 ```json
@@ -124,7 +131,7 @@ actively is a `409`.
 - 401 auth middleware error
 - 403 forbidden (role guard)
 - 404 `CLASS_NOT_FOUND` (course missing/inactive) / `USER_NOT_FOUND`
-- 409 `ALREADY_ENROLLED`
+- 409 `ALREADY_ENROLLED` (same mode already active) / `ALREADY_ENROLLED_OTHER_MODE` (the other mode of this course is active)
 
 ### GET `/my`
 

@@ -660,6 +660,14 @@ export interface BulkUploadResult {
   errors: { row: number; message: string }[];
 }
 
+/** GET /users/lookup: the little a desk needs to pick a student. No contact details or identity numbers. */
+export interface StudentLookupRow {
+  id: string;
+  name: string;
+  indexNumber: number;
+  profileImage: string | null;
+}
+
 /** An attendance record (see attendance.endpoints.md). Relations included on query reads. */
 export interface AttendanceRecord {
   id: string;
