@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { isRealCalendarDay } from '@/utils/org-time';
 import { normalizeSriLankanMobile } from '@/utils/sri-lanka-mobile';
 
+/** One space between words, so the name a clerk types in a search finds the name that was stored (and the slip prints cleanly). */
+const singleSpaced = (value: string): string => value.replace(/\s+/g, ' ');
+
 const mobile = (label: string) =>
   z.string().trim().transform((value, ctx) => {
     const normalized = normalizeSriLankanMobile(value);
@@ -26,10 +29,10 @@ export const email = z
 
 /** The fields the registration slip captures, shared by self-registration and the front desk. No NIC: it is never asked for here. */
 export const studentFields = {
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name must be under 100 characters').trim(),
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100, 'Name must be under 100 characters').transform(singleSpaced),
   dateOfBirth,
   phone: mobile('Mobile number').optional(),
-  guardianName: z.string().trim().min(2, 'Guardian name must be at least 2 characters').max(100, 'Guardian name must be under 100 characters').optional(),
+  guardianName: z.string().trim().min(2, 'Guardian name must be at least 2 characters').max(100, 'Guardian name must be under 100 characters').transform(singleSpaced).optional(),
   guardianMobile: mobile('Guardian mobile number').optional(),
   guardianConsent: z.boolean().optional(),
   address: z.string().trim().max(500, 'Address must be under 500 characters').optional(),

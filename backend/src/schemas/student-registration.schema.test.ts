@@ -59,6 +59,13 @@ describe('createStudentSchema (front desk)', () => {
     expect(parsed.phone).toBe('+94771234567');
   });
 
+  it('stores names with single spaces, so a search with one space finds them', () => {
+    const parsed = createStudentSchema.parse({ ...walkIn, name: '  Kasun   Silva ', guardianName: 'Nimal \t Silva', guardianMobile: '0712345678' });
+    expect(parsed.name).toBe('Kasun Silva');
+    expect(parsed.guardianName).toBe('Nimal Silva');
+    expect(registerSchema.parse({ ...self, name: 'Kasun\u00a0 Silva' }).name).toBe('Kasun Silva');
+  });
+
   it('takes a reason for overriding a possible-duplicate warning', () => {
     expect(createStudentSchema.parse({ ...walkIn, duplicateOverrideReason: 'Twin brother, same phone' }).duplicateOverrideReason).toBe('Twin brother, same phone');
     expect(createStudentSchema.safeParse({ ...walkIn, duplicateOverrideReason: 'x' }).success).toBe(false);
