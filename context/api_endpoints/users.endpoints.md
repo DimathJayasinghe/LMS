@@ -133,6 +133,7 @@ Returned in list and detail endpoints:
 | POST | `/:id/handover` | SUPER_ADMIN | Hand the classes of an account that already left to working teachers. |
 | PATCH | `/:id/barcode` | ADMIN, STAFF | Assign a barcode to a user. |
 | POST | `/staff` | SUPER_ADMIN | Create a teacher, front-desk or marker account with a one-time temporary password, shown once. |
+| POST | `/students` | SUPER_ADMIN, ADMIN | Register a walk-in student at the front desk, with a card and a one-time temporary password, shown once. |
 | POST | `/:id/reset-password` | SUPER_ADMIN, ADMIN | Staff-assisted reset: one-time temporary password, shown once. |
 | GET | `/resolve-barcode` | ADMIN, STAFF | Resolve a scanned barcode to a student. |
 | GET | `/lookup?q=` | SUPER_ADMIN, ADMIN | Find students by name, index number or phone, returning only what the desk needs to pick one. |
@@ -459,6 +460,50 @@ The account is created active with `mustChangePassword = true` and `setupComplet
 - 401 auth middleware error
 - 403 `FORBIDDEN_ROLE` (route guard), `STEP_UP_REQUIRED` (no `currentPassword`) and `ACTOR_PASSWORD_INVALID` (wrong password; 403, not 401, so the owner's session is not ended)
 - 409 `EMAIL_ALREADY_EXISTS`
+
+### POST `/students`
+
+Front-desk registration of a walk-in student, from the paper slip the student or guardian fills in. The student gets an index number, a card (`LMS-` barcode) and a one-time password to print on the registration slip. Students who can use a phone at home still register themselves (`POST /auth/register`); this route exists for the ones who cannot.
+
+**Required header:** `Idempotency-Key: <uuid>`. A replay of the same key returns the status of the first answer with a placeholder body that does **not** contain the password; the response carries `Cache-Control: no-store`.
+
+**Who:** `ADMIN` (front desk) and `SUPER_ADMIN`. Teachers, markers and students get 403.
+
+**Request body** (strict: an unknown key, including `nic`, `password` and `role`, is a 400)
+
+```json
+{
+	"email": "student@example.com",
+	"name": "Nimal Perera",
+	"dateOfBirth": "2008-04-12",
+	"phone": "077 123 4567",
+	"guardianName": "Kamal Perera",
+	"guardianMobile": "071 234 5678",
+	"guardianConsent": true,
+	"address": "12 Temple Road",
+	"city": "Kandy",
+	"duplicateOverrideReason": "Twin brother, same phone"
+}
+```
+
+Field rules are the same as `POST /auth/register` (mobile spellings, `+947XXXXXXXX` storage, birth date, guardian rules for a minor). The clerk met the guardian, so `guardianConsent: true` is the front desk's confirmation and the audit row says `guardianConsentSource: FRONT_DESK`. The desk is **not** capped per phone: a family registers together.
+
+**Possible duplicates.** Unless `identity.register.duplicateWarning` is off, the same mobile (the student's or the guardian's, matched in any stored spelling) on an account with a similar name (same name ignoring case and spacing, one name contained in the other, or a small spelling difference) stops the request with 409 `POSSIBLE_DUPLICATE` and `data.matches: [{ id, name, indexNumber }]`. Nothing is created. A sibling with a different name on the same number is not flagged. The clerk checks the match and repeats the request with `duplicateOverrideReason` (3-300 characters); the reason and the matched index numbers go into the audit row.
+
+**Success (201)**
+
+```json
+{ "status": "success", "data": { "user": { "id": "uuid", "indexNumber": "…", "name": "Nimal Perera", "email": "student@example.com", "role": "STUDENT", "barcode": "LMS-…", "mustChangePassword": true, "setupCompleted": true }, "temporaryPassword": "…", "mustChangePassword": true }, "message": "Student registered. Give the temporary password to the student; it is not shown again." }
+```
+
+The account is created active with `mustChangePassword = true` and `setupCompleted = true`: the student signs in with the printed password and may only change it (403 `PASSWORD_CHANGE_REQUIRED` elsewhere). One audit row (`STUDENT_REGISTERED_BY_STAFF`) is written in the same transaction as the account; neither the password nor its hash is stored in it.
+
+**Errors**
+
+- 400 validation error, missing `Idempotency-Key`, `GUARDIAN_REQUIRED`, `GUARDIAN_CONSENT_REQUIRED`, `INVALID_DATE_OF_BIRTH`
+- 401 auth middleware error
+- 403 `FORBIDDEN_ROLE`
+- 409 `EMAIL_ALREADY_EXISTS`, `POSSIBLE_DUPLICATE`, `CODE_UNAVAILABLE` (the card could not be allocated; retry)
 
 ### POST `/:id/reset-password`
 
