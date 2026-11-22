@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Role } from '@prisma/client';
 import * as ClassController from '@/controllers/class.controller';
+import * as RosterController from '@/controllers/roster.controller';
 import { classSessionRoutes } from '@/routes/class-session.routes';
 import { courseModuleRoutes } from '@/routes/course-module.routes';
 import { verifyToken } from '@/middleware/auth.middleware';
@@ -18,6 +19,7 @@ import {
 	listPublicClassesQuerySchema,
 	updateClassSchema,
 } from '@/schemas/class.schema';
+import { rosterQuerySchema } from '@/schemas/roster.schema';
 
 export const classRoutes = Router();
 
@@ -87,6 +89,16 @@ classRoutes.patch(
 	validateBody(courseAssetAltSchema),
 	checkIdempotency,
 	ClassController.updateCourseAssetAlt,
+);
+
+// Every student of one class; the service also checks that a teacher owns it.
+classRoutes.get(
+	'/:classId/roster',
+	verifyToken,
+	requireRole(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
+	validateParams(classIdParamSchema),
+	validateQuery(rosterQuerySchema),
+	RosterController.listRoster,
 );
 
 classRoutes.get(

@@ -542,6 +542,8 @@
 
 **Reversibility:** Yes. Read-only endpoint; setting.
 
+**Wave 1 implementation (#116, unreleased):** built as decided, with two differences. The `TRIAL` value and the Repeater badge wait for trial months and D-STRUCTURE-6 (Wave 2c); until then a row is `PAID` or `NOT_PAID`. The attendance count is over the last `roster.attendanceWindowSessions` held sessions of the whole class, not per cohort. The teacher Present and Undo toggles (D-EXAMS-8) and the 'absent' filter are not part of this step. `roster.service.ts` returns exactly seven keys per row, asserted by a key-set test; the class page shows the section to the owning teacher, front desk and owner and hides it when the API answers 403.
+
 **Code impact:** roster.service.ts: enrollments (deletedAt null, course active) left-joined to current-month Payment, count Attendance for the last N sessions excluding voided; select-only whitelist asserted by a Vitest key test; route with verifyToken and requireRole(SUPER_ADMIN, ADMIN, TEACHER); 'Students' tab reused for D-EXAMS-8. Size M. Tests: other teacher 403, whitelist, Colombo midnight, dropped excluded, setting off.
 
 ### D-EXAMS-8: Teacher attendance writes and corrections
@@ -759,6 +761,8 @@
 **Rationale:** A clerk needs to recognise a child and phone a parent, not hold their NIC and address, the data most useful to someone copying a database. Teachers move between institutes, so phone numbers invite poaching. The API is the real boundary.
 
 **Settings and defaults:** identity.adminCanSeeAddress = false; identity.adminCanSearchNic = false; identity.auditFullRecordReads = true (roster paid flag is roster.showPaidState).
+
+**Wave 1 implementation of the teacher part (#116, unreleased):** `GET /classes/:id/roster` is the one place a teacher reads student identity, and it carries only the student's id, name and index number besides the fields of D-EXAMS-7.
 
 **Rejected:** ADMIN sees everything; hide fields only in the frontend; teacher sees phone numbers.
 

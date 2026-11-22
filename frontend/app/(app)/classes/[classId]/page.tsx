@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import EnrollPanel from "./_components/EnrollPanel";
 import { StaffEnrollPanel } from "./_components/StaffEnrollPanel";
+import { ClassRoster } from "./_components/ClassRoster";
 import { LiveClassAction } from "./_components/LiveClassAction";
 import { SessionEditDialog } from "./_components/SessionEditDialog";
 import { canGoLive, classModeLabel } from "@/lib/class-mode";
+import { canViewRoster, rosterPageOf } from "@/lib/roster";
 import { CourseSeenTracker } from "./_components/CourseSeenTracker";
 import { CourseModules } from "./_components/CourseModules";
 import { api } from "@/lib/api-server";
@@ -22,6 +24,7 @@ import type {
   Course,
   CourseModule,
   Enrollment,
+  RosterList,
   Subject,
   VideoRecording,
 } from "@/lib/types";
@@ -46,11 +49,14 @@ function formatSessionDate(iso: string): string {
 
 export default async function ClassDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ classId: string }>;
+  searchParams: Promise<{ rosterPage?: string | string[] }>;
 }) {
   const cookie = (await cookies()).toString();
   const { classId } = await params;
+  const rosterPage = rosterPageOf((await searchParams).rosterPage);
 
   const user = await requireUser(cookie);
 
@@ -66,7 +72,7 @@ export default async function ClassDetailPage({
     throw e;
   }
 
-  const [subjectName, modulesResult, sessionsResult, videosResult, active] = await Promise.all([
+  const [subjectName, modulesResult, sessionsResult, videosResult, active, rosterResult] = await Promise.all([
     // Subject name (payload carries only subjectId).
     (async () => {
       try {
@@ -136,9 +142,21 @@ export default async function ClassDetailPage({
         return null;
       }
     })(),
+    // The student list: the owning teacher, front desk and owner. Another teacher's class answers 403 and shows nothing.
+    (async (): Promise<{ roster: RosterList | null; failed: boolean }> => {
+      if (!canViewRoster(user.role)) return { roster: null, failed: false };
+      try {
+        const roster = await guard401(api.get<RosterList>(`/classes/${classId}/roster?page=${rosterPage}`, { cookie }));
+        return { roster, failed: false };
+      } catch (e) {
+        unstable_rethrow(e);
+        return { roster: null, failed: !(e instanceof ApiError && e.status === 403) };
+      }
+    })(),
   ]);
 
   const { sessions, gated } = sessionsResult;
+  const { roster, failed: rosterFailed } = rosterResult;
   const { videos, gated: videosGated } = videosResult;
   const { modules, gated: modulesGated } = modulesResult;
   const banner = course.backdropUrl ?? course.bannerUrl;
@@ -269,6 +287,13 @@ export default async function ClassDetailPage({
               </ul>
             )}
           </section>
+
+          {roster && <ClassRoster classId={classId} roster={roster} />}
+          {rosterFailed && (
+            <p role="alert" className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
+              The student list could not be loaded. Reload the page to try again.
+            </p>
+          )}
 
           {!canOpenRecordings && (
             <section>
