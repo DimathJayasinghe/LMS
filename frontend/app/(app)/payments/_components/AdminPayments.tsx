@@ -1,19 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Loader2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api, ApiError } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+import { BulkUpload } from "./BulkUpload";
 import { CollectPayment } from "./CollectPayment";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
 import { PaymentOverrideForm } from "./PaymentOverrideForm";
 import { PaymentAdjustmentPanel } from "./PaymentAdjustmentPanel";
 import { TodaysCash } from "./TodaysCash";
 import type { CashSummary } from "@/lib/cash";
-import type { ApiSuccess, BulkUploadResult, Payment, PaymentStatus, PaymentSummary } from "@/lib/types";
+import type { Payment, PaymentStatus, PaymentSummary } from "@/lib/types";
 
 interface Props {
   payments: Payment[];
@@ -25,6 +25,8 @@ interface Props {
   statuses: PaymentStatus[];
   summary: PaymentSummary | null;
   canOverride: boolean;
+  /** The owner-only bulk upload tool. Front desk collects one payment at a time. */
+  canBulkUpload?: boolean;
   timezone: string;
   /** Branches the desk can record cash against; empty hides the branch choice. */
   institutes?: { id: string; name: string }[];
@@ -45,15 +47,12 @@ export function AdminPayments({
   statuses,
   summary,
   canOverride,
+  canBulkUpload = false,
   timezone,
   institutes = [],
   todaysCash = null,
 }: Props) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [result, setResult] = useState<BulkUploadResult | null>(null);
   const [selectedOverride, setSelectedOverride] = useState<Payment | null>(null);
   const [selectedLedger, setSelectedLedger] = useState<Payment | null>(null);
 
@@ -74,26 +73,6 @@ export function AdminPayments({
     if (status !== "all") q.set("status", status);
     if (p > 1) q.set("page", String(p));
     return `/payments?${q.toString()}`;
-  };
-
-  const onUpload = async (file: File): Promise<void> => {
-    setUploading(true);
-    setUploadError(null);
-    setResult(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await api.upload<ApiSuccess<BulkUploadResult>>("/payments/bulk-upload", form, {
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-      });
-      setResult(res.data);
-      router.refresh();
-    } catch (e) {
-      setUploadError(e instanceof ApiError ? e.message : "Upload failed. Try again.");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
   };
 
   const stats = [
@@ -264,52 +243,7 @@ export function AdminPayments({
       {todaysCash && <TodaysCash summary={todaysCash} />}
       <CollectPayment timezone={timezone} institutes={institutes} />
 
-      {/* Bulk upload */}
-      <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold text-foreground">Bulk upload</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Upload an .xlsx with columns: <code>enrollmentId</code> or{" "}
-          <code>indexNumber + courseId + classType</code>, plus <code>paymentMonth</code> (YYYY-MM),
-          optional <code>amount</code> and <code>note</code>.
-        </p>
-        <div className="mt-3 flex items-center gap-3">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx"
-            aria-label="Bulk payment file"
-            disabled={uploading}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void onUpload(f);
-            }}
-            className="text-sm file:mr-3 file:rounded-lg file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-sm hover:file:bg-muted"
-          />
-          {uploading && <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />}
-          {!uploading && <Upload className="size-4 text-muted-foreground" aria-hidden />}
-        </div>
-
-        {uploadError && <p className="mt-2 text-xs text-destructive">{uploadError}</p>}
-
-        {result && (
-          <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
-            <p className="text-foreground">
-              {result.total} rows · {result.created} created · {result.updated} updated ·{" "}
-              {result.skipped} skipped · {result.errors.length} error
-              {result.errors.length === 1 ? "" : "s"}
-            </p>
-            {result.errors.length > 0 && (
-              <ul className="mt-2 space-y-1 text-xs text-destructive">
-                {result.errors.map((err) => (
-                  <li key={err.row}>
-                    Row {err.row}: {err.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </section>
+      {canBulkUpload && <BulkUpload />}
     </div>
   );
 }

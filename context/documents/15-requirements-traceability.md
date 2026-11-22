@@ -76,7 +76,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-PAY-02 | Platform payment (card/wallet) | Done | PayHere onsite checkout; webhook-verified |
 | R-PAY-03 | Front desk / physical institute cash with receipt | Done | `ENTRANCE` method; `PaymentReceipt` UI |
 | R-PAY-04 | **Bank transfer with slip upload and staff approval** | Planned | Payment channels spec §3 (`PaymentSlip`, `BANK_TRANSFER`) |
-| R-PAY-05 | Excel reconciliation | Done | `BULK` method |
+| R-PAY-05 | Excel reconciliation | Done | `BULK` method; owner only, checked first (`?dryRun=true`), all or nothing, per-row audit (F-58, #113) |
 | R-PAY-06 | Other local wallets (LankaQR, FriMi, Genie) | Gap | Only via whatever PayHere exposes |
 | R-PAY-07 | Content locks when unpaid, with a configurable grace period | Partial | The `access.service.ts` coverage gate uses the organization billing month and configurable grace (`fees.graceDays`=10); full coverage function and `AccessException` in Wave 2b T6 (D-MONEY-1) |
 | R-PAY-08 | Refunds and adjustments with an audit trail | Done | `PaymentAdjustment` immutable ledger; provider-executed refunds planned |

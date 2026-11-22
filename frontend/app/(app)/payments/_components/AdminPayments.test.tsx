@@ -169,27 +169,12 @@ describe("AdminPayments — filters", () => {
 });
 
 describe("AdminPayments — bulk upload", () => {
-  it("uploads a file, renders the result incl. per-row errors, and refreshes", async () => {
-    upload.mockResolvedValue({
-      data: { total: 2, created: 1, updated: 0, skipped: 0, errors: [{ row: 3, message: "Unknown index." }] },
-    });
-    const user = userEvent.setup();
-    render(<AdminPayments {...baseProps} />);
+  it("shows the bulk upload tool to the owner only", () => {
+    const { rerender } = render(<AdminPayments {...baseProps} canBulkUpload />);
+    expect(screen.getByLabelText("Bulk payment file")).toBeInTheDocument();
 
-    const file = new File(["dummy"], "payments.xlsx", {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    await user.upload(screen.getByLabelText("Bulk payment file"), file);
-
-    expect(upload).toHaveBeenCalledWith(
-      "/payments/bulk-upload",
-      expect.any(FormData),
-      expect.objectContaining({
-        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
-      }),
-    );
-    expect(await screen.findByText(/1 created/)).toBeInTheDocument();
-    expect(screen.getByText(/Row 3: Unknown index\./)).toBeInTheDocument();
-    expect(refresh).toHaveBeenCalled();
+    rerender(<AdminPayments {...baseProps} />);
+    expect(screen.queryByLabelText("Bulk payment file")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bulk upload")).not.toBeInTheDocument();
   });
 });

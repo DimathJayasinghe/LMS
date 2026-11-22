@@ -95,7 +95,7 @@ export default async function PaymentsPage({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Payments" description="Payment records, collection, and bulk upload." />
+      <PageHeader title="Payments" description={viewer.role === "SUPER_ADMIN" ? "Payment records, collection, and bulk upload." : "Payment records and collection."} />
       <AdminPayments
         payments={list.data}
         total={list.count ?? 0}
@@ -106,6 +106,7 @@ export default async function PaymentsPage({
         statuses={STATUSES}
         summary={summary}
         canOverride={viewer.role === "SUPER_ADMIN"}
+        canBulkUpload={viewer.role === "SUPER_ADMIN"}
         timezone={timezone}
         institutes={institutes.map((i) => ({ id: i.id, name: i.name }))}
         todaysCash={todaysCash}

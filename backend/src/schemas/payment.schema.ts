@@ -114,6 +114,11 @@ export const bulkPaymentRowSchema = z
 
 export type BulkPaymentRow = z.infer<typeof bulkPaymentRowSchema>;
 
+/** `?dryRun=true` checks the file and reports the result without saving anything. Accepts the parsed boolean too, so the controller can re-read a query the middleware already normalised. */
+export const bulkUploadQuerySchema = z.object({
+	dryRun: z.union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')]).default(false),
+});
+
 // ─── Entrance Collection (Admin/Staff) ─────────────────────
 export const collectEntrancePaymentSchema = z.object({
 	enrollmentId: z.string().uuid(),

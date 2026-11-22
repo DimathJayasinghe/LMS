@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma, Role } from '@prisma/client';
 
-const { adjustmentCreate, paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, paymentCreate, enrollmentFindUnique, dispatch, getCurrentPaymentMonth, transaction, readSheet, userFindUnique, paymentGroupBy, queryRaw } = vi.hoisted(() => ({
+const { adjustmentCreate, paymentAggregate, paymentCount, paymentFindUnique, paymentUpdate, paymentCreate, enrollmentFindUnique, dispatch, getCurrentPaymentMonth, transaction, userFindUnique, paymentGroupBy, queryRaw } = vi.hoisted(() => ({
 	adjustmentCreate: vi.fn(),
 	paymentAggregate: vi.fn(),
 	paymentCount: vi.fn(),
@@ -12,7 +12,6 @@ const { adjustmentCreate, paymentAggregate, paymentCount, paymentFindUnique, pay
 	dispatch: vi.fn(),
 	getCurrentPaymentMonth: vi.fn(() => '2026-07'),
 	transaction: vi.fn(),
-	readSheet: vi.fn(),
 	userFindUnique: vi.fn(),
 	paymentGroupBy: vi.fn(),
 	queryRaw: vi.fn(),
@@ -43,9 +42,8 @@ vi.mock('@/config/database', () => ({
 vi.mock('@/services/notification.service', () => ({ dispatch }));
 vi.mock('@/services/access.service', () => ({ getCurrentPaymentMonth }));
 vi.mock('@/services/outstanding.service', () => ({ countOutstanding: vi.fn().mockResolvedValue({ count: 0, expected: '0.00' }) }));
-vi.mock('read-excel-file/node', () => ({ readSheet }));
 
-import { bulkUploadPayments, getPaymentsSummary, getFinancialReport, overridePayment, collectEntrancePayment } from './payment.service';
+import { getPaymentsSummary, getFinancialReport, overridePayment, collectEntrancePayment } from './payment.service';
 
 beforeEach(() => {
 	adjustmentCreate.mockReset();
@@ -59,51 +57,9 @@ beforeEach(() => {
 	getCurrentPaymentMonth.mockReturnValue('2026-07');
 	transaction.mockReset();
 	transaction.mockImplementation(async (callback) => callback(transactionClient));
-	readSheet.mockReset();
 	userFindUnique.mockReset();
 	paymentGroupBy.mockReset();
 	queryRaw.mockReset();
-});
-
-describe('bulkUploadPayments — safe .xlsx parsing', () => {
-	const file = {
-		originalname: 'payments.xlsx',
-		buffer: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
-	} as Express.Multer.File;
-
-	it('rejects legacy or spoofed spreadsheet input before parsing', async () => {
-		await expect(
-			bulkUploadPayments({ ...file, originalname: 'payments.xls' }),
-		).rejects.toMatchObject({ code: 'BULK_UPLOAD_INVALID_FILE', statusCode: 400 });
-		expect(readSheet).not.toHaveBeenCalled();
-	});
-
-	it('reads the first sheet, normalizes headers, and creates a valid payment', async () => {
-		readSheet.mockResolvedValueOnce([
-			['Enrollment ID', 'Payment Month', 'Amount', 'Note'],
-			['00000000-0000-4000-8000-000000000001', '2026-07', 2500, 'Front desk import'],
-		]);
-		enrollmentFindUnique.mockResolvedValueOnce({
-			id: '00000000-0000-4000-8000-000000000001',
-			course: { monthlyFee: new Prisma.Decimal('2500') },
-			user: { id: 'student-1' },
-		});
-		paymentFindUnique.mockResolvedValueOnce(null);
-		paymentCreate.mockResolvedValueOnce({ id: 'payment-1' });
-
-		const result = await bulkUploadPayments(file);
-
-		expect(result).toMatchObject({ total: 1, created: 1, updated: 0, skipped: 0, errors: [] });
-		expect(paymentCreate).toHaveBeenCalledWith({
-			data: expect.objectContaining({
-				enrollmentId: '00000000-0000-4000-8000-000000000001',
-				paymentMonth: '2026-07',
-				amount: 2500,
-				method: 'BULK',
-				status: 'SUCCESS',
-			}),
-		});
-	});
 });
 
 describe('getPaymentsSummary', () => {

@@ -19,8 +19,9 @@ vi.mock('@/config/sentry', () => ({ captureException: vi.fn() }));
 vi.mock('@/controllers/payment.controller', () => ({
   initiatePayherePayment: vi.fn(), collectEntrancePayment: vi.fn(), handlePayhereNotify: vi.fn(), getPayhereStatus: vi.fn(),
   listPayments: vi.fn(), listMyPayments: vi.fn(), getPaymentsSummary: vi.fn(), getFinancialReport: vi.fn(), getPaymentById: vi.fn(),
-  overridePayment: vi.fn(), listPaymentAdjustments: vi.fn(), refundPayment: vi.fn(), bulkUploadPayments: vi.fn(),
+  overridePayment: vi.fn(), listPaymentAdjustments: vi.fn(), refundPayment: vi.fn(),
 }));
+vi.mock('@/controllers/payment-bulk.controller', () => ({ bulkUploadPayments: vi.fn() }));
 vi.mock('@/services/outstanding.service', () => ({ listOutstanding: m.list }));
 vi.mock('@/services/outstanding-export.service', () => ({ exportOutstandingCsv: m.exportCsv }));
 vi.mock('@/services/fee-reminder.service', () => ({ sendFeeReminders: m.remind }));
