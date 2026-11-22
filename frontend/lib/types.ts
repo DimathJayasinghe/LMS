@@ -884,3 +884,41 @@ export interface HallMarksResult {
   counts: { total: number; changed: number; unchanged: number; rejected: number };
   rows: HallMarkRow[];
 }
+
+/** What each payment method brought in for a month (the owner console and the financial report). */
+export interface MethodTotal {
+  method: "ONLINE" | "ENTRANCE" | "BULK" | "MANUAL";
+  collected: string;
+  paidCount: number;
+}
+
+/** GET /console/cash. */
+export interface ConsoleCash {
+  date: string;
+  tallyEnabled: boolean;
+  collectedTotal: string;
+  paymentCount: number;
+  rows: CashRow[];
+  /** Counts that differ beyond the owner's threshold and are not reconciled: today's, and older days. */
+  flagged: CashRow[];
+  /** `from`..`to` is the window the waiting days were counted over. */
+  unreconciled: { count: number; rows: CashRow[]; from: string; to: string };
+  /** Fees for the billing month of `date`, by method, net of refunds. */
+  month: { month: string; byMethod: MethodTotal[] };
+}
+
+export interface ConsoleOwingCourse {
+  courseId: string;
+  name: string;
+  count: number;
+  expected: string;
+}
+
+/** GET /console/owing. */
+export interface ConsoleOwing {
+  month: string;
+  students: number;
+  amount: string;
+  courses: ConsoleOwingCourse[];
+  otherCourses: number;
+}

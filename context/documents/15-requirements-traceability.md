@@ -162,6 +162,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-RPT-03 | Daily collection report for the counter | Done | Payments, Cash: cash by Colombo day, collector and branch, the clerk's end-of-day count, difference and stale marker, owner reconcile (D-OPS-1, F-77, #112, unreleased); no printable slip yet |
 | R-RPT-04 | Export to Excel/PDF | Planned | Phase G settlement/export |
 | R-RPT-05 | Owner dashboard on mobile | Partial | Responsive web; role dashboards tracked in issue #81 |
+| R-RPT-06 | Owner console: a read-only overview of what needs the owner today | Partial | `/admin/console` (owner only, `GET /console/cash` and `/console/owing`): cash today by collector and branch, counts that differ, days waiting for reconcile, the month by method, who owes in total and by class; marking, attendance, setup and SMS panels are next (F-127, part 1 in #119, unreleased) |
 
 ### 1.11 Platform and non-functional
 
