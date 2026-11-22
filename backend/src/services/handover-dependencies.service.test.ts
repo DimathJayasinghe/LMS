@@ -82,7 +82,7 @@ describe('orphaned classes', () => {
     expect(orphanedCourseWhere('org-1')).toEqual({
       organizationId: 'org-1',
       isActive: true,
-      teacher: { OR: [{ deletedAt: { not: null } }, { role: { not: Role.TEACHER } }] },
+      teacher: { NOT: { deletedAt: null, role: Role.TEACHER } },
     });
   });
 

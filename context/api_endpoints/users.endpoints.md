@@ -323,7 +323,7 @@ keys return 400; replaying the same key returns the original stored response, in
 - 403 `FORBIDDEN` for a self change or a caller who is not the owner
 - 403 `STEP_UP_REQUIRED`, 403 `ACTOR_PASSWORD_INVALID`
 - 409 `LAST_OWNER` when the last active owner would be demoted
-- 409 `ROLE_CHANGE_NOT_ALLOWED` (a student account as the target, or a move to the student role)
+- 409 `ROLE_CHANGE_NOT_ALLOWED` (a student account as the target)
 - 409 `TEACHER_HAS_CLASSES`, `MARKER_HAS_ALLOCATIONS`, `HANDOVER_SLOT_CONFLICT`: see Hand-over below
 - 404 `USER_NOT_FOUND` (service error shape)
 

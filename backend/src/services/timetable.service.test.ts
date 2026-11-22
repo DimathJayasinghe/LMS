@@ -168,7 +168,7 @@ describe('session preview, generation, and upcoming access', () => {
 		await previewGeneration(from, to, { userId: 'owner-1', role: Role.SUPER_ADMIN });
 
 		for (const call of timetableSlotFindMany.mock.calls) {
-			expect(call[0].where).toMatchObject({ isActive: true, course: { teacher: { deletedAt: null } } });
+			expect(call[0].where).toMatchObject({ isActive: true, course: { teacher: { deletedAt: null, role: Role.TEACHER } } });
 		}
 	});
 

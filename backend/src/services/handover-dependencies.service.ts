@@ -82,14 +82,18 @@ export const listHandoverDependencies = async (
   };
 };
 
+/** A teacher who can run a class: an active account that still holds the teacher role. */
+export const workingTeacherWhere: Prisma.UserWhereInput = { deletedAt: null, role: Role.TEACHER };
+
 /**
  * Active classes whose teacher left: deactivated, or moved to another role. One definition for the owner console count
- * and for the list the owner hands over from, so the two always agree.
+ * and for the list the owner hands over from, so the two always agree; session generation uses the same working-teacher
+ * clause, so a class on this list gets no new sessions until it is handed over.
  */
 export const orphanedCourseWhere = (organizationId: string): Prisma.CourseWhereInput => ({
   organizationId,
   isActive: true,
-  teacher: { OR: [{ deletedAt: { not: null } }, { role: { not: Role.TEACHER } }] },
+  teacher: { NOT: workingTeacherWhere },
 });
 
 export interface OrphanedGroup {

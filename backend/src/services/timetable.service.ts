@@ -5,6 +5,7 @@ import { COLOMBO_UTC_OFFSET_MIN } from '@/utils/constants';
 import { minutesFromMidnight, timeRangesOverlap } from '@/utils/time-range';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import { assertCourseAccess } from '@/services/class.service';
+import { workingTeacherWhere } from '@/services/handover-dependencies.service';
 import type {
   CreateTimetableSlotInput,
   ListUpcomingSessionsQuery,
@@ -320,8 +321,8 @@ const occurrences = (from: Date, to: Date, dayOfWeek: number, startTime: string)
   return result;
 };
 
-/** A class whose teacher is deactivated has nobody to run it, so no sessions are generated for it. */
-const ACTIVE_TEACHER = { teacher: { deletedAt: null } } satisfies Prisma.CourseWhereInput;
+/** A class whose teacher left (deactivated or moved to another role) has nobody to run it, so no sessions are generated for it. */
+const ACTIVE_TEACHER = { teacher: workingTeacherWhere } satisfies Prisma.CourseWhereInput;
 
 /**
  * Materialize dated ClassSessions from every active slot for the range.

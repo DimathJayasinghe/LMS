@@ -40,7 +40,7 @@ describe('getSetupPanel', () => {
     m.courseFindMany.mockResolvedValueOnce([course('c1', 'Physics 2026', 2026, 'Ms Perera')]);
     m.courseCount.mockResolvedValueOnce(4);
     const panel = await getSetupPanel(owner as never);
-    const where = { organizationId: 'org', isActive: true, teacher: { OR: [{ deletedAt: { not: null } }, { role: { not: 'TEACHER' } }] } };
+    const where = { organizationId: 'org', isActive: true, teacher: { NOT: { deletedAt: null, role: 'TEACHER' } } };
     expect(m.courseFindMany.mock.calls[0]![0]).toMatchObject({ where, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 10 });
     expect(m.courseCount).toHaveBeenNthCalledWith(1, { where });
     expect(panel.orphanedClasses).toEqual({ count: 4, rows: [{ courseId: 'c1', name: 'Physics 2026', year: 2026, teacherName: 'Ms Perera' }] });
