@@ -304,6 +304,8 @@
 
 **Reversibility:** Fully by settings; snapshot columns additive nullable.
 
+**Wave 1 implementation (#115, unreleased):** the warning half is built: `scan-context.service.ts` derives the enrollment state (active PHYSICAL enrollment = ENROLLED, ONLINE only = MODE_MISMATCH, none = NOT_ENROLLED), the fee state through `isStudentCovered` on that enrollment, and the two policies; the scan returns `context` and snapshots `enrollmentStateAtScan`, `paidAtScan` and `instituteId` on the first scan only; manual mark records the same snapshot and never refuses. The scan window, `late`, student-centric auto mode and `recordAttendance` are Wave 1b. The single Attendance migration (status, mark/void columns, durationSeconds, instituteId, `VIDEO`) ships with it.
+
 **Code impact:** scanBarcode loads session start and duration, evaluates the window, resolves the enrollment, derives MODE_MISMATCH, calls isStudentCovered, writes via recordAttendance (D-ACCESS-5) and returns the context object. Attendance columns come from the single Attendance migration. Frontend banner, large photo, links, SCAN_WINDOW_CLOSED copy; new report for SUPER_ADMIN and the course's teacher. Vitest condition x policy, window edges, override with and without reason, inactive user, institute mismatch. Size M.
 
 ### D-ACCESS-4: Scan identity uniqueness, one resolver, QR value scheme and card reissue

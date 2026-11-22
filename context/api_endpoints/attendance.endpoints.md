@@ -143,21 +143,54 @@ came from a timetable slot, its configured institute must match.
 ```json
 {
 	"status": "success",
-	"data": { "...attendanceRecord" },
+	"data": {
+		"...attendanceRecord",
+		"context": {
+			"enrollmentState": "ENROLLED | NOT_ENROLLED | MODE_MISMATCH",
+			"paidThisMonth": true,
+			"covered": "PAID | GRACE | UNPAID",
+			"month": "2026-11",
+			"graceUntil": "2026-11-10",
+			"warnings": ["NOT_ENROLLED", "MODE_MISMATCH", "FEE_IN_GRACE", "FEE_UNPAID"],
+			"student": { "name": "Nimal Perera", "indexNumber": 42, "profileImage": "https://… | null" }
+		}
+	},
 	"message": "Attendance recorded successfully."
 }
 ```
+
+**Enrollment and fee state at the door (F-12, D-ACCESS-3).** The scan warns and records; it does not turn
+a business problem into a refusal unless the organization's settings say so. The enrollment that counts is
+the student's active `PHYSICAL` enrollment of the session's course (`ENROLLED`); only an active `ONLINE`
+one is `MODE_MISMATCH`; none is `NOT_ENROLLED` (no fee state, only the `NOT_ENROLLED` warning). The fee is
+checked with `isStudentCovered` on the chosen enrollment: `PAID` (a payment for the current Colombo month),
+`GRACE` (not paid, inside `fees.graceDays`) or `UNPAID`. `paidThisMonth` is true only for `PAID`.
+`FEE_IN_GRACE` and `FEE_UNPAID` are not raised for a not-enrolled student.
+
+The first scan of a student for a session snapshots `enrollmentStateAtScan`, `paidAtScan` (= `paidThisMonth`)
+and `instituteId` on the row; a repeat scan changes only `lastSeenAt`, and `context` is always the current
+state. Settings (owner, per organization, default `WARN`): `attendance.scan.notEnrolledPolicy` and
+`attendance.scan.unpaidPolicy`. A `BLOCK` policy refuses the scan and writes nothing; the unpaid policy
+applies to enrolled students (including online-only ones) whose fee is not covered. `MODE_MISMATCH` is
+always a warning.
+
+The scan window (F-43), student-centred scanning (D-OPS-3) and the "attended without enrollment or
+payment" report are separate, later work; the snapshot columns are what the report will read.
 
 **Errors**
 
 - 400 validation error
 - 400 `INVALID_ROLE_FOR_ATTENDANCE` (user is not a student)
+- 402 `SCAN_BLOCKED_UNPAID` (policy `BLOCK`, enrolled but the fee is not covered; nothing is written)
 - 403 `STUDENT_DEACTIVATED`
+- 403 `SCAN_BLOCKED_NOT_ENROLLED` (policy `BLOCK`, no active enrollment; nothing is written)
 - 404 `CLASS_SESSION_NOT_FOUND`
 - 404 `INSTITUTE_NOT_FOUND`
 - 404 `BARCODE_NOT_FOUND`
 - 409 `AMBIGUOUS_CODE` (the code matches more than one student; no attendance is written)
 - 409 `SESSION_INSTITUTE_MISMATCH`
+
+Structural refusals (identity, institute) are decided before any enrollment or fee check.
 
 ### POST `/zoom-webhook`
 
@@ -242,7 +275,8 @@ make concurrent/repeated application safe. Writes `ATTENDANCE_RECONCILED` to the
 
 ### POST `/manual`
 
-Manually mark attendance for a student (admin reconciliation fallback).
+Manually mark attendance for a student (admin reconciliation fallback). It records the same
+enrollment and fee snapshot on a new row as the entrance scan does, and is never refused for it.
 
 **Request body**
 

@@ -230,7 +230,9 @@ erDiagram
 | `PaymentSlipStatus` **(planned)** | `PENDING_UPLOAD`, `SUBMITTED`, `APPROVED`, `REJECTED`, `EXPIRED`, `SUPERSEDED` | PaymentSlip |
 | `SubmissionStatus` | `UPLOADING`, `COMPLETED` | Submission |
 | `SubmissionSource` | `ONLINE`, `HALL` | Submission |
-| `AttendanceSource` | `QR`, `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL` | Attendance |
+| `AttendanceSource` | `QR`, `BARCODE`, `ZOOM_WEBHOOK`, `MANUAL`, `VIDEO` (value added; nothing writes it yet) | Attendance |
+| `AttendanceStatus` | `PRESENT`, `LATE`, `PARTIAL`, `EXCUSED` | Attendance |
+| `EnrollmentScanState` | `ENROLLED`, `NOT_ENROLLED`, `MODE_MISMATCH` | Attendance |
 | `SmsStatus` | `PENDING`, `SENT`, `FAILED` | SmsLog |
 | `ExamType` | `MCQ`, `WRITTEN`, `HYBRID`, `INCLASS` | Exam |
 
@@ -239,7 +241,7 @@ erDiagram
 - **`Role`** — `SUPER_ADMIN` is the owner of one organization (one per organization by default, up to two with `identity.maxOwners`; today there is one organization). `PLATFORM_ADMIN` is a reserved name for the future SaaS operator and is **not** in the enum; `TEACHER` (many) teaches courses; `ADMIN` (many) is front-desk staff; `MARKER` grades assigned exams; `STUDENT`. This replaces the legacy `ADMIN/STAFF` mapping in the current code (§12).
 - **`ClassType`** — `ONLINE` vs `PHYSICAL` today; **`HYBRID` is planned for enrollments** and means one enrollment, one fee, physical attendance plus online access. On `ClassSession` and `TimetableSlot`, `classType` is **nullable**: `null` means the session is for all cohorts (e.g. a physical class that is also streamed to online students); a session is never itself `HYBRID`. Eligibility rules are in the [payment channels and HYBRID design](../../docs/superpowers/specs/2026-11-19-payment-channels-and-hybrid-enrollment-design.md) §4.3.
 - **`PaymentMethod`** — how a payment was collected: `ONLINE` (PayHere, on the platform), `ENTRANCE` (paid in person at the front desk or a branch), `BULK` (Excel import), `MANUAL` (admin/owner adjustment), and planned `BANK_TRANSFER` (student uploads a slip; staff approve). Enables channel-based reporting.
-- **`AttendanceSource`** — `QR` (student shows their QR at the entrance, staff scans) or `BARCODE` (physical barcode card) — both are entrance scans; `ZOOM_WEBHOOK` (live-streamed class join); `MANUAL` (admin entry). A record existing = present; no record = absent.
+- **`AttendanceSource`** — `QR` (student shows their QR at the entrance, staff scans) or `BARCODE` (physical barcode card) — both are entrance scans; `ZOOM_WEBHOOK` (live-streamed class join); `MANUAL` (admin entry); `VIDEO` (a recording watched) exists as a value for the planned single attendance writer. A record existing = present unless voided; no record = absent. `AttendanceStatus` is `PRESENT` for every row today (`LATE` and `PARTIAL` and `EXCUSED` arrive with the scan window, live reconciliation and teacher marking).
 - **`ExamType`** — a coarse label for the paper: `MCQ` (only an MCQ section), `WRITTEN` (only structured/essay), `HYBRID` (a mixed paper: MCQ + structured/essay), `INCLASS` (pure paper exam with no LMS submission — marker enters marks). The exam's `allowTypedAnswers` / `allowPdfUpload` flags decide which submission channels students may use; the same paper serves both online and physical cohorts.
 
 ---
@@ -550,17 +552,33 @@ model Attendance {
   classSessionId String
   classSession   ClassSession     @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
 
+  // The single Attendance migration (2026-11-22): written by the entrance scan and manual mark today,
+  // the rest are for staff marking, voiding, live duration and the report (later work).
+  status                AttendanceStatus     @default(PRESENT)
+  markedById            String?              // User, SetNull
+  voidedAt              DateTime?
+  voidedById            String?              // User, SetNull
+  voidReason            String?
+  enrollmentStateAtScan EnrollmentScanState? // snapshot at the first scan or manual mark
+  paidAtScan            Boolean?             // snapshot: a payment covered the month (not merely grace)
+  durationSeconds       Int?
+  instituteId           String?              // Institute where the scan happened, SetNull
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, classSessionId])                // one record per student per session
   @@index([userId])
   @@index([classSessionId])
+  @@index([markedById])
+  @@index([voidedById])
+  @@index([instituteId])
 }
 ```
 
 - **`source`** captures *how* attendance was logged (`QR`/`BARCODE` entrance scan, `ZOOM_WEBHOOK`, `MANUAL`).
 - **`lastSeenAt`** + `upsert` solves the Zoom reconnect storm: 45 reconnects → 1 row, `lastSeenAt` updated.
+- **`enrollmentStateAtScan` / `paidAtScan` / `instituteId`** are taken once, on the first scan or manual mark, and never rewritten, so "attended without enrollment or payment" stays computable after enrollments and payments change later. Rows from before this change have them null.
 
 ### 4.11 VideoRecording
 

@@ -75,6 +75,21 @@ enum AttendanceSource {
   BARCODE // physical barcode card
   ZOOM_WEBHOOK // live-streamed class join
   MANUAL // admin entry
+  VIDEO // recording watched (written by a later change; the value ships with the single Attendance migration)
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  PARTIAL // live join below the minimum; counts as neither attended nor unexplained
+  EXCUSED
+}
+
+// Whether the student held an active enrollment for the course at the entrance scan; snapshotted on the row.
+enum EnrollmentScanState {
+  ENROLLED
+  NOT_ENROLLED
+  MODE_MISMATCH // enrolled online only
 }
 
 enum SmsStatus {
@@ -211,6 +226,8 @@ model User {
   courseProgress                    CourseContentProgress[]
   studentBarcodes                   StudentBarcode[] // per-institute barcodes
   attendance                        Attendance[]
+  attendanceMarked                  Attendance[]  @relation("AttendanceMarkedBy")
+  attendanceVoided                  Attendance[]  @relation("AttendanceVoidedBy")
   submissions                       Submission[]
   gradedSubmissions                 Submission[]                 @relation("SubmissionGrader")
   actorAuditLogs                    AuditLog[]                   @relation("AuditActor")
@@ -627,6 +644,20 @@ model Attendance {
   classSessionId String
   classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
 
+  // Written by the entrance scan today; staff marking, voiding and live duration use the rest later.
+  status                AttendanceStatus     @default(PRESENT)
+  markedById            String?
+  markedBy              User?                @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+  voidedAt              DateTime?
+  voidedById            String?
+  voidedBy              User?                @relation("AttendanceVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  voidReason            String?
+  enrollmentStateAtScan EnrollmentScanState?
+  paidAtScan            Boolean?
+  durationSeconds       Int?
+  instituteId           String?
+  institute             Institute?           @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -637,6 +668,9 @@ model Attendance {
   @@unique([userId, classSessionId])
   @@index([userId])
   @@index([classSessionId])
+  @@index([markedById])
+  @@index([voidedById])
+  @@index([instituteId])
   @@index([organizationId])
 }
 
@@ -1124,6 +1158,7 @@ model Institute {
   isActive Boolean @default(true)
 
   studentBarcodes StudentBarcode[]
+  attendances     Attendance[]
   timetableSlots  TimetableSlot[]
   payments        Payment[]
   cashTallies     CashTally[]

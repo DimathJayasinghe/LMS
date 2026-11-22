@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StaffScanner } from "./StaffScanner";
 import { ApiError } from "@/lib/api";
-import type { AttendanceRecord, ClassSession, Course, Institute, User } from "@/lib/types";
+import type { AttendanceRecord, ClassSession, Course, Institute, ScanContext, User } from "@/lib/types";
 
 const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 
@@ -75,6 +75,20 @@ const rec = (id: string, userId: string, name: string, index: number): Attendanc
   user: { id: userId, name, email: "x@y.lk", indexNumber: index },
 });
 
+const contextFor = (name: string, index: number, patch: Partial<ScanContext> = {}): ScanContext => ({
+  enrollmentState: "ENROLLED",
+  paidThisMonth: true,
+  covered: "PAID",
+  month: "2026-11",
+  graceUntil: "2026-11-10",
+  warnings: [],
+  student: { name, indexNumber: index, profileImage: null },
+  ...patch,
+});
+const scanned = (id: string, userId: string, name: string, index: number, patch: Partial<ScanContext> = {}) => ({
+  data: { ...rec(id, userId, name, index), context: contextFor(name, index, patch) },
+});
+
 beforeEach(() => {
   get.mockReset().mockImplementation((path: string) => {
     if (path.startsWith("/classes/c1/sessions"))
@@ -106,7 +120,7 @@ describe("StaffScanner — session gating", () => {
 
 describe("StaffScanner — wedge scan", () => {
   it("POSTs the scan on Enter and adds the student to the roster", async () => {
-    post.mockResolvedValue({ data: rec("a1", "u1", "Nimal", 42) });
+    post.mockResolvedValue(scanned("a1", "u1", "Nimal", 42));
     const user = userEvent.setup();
     render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);
@@ -119,7 +133,8 @@ describe("StaffScanner — wedge scan", () => {
       instituteId: institutes[0]!.id,
       source: "BARCODE",
     });
-    expect(await screen.findByText("Nimal")).toBeInTheDocument();
+    // The roster row and the result card both name the student.
+    expect(await screen.findAllByText("Nimal")).toHaveLength(2);
     expect(screen.getByText(/checked in/)).toBeInTheDocument();
   });
 
@@ -146,24 +161,68 @@ describe("StaffScanner — wedge scan", () => {
   });
 
   it("dedupes the roster when the same student is scanned twice", async () => {
-    post.mockResolvedValue({ data: rec("a1", "u1", "Nimal", 42) });
+    post.mockResolvedValue(scanned("a1", "u1", "Nimal", 42));
     const user = userEvent.setup();
     render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);
 
     const scan = screen.getByLabelText("Scan code");
     await user.type(scan, "LMS-042{Enter}");
-    await screen.findByText("Nimal");
+    await screen.findAllByText("Nimal");
     await user.type(scan, "LMS-042{Enter}");
 
     const roster = screen.getByText("Checked in").closest("div")!.parentElement!;
     expect(within(roster).getAllByText("Nimal")).toHaveLength(1);
   });
+
+  it("shows the face-and-state card with the warnings from the scan", async () => {
+    post.mockResolvedValue(scanned("a1", "u1", "Nimal", 42, { enrollmentState: "NOT_ENROLLED", paidThisMonth: false, covered: "UNPAID", warnings: ["NOT_ENROLLED"] }));
+    const user = userEvent.setup();
+    render(<StaffScanner classes={classes} institutes={institutes} />);
+    await pickSession(user);
+
+    await user.type(screen.getByLabelText("Scan code"), "LMS-042{Enter}");
+
+    expect(await screen.findByText("Not enrolled in this class")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Enrol" })).toHaveAttribute("href", "/classes/c1");
+    expect(screen.getByText("No photo on file")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["SCAN_BLOCKED_NOT_ENROLLED", 403, /not enrolled in this class, so nothing was recorded/i],
+    ["SCAN_BLOCKED_UNPAID", 402, /fee is not covered, so nothing was recorded/i],
+  ])("maps %s to a refusal that says nothing was recorded, and clears the previous card", async (code, status, message) => {
+    post.mockResolvedValueOnce(scanned("a1", "u1", "Nimal", 42, { paidThisMonth: false, covered: "UNPAID", warnings: ["FEE_UNPAID"] }));
+    post.mockRejectedValueOnce(new ApiError(status, "refused", code));
+    const user = userEvent.setup();
+    render(<StaffScanner classes={classes} institutes={institutes} />);
+    await pickSession(user);
+
+    await user.type(screen.getByLabelText("Scan code"), "LMS-042{Enter}");
+    expect(await screen.findByText(/2026-11 fee is not paid/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Scan code"), "LMS-043{Enter}");
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-11 fee is not paid/)).not.toBeInTheDocument();
+  });
+
+  it("drops the card when another session is picked", async () => {
+    post.mockResolvedValue(scanned("a1", "u1", "Nimal", 42, { paidThisMonth: false, covered: "UNPAID", warnings: ["FEE_UNPAID"] }));
+    const user = userEvent.setup();
+    render(<StaffScanner classes={classes} institutes={institutes} />);
+    await pickSession(user);
+    await user.type(screen.getByLabelText("Scan code"), "LMS-042{Enter}");
+    await screen.findByText(/2026-11 fee is not paid/);
+
+    await user.selectOptions(screen.getByLabelText("Select session"), "");
+
+    expect(screen.queryByText(/2026-11 fee is not paid/)).not.toBeInTheDocument();
+  });
 });
 
 describe("StaffScanner - camera scan", () => {
   it("tags a camera decode as QR", async () => {
-    post.mockResolvedValue({ data: { ...rec("a1", "u1", "Nimal", 42), source: "QR" } });
+    post.mockResolvedValue({ data: { ...scanned("a1", "u1", "Nimal", 42).data, source: "QR" } });
     const user = userEvent.setup();
     render(<StaffScanner classes={classes} institutes={institutes} />);
     await pickSession(user);

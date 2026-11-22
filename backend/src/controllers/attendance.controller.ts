@@ -21,7 +21,7 @@ import { logger } from '@/config/logger';
 export const scanBarcode = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const input = scanBarcodeSchema.parse(req.body);
-    const attendance = await AttendanceService.scanBarcode(input);
+    const { attendance, context } = await AttendanceService.scanBarcode(input);
 
     void AuditService.log({
       action: AUDIT_ACTION.ATTENDANCE_BARCODE,
@@ -32,13 +32,15 @@ export const scanBarcode = asyncHandler(
         classSessionId: input.classSessionId,
         instituteId: input.instituteId,
         source: input.source,
+        enrollmentState: context.enrollmentState,
+        warnings: context.warnings,
       },
       context: extractAuditContext(req),
     });
 
     res.status(200).json({
       status: 'success',
-      data: attendance,
+      data: { ...attendance, context },
       message: 'Attendance recorded successfully.',
     });
   },

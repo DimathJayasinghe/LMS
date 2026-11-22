@@ -668,6 +668,20 @@ export interface StudentLookupRow {
   profileImage: string | null;
 }
 
+/** What the entrance scan reports about the scanned student (POST /attendance/scan, `data.context`). */
+export type ScanWarning = "NOT_ENROLLED" | "MODE_MISMATCH" | "FEE_IN_GRACE" | "FEE_UNPAID";
+
+export interface ScanContext {
+  enrollmentState: "ENROLLED" | "NOT_ENROLLED" | "MODE_MISMATCH";
+  /** A payment covers the current billing month (strictly paid, not merely inside grace). */
+  paidThisMonth: boolean;
+  covered: "PAID" | "GRACE" | "UNPAID";
+  month: string;
+  graceUntil: string | null;
+  warnings: ScanWarning[];
+  student: { name: string; indexNumber: number; profileImage: string | null };
+}
+
 /** An attendance record (see attendance.endpoints.md). Relations included on query reads. */
 export interface AttendanceRecord {
   id: string;
@@ -695,6 +709,9 @@ export interface AttendanceRecord {
     courseId: string;
   };
 }
+
+/** POST /attendance/scan responds with the record and what the door needs to know. */
+export type ScanAttendanceRecord = AttendanceRecord & { context: ScanContext };
 
 export interface AttendanceReconciliation {
   sessionId: string;

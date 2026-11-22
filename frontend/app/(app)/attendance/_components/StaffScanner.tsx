@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { QrCamera } from "@/components/custom/QrCamera";
 import { attendanceSourceLabel } from "@/lib/attendance";
+import { ScanResultCard } from "./ScanResultCard";
 import type {
   ApiList,
   ApiSuccess,
@@ -15,6 +16,8 @@ import type {
   ClassSession,
   Course,
   Institute,
+  ScanAttendanceRecord,
+  ScanContext,
   User,
 } from "@/lib/types";
 
@@ -47,6 +50,10 @@ function scanErrorMessage(e: unknown): string {
       return "That institute is unavailable. Choose another location.";
     case "SESSION_INSTITUTE_MISMATCH":
       return "This session is scheduled at a different institute.";
+    case "SCAN_BLOCKED_NOT_ENROLLED":
+      return "Not enrolled in this class, so nothing was recorded. Enrol them first.";
+    case "SCAN_BLOCKED_UNPAID":
+      return "This month's fee is not covered, so nothing was recorded. Collect payment first.";
     default:
       return e.message;
   }
@@ -62,6 +69,7 @@ export function StaffScanner({ classes, institutes }: Props) {
   const [scanValue, setScanValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [scanContext, setScanContext] = useState<ScanContext | null>(null);
 
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -79,6 +87,7 @@ export function StaffScanner({ classes, institutes }: Props) {
     setSessions([]);
     setRoster([]);
     setResult(null);
+    setScanContext(null);
     setCameraOn(false);
   };
 
@@ -131,12 +140,14 @@ export function StaffScanner({ classes, institutes }: Props) {
     setSessions([]);
     setRoster([]);
     setResult(null);
+    setScanContext(null);
   };
 
   const selectSession = (id: string): void => {
     setSessionId(id);
     setRoster([]); // the effect refills it for a non-empty id
     setResult(null);
+    setScanContext(null);
   };
 
   const addToRoster = (rec: AttendanceRecord): void =>
@@ -147,18 +158,20 @@ export function StaffScanner({ classes, institutes }: Props) {
     if (!barcode || !instituteId || !sessionId || busy) return;
     setBusy(true);
     try {
-      const res = await api.post<ApiSuccess<AttendanceRecord>>("/attendance/scan", {
+      const res = await api.post<ApiSuccess<ScanAttendanceRecord>>("/attendance/scan", {
         barcode,
         classSessionId: sessionId,
         instituteId,
         source,
       });
       addToRoster(res.data);
+      setScanContext(res.data.context);
       setResult({
         ok: true,
         msg: `${res.data.user?.name ?? "Student"} #${res.data.user?.indexNumber ?? "?"} checked in`,
       });
     } catch (e) {
+      setScanContext(null);
       setResult({ ok: false, msg: scanErrorMessage(e) });
     } finally {
       setBusy(false);
@@ -182,6 +195,7 @@ export function StaffScanner({ classes, institutes }: Props) {
         classSessionId: sessionId,
       });
       addToRoster(res.data);
+      setScanContext(null);
       setResult({ ok: true, msg: `${res.data.user?.name ?? u.name} checked in (manual)` });
       setManualTerm("");
       setManualResults([]);
@@ -312,6 +326,8 @@ export function StaffScanner({ classes, institutes }: Props) {
               {result.msg}
             </p>
           )}
+
+          {scanContext && <ScanResultCard context={scanContext} classId={classId} />}
 
           {cameraOn && (
             <div className="mt-3">

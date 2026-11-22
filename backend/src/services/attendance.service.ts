@@ -5,6 +5,8 @@ import { logger } from '@/config/logger';
 import { assertCourseAccess } from '@/services/class.service';
 import { assertStudentContentAccess } from '@/services/access.service';
 import { resolveStudentByCode } from '@/services/scan-code.service';
+import { assertScanAllowed, evaluateScan, type ScanContext } from '@/services/scan-context.service';
+import { DEFAULT_ORGANIZATION_ID } from '@/utils/constants';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type { ScanBarcodeInput, ManualAttendanceInput, AttendanceQuery } from '@/schemas/attendance.schema';
 
@@ -51,6 +53,18 @@ const attendanceWithRelationsSelect = {
   classSession: { select: { id: true, title: true, date: true, courseId: true } },
 } satisfies Prisma.AttendanceSelect;
 
+// The scanner also shows the student's photo so the clerk can compare faces at the door.
+const scanSelect = {
+  ...attendanceWithRelationsSelect,
+  user: { select: { ...attendanceWithRelationsSelect.user.select, profileImage: true } },
+} satisfies Prisma.AttendanceSelect;
+
+/** What the scanner shows after a scan: the enrollment and fee state, and the face to compare. */
+export type ScanResult = {
+  attendance: AttendanceRecord;
+  context: ScanContext & { student: { name: string; indexNumber: number; profileImage: string | null } };
+};
+
 // ─── Helpers ─────────────────────────────────────────────────
 
 const ensureClassSessionExists = async (
@@ -58,18 +72,21 @@ const ensureClassSessionExists = async (
 ): Promise<{
   id: string;
   courseId: string;
+  organizationId: string;
   deletedAt: Date | null;
   timetableSlot: { instituteId: string | null } | null;
 }> => {
-  const session = await prisma.classSession.findUnique({
+  const found = await prisma.classSession.findUnique({
     where: { id: sessionId },
     select: {
       id: true,
       courseId: true,
       deletedAt: true,
       timetableSlot: { select: { instituteId: true } },
+      course: { select: { organizationId: true } },
     },
   });
+  const session = found && { ...found, organizationId: found.course?.organizationId ?? DEFAULT_ORGANIZATION_ID };
 
   if (!session || session.deletedAt) {
     throw new AppError('CLASS_SESSION_NOT_FOUND', 404, 'Class session not found or has been deleted.');
@@ -82,7 +99,7 @@ const ensureClassSessionExists = async (
 // Admin scans a student's barcode at the physical entrance.
 // Uses upsert to prevent duplicate records from rapid scans.
 
-export const scanBarcode = async (input: ScanBarcodeInput): Promise<AttendanceRecord> => {
+export const scanBarcode = async (input: ScanBarcodeInput): Promise<ScanResult> => {
   const session = await ensureClassSessionExists(input.classSessionId);
 
   const institute = await prisma.institute.findUnique({
@@ -116,8 +133,13 @@ export const scanBarcode = async (input: ScanBarcodeInput): Promise<AttendanceRe
     throw new AppError('INVALID_ROLE_FOR_ATTENDANCE', 400, 'Attendance can only be marked for students.');
   }
 
-  // Upsert prevents duplicates from rapid scans (plan §10)
-  return prisma.attendance.upsert({
+  // The door warns about enrollment and fees and records them; only the organization's policies refuse.
+  const now = new Date();
+  const { context, block } = await evaluateScan({ studentId: student.id, courseId: session.courseId, organizationId: session.organizationId, now });
+  assertScanAllowed(block);
+
+  // Upsert prevents duplicates from rapid scans (plan §10). The snapshot is taken on the first scan only.
+  const record = await prisma.attendance.upsert({
     where: {
       userId_classSessionId: {
         userId: student.id,
@@ -128,14 +150,20 @@ export const scanBarcode = async (input: ScanBarcodeInput): Promise<AttendanceRe
       userId: student.id,
       classSessionId: input.classSessionId,
       source: input.source,
-      scannedAt: new Date(),
-      lastSeenAt: new Date(),
+      scannedAt: now,
+      lastSeenAt: now,
+      instituteId: input.instituteId,
+      enrollmentStateAtScan: context.enrollmentState,
+      paidAtScan: context.paidThisMonth,
     },
     update: {
-      lastSeenAt: new Date(),
+      lastSeenAt: now,
     },
-    select: attendanceWithRelationsSelect,
+    select: scanSelect,
   });
+
+  const { profileImage, name, indexNumber } = record.user;
+  return { attendance: record, context: { ...context, student: { name, indexNumber, profileImage } } };
 };
 
 // ─── Zoom Webhook ────────────────────────────────────────────
@@ -205,7 +233,7 @@ export const handleZoomWebhook = async (
 // Admin can manually mark a student as present (e.g., reconciliation)
 
 export const markManualAttendance = async (input: ManualAttendanceInput): Promise<AttendanceRecord> => {
-  await ensureClassSessionExists(input.classSessionId);
+  const session = await ensureClassSessionExists(input.classSessionId);
 
   const student = await prisma.user.findUnique({
     where: { id: input.userId },
@@ -224,6 +252,10 @@ export const markManualAttendance = async (input: ManualAttendanceInput): Promis
     throw new AppError('INVALID_ROLE_FOR_ATTENDANCE', 400, 'Attendance can only be marked for students.');
   }
 
+  // A staff mark is never refused for enrollment or fees; the state is only recorded, as at the door.
+  const now = new Date();
+  const { context } = await evaluateScan({ studentId: input.userId, courseId: session.courseId, organizationId: session.organizationId, now });
+
   return prisma.attendance.upsert({
     where: {
       userId_classSessionId: {
@@ -235,8 +267,10 @@ export const markManualAttendance = async (input: ManualAttendanceInput): Promis
       userId: input.userId,
       classSessionId: input.classSessionId,
       source: AttendanceSource.MANUAL,
-      scannedAt: new Date(),
-      lastSeenAt: new Date(),
+      scannedAt: now,
+      lastSeenAt: now,
+      enrollmentStateAtScan: context.enrollmentState,
+      paidAtScan: context.paidThisMonth,
     },
     update: {
       lastSeenAt: new Date(),
