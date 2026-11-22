@@ -142,7 +142,7 @@
 | F-127 | medium | access-gap | Owner has no organization-wide read-only oversight surface: rosters, attendance by class and branch, marking progress, who owes, cash by collector, SMS log, security audit and teacher statements are missing or scattered, and there is no audited read-only view of what a teacher, front desk or student sees | M | no | code | domain review | Partly fixed (the console panels are in #119 and #120, unreleased; the audited view-as mode, security audit panel and teacher statements remain) |
 | F-18 | low | data-integrity | Billing month is computed in UTC, not Asia/Colombo, in both backend and frontend | S | - | code | EP-03, UXS-10(student) | Fixed (#106, unreleased) |
 | F-26 | low | doc-drift | Source comments and route docs still claim the stream token is IP-bound; it is not | S | - | code | EP-05, DEL-13 | Open |
-| F-33 | low | access-leak | Registration response hardening (details kept in the private audit notes) | S | - | code | ACC-19 | Open |
+| F-33 | low | access-leak | Registration response hardening (details kept in the private audit notes) | S | - | code | ACC-19 | Fixed (#122, unreleased) |
 | F-34 | low | doc-drift | Doc 01 contradicts itself and the code on roles, onboarding and approval | S | - | code | ACC-20 | Open |
 | F-42 | low | access-leak | Staff scanner 'Mark by name' uses the full user search, handing front-desk NIC, phone and address of every student it types | S | - | code | ATT-15 | Open |
 | F-45 | low | data-integrity | Soft-deleting or cancelling a session hides its attendance everywhere; there is no 'cancelled' state | M | - | code | ATT-18 | Open |

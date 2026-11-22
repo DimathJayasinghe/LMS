@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { UserFilters } from "./_components/UserFilters";
 import { UsersTable } from "./_components/UsersTable";
 import { CreateStaffDialog } from "./_components/CreateStaffDialog";
+import { RegisterStudentDialog } from "./_components/RegisterStudentDialog";
 import { OrphanedClassesCard } from "./_components/OrphanedClassesCard";
 import { api } from "@/lib/api-server";
 import type { AcademicStaff, ApiList, OrphanedClassGroup, Role, User } from "@/lib/types";
@@ -68,7 +69,12 @@ export default async function UsersPage({
       <PageHeader
         title="Users"
         description="Manage accounts, roles, and entrance codes."
-        action={viewer.role === "SUPER_ADMIN" ? <CreateStaffDialog /> : undefined}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <RegisterStudentDialog />
+            {viewer.role === "SUPER_ADMIN" && <CreateStaffDialog />}
+          </div>
+        }
       />
 
       <OrphanedClassesCard groups={orphaned} teachers={teachers} />

@@ -848,6 +848,8 @@
 
 **Code impact:** auth.service register and schema (shared with D-IDENTITY-1, -2); staff registration controller, service, route; limiter configuration per route (with F-02 keying); registration and 'register student' screens with print slip and card. Size S-M. Vitest: age boundary, minor requires guardian, phone normalisation, duplicate warning, no NIC accepted.
 
+**Implementation note (#122):** Built as written, with these scope calls. Email stays required on both paths until the Wave 2 identity work (T21) makes a phone-only account possible; `school` is not captured yet. `identity.register.requireMobile` and `captchaEnabled` are not settings: a reachable mobile (the student's or a guardian's) is always required, and CAPTCHA waits for evidence of abuse. The per-phone cap applies to public sign-up only; the front desk is uncapped, so a family registers together. The cap counts a number as the student's or as a guardian's. It is keyed on an unverified number, so it limits volume but does not establish ownership of the number; SMS verification at sign-up closes that, not a tighter cap. The cost until then is bounded: the front desk is not capped, the per-address cap applies as well, and the message sends the person to the desk. The guardian consent a clerk records is `FRONT_DESK` in the audit row; a stored `WRITTEN_FORM` kind waits for the guardian record (T21). A temporary password issued at the desk makes the account `mustChangePassword` with `setupCompleted` true; the narrow setup gate arrives with Task 6.
+
 ### D-IDENTITY-13: Tenant export and restore tool
 
 **Settles:** Doc 14 section 13 item 3, Doc 14 section 12 risk

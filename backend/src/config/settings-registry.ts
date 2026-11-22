@@ -37,6 +37,11 @@ export const settingsRegistry = {
   'identity.staffDeactivate.requireHandover': bool(true),
   'identity.handoverLookaheadDays': int(1, 60, 14),
   'handover.defaultEffectiveMonth': { schema: z.enum(['NEXT', 'CURRENT']), default: 'NEXT' as const },
+  'identity.minorAgeYears': int(10, 25, 18),
+  'identity.register.selfRegistrationEnabled': bool(true),
+  'identity.register.perIpPerHour': int(1, 100000, 60),
+  'identity.register.perPhonePerDay': int(1, 100, 5),
+  'identity.register.duplicateWarning': bool(true),
   'console.lookbackDays': int(1, 3650, 30),
 } as const;
 

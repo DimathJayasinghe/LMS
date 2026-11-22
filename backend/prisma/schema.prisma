@@ -219,6 +219,12 @@ model User {
   tokenVersion       Int     @default(0)
   mustChangePassword Boolean @default(false) // set by a staff-assisted reset; only the password change flow works until cleared
 
+  // What the registration slip captures. Interim: the guardian table (Wave 2 T21) takes these four over and drops them.
+  dateOfBirth       DateTime? @db.Date
+  guardianName      String?
+  guardianMobile    String? // stored as +947XXXXXXXX
+  guardianConsentAt DateTime?
+
   permission                        Permission?                  @relation("UserPermission")
   enrollments                       Enrollment[]
   taughtCourses                     Course[]                     @relation("CourseTeacher") // courses this TEACHER teaches

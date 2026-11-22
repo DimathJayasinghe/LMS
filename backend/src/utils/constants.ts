@@ -39,6 +39,8 @@ export const RATE_LIMIT_AUTH_MAX = 10;
 
 /** Auth rate limit window in milliseconds (1 minute) */
 export const RATE_LIMIT_AUTH_WINDOW_MS = 60 * 1000;
+/** One hour: a class registering from one institute connection spreads over a session, not a minute. */
+export const RATE_LIMIT_REGISTER_WINDOW_MS = 60 * 60 * 1000;
 
 /** Stream-token endpoint: cap per IP to stop scripted harvesting of Bunny tokens (architecture §7.1) */
 export const RATE_LIMIT_STREAM_MAX = 30;
@@ -251,6 +253,7 @@ export const AUDIT_ACTION = {
 	USER_ACTIVATED: 'USER_ACTIVATED',
 	USER_DEACTIVATED: 'USER_DEACTIVATED',
 	STAFF_ACCOUNT_CREATED: 'STAFF_ACCOUNT_CREATED',
+	STUDENT_REGISTERED_BY_STAFF: 'STUDENT_REGISTERED_BY_STAFF',
 	CLASSES_HANDED_OVER: 'CLASSES_HANDED_OVER',
 	FEE_REMINDER_SENT: 'FEE_REMINDER_SENT',
 	OUTSTANDING_EXPORTED: 'OUTSTANDING_EXPORTED',

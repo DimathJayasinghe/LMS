@@ -115,7 +115,7 @@ Returned in `register`, `login`, `refresh`, and `me`:
 
 ### POST `/register`
 
-Creates a new student account and sets auth cookies.
+Creates a new student account and sets auth cookies. Public sign-up always creates a `STUDENT` of the default organization; there is no field to choose a role or an organization.
 
 **Request body**
 
@@ -124,35 +124,47 @@ Creates a new student account and sets auth cookies.
 	"email": "user@example.com",
 	"name": "User Name",
 	"password": "Password1",
-	"phone": "0771234567",
-	"nic": "200012345678"
+	"dateOfBirth": "2008-04-12",
+	"phone": "077 123 4567",
+	"guardianName": "Nimal Silva",
+	"guardianMobile": "071 234 5678",
+	"guardianConsent": true,
+	"address": "12 Temple Road",
+	"city": "Kandy"
 }
 ```
 
-**Validation rules**
+**Validation rules** (the body is strict: an unknown key, including `nic`, is a 400)
 
-- `email`: valid email, max 255 chars
+- `email`: valid email, max 255 chars, lowercased
 - `name`: 2-100 chars
 - `password`: 8-72 chars, must include upper, lower, number
-- `phone`: optional, must match Sri Lankan format `+94` or `0` + 9 digits
-- `nic`: optional, 9 digits + `V/X` or 12 digits
+- `dateOfBirth`: required, `YYYY-MM-DD`, a real date, not in the future on the organization's day (`INVALID_DATE_OF_BIRTH`)
+- `phone`, `guardianMobile`: Sri Lankan **mobile** numbers (`0712345678`, `+94 71 234 5678`, `94712345678` and spaced forms are accepted; landlines are not) and are stored as `+947XXXXXXXX`. At least one of the two is required, so somebody is reachable
+- `guardianName`: 2-100 chars; `address` max 500, `city` max 100 (all optional)
+- A student younger than `identity.minorAgeYears` (default 18) on the organization's day needs `guardianName` and `guardianMobile` (`GUARDIAN_REQUIRED`) and `guardianConsent: true` (`GUARDIAN_CONSENT_REQUIRED`); the moment of consent is stored (`guardianConsentAt`)
+- No NIC number is collected at sign-up. The student still completes account setup (NIC photos, institute cards) afterwards, as before
 
 **Success (201)**
 
 ```json
 {
 	"status": "success",
-	"data": { "...user" },
+	"data": { "id": "uuid", "indexNumber": "…", "name": "User Name", "email": "user@example.com", "role": "STUDENT", "barcode": "LMS-…", "mustChangePassword": false, "setupCompleted": false },
 	"message": "Registration successful."
 }
 ```
 
+The answer carries only those fields: no phone, date of birth, guardian or address.
+
 **Errors**
 
-- 400 validation error (see validation error shape)
+- 400 validation error (see validation error shape), `GUARDIAN_REQUIRED`, `GUARDIAN_CONSENT_REQUIRED`, `INVALID_DATE_OF_BIRTH`
+- 403 `SELF_REGISTRATION_DISABLED`: the owner turned `identity.register.selfRegistrationEnabled` off; the front desk can still register walk-ins (`POST /users/students`)
 - 409 `EMAIL_ALREADY_EXISTS` (service error shape)
-- 409 `NIC_ALREADY_EXISTS` (service error shape)
-- 409 `CODE_UNAVAILABLE` — registration could not allocate its generated card; retry registration.
+- 409 `CODE_UNAVAILABLE`: registration could not allocate its generated card; retry registration.
+- 429 `REGISTRATION_LIMIT_REACHED`: `identity.register.perPhonePerDay` (default 5) students already registered in the last 24 hours with this mobile number, as the student's or as a guardian's. Siblings legitimately share a number, so the cap is generous; the message sends the person to the front desk, which is not capped. The code does not say whose number it is.
+- 429 `Too many requests. Please try again later.` (limiter body, no code): more than `identity.register.perIpPerHour` (default 60) registrations from one address in an hour (one-hour window)
 
 ### POST `/login`
 

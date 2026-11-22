@@ -170,3 +170,18 @@
 html{
   font-size: 16px;
 }
+
+/* The registration slip is rendered into the body but only ever printed: it is hidden on screen, and while it is open
+   a print shows nothing else. */
+.print-slip-root {
+  display: none;
+}
+@media print {
+  body[data-print-slip] > *:not(.print-slip-root) {
+    display: none !important;
+  }
+  body[data-print-slip] > .print-slip-root {
+    display: block;
+    background: #fff;
+  }
+}

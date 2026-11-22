@@ -5,11 +5,15 @@ import { RedisStore } from 'rate-limit-redis';
 import { redis } from './redis';
 import { logger } from './logger';
 import { env } from './env';
+import { settingsRegistry } from './settings-registry';
+import { createSettingsReader } from '@/services/settings.service';
 import {
   COOKIE_ACCESS_TOKEN,
   COOKIE_REFRESH_TOKEN,
   RATE_LIMIT_GLOBAL_WINDOW_MS,
   RATE_LIMIT_AUTH_WINDOW_MS,
+  RATE_LIMIT_REGISTER_WINDOW_MS,
+  DEFAULT_ORGANIZATION_ID,
   RATE_LIMIT_STREAM_MAX,
   RATE_LIMIT_STREAM_WINDOW_MS,
 } from '../utils/constants';
@@ -56,9 +60,14 @@ interface LimiterOptions {
  * In production, Redis should always be available. In local dev, it's okay to
  * run without it — the in-memory fallback still provides rate limiting.
  */
+/** The public registration cap per address is the owner's `identity.register.perIpPerHour`; a settings outage must not close registration. */
+export const registerIpLimit = (): Promise<number> =>
+  createSettingsReader(DEFAULT_ORGANIZATION_ID)('identity.register.perIpPerHour')
+    .catch(() => settingsRegistry['identity.register.perIpPerHour'].default);
+
 const createLimiter = (
   windowMs: number,
-  max: number | ((req: Request) => number),
+  max: number | ((req: Request) => number | Promise<number>),
   keyPrefix: string,
   options: LimiterOptions = {},
 ): ReturnType<typeof rateLimit> => {
@@ -137,8 +146,8 @@ export const createRateLimiters = (): {
     { keyGenerator: addressKey },
   ),
   registerLimiter: createLimiter(
-    RATE_LIMIT_AUTH_WINDOW_MS,
-    env.RATE_LIMIT_REGISTER_IP_MAX,
+    RATE_LIMIT_REGISTER_WINDOW_MS,
+    registerIpLimit,
     'rl:register:',
     { keyGenerator: addressKey },
   ),

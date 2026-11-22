@@ -5,10 +5,9 @@ import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/app-error';
-import { BCRYPT_SALT_ROUNDS } from '../utils/constants';
 import { logger } from '../config/logger';
-import { assertScanCodeFree } from './scan-code.service';
-import { formatLmsBarcode } from '@/utils/scan-code';
+import { registerSelf } from './self-registration.service';
+import type { RegisteredStudent } from './student-account.service';
 import type { RegisterInput, LoginInput } from '../schemas/auth.schema';
 import type { JwtPayload } from '../types/auth.types';
 
@@ -130,72 +129,28 @@ const toSafeUser = (user: {
 
 // ─── Public Service Methods ──────────────────────────────────
 
+/** What a registration answers with: enough to know the account exists and to print its card, nothing else. */
+export type RegisteredUser = Omit<RegisteredStudent, 'tokenVersion'>;
+
 /**
- * Registers a new student account.
- * Students register with deletedAt = null (active by default).
- * Role assignment is done by Super Admin later — all registrations default to STUDENT.
+ * Public student sign-up. The rules (owner switch, age and guardian, per-number cap) and the write live in
+ * `registerSelf`, shared with the front desk's walk-in path; this adds the sign-in.
  */
 export const register = async (
   data: RegisterInput,
-): Promise<{ user: SafeUser; tokens: AuthTokens }> => {
-  // Check for existing email (case-insensitive via schema transform)
-  const existingUser = await prisma.user.findUnique({
-    where: { email: data.email },
+): Promise<{ user: RegisteredUser; tokens: AuthTokens }> => {
+  const { tokenVersion, ...user } = await registerSelf(data).catch((error: unknown) => {
+    if (error instanceof AppError && error.code === 'CODE_UNAVAILABLE') {
+      logger.warn({ email: data.email }, 'Registration refused: the generated LMS card is already held by another user.');
+    }
+    throw error;
   });
 
-  if (existingUser) {
-    throw new AppError('EMAIL_ALREADY_EXISTS', 409, 'An account with this email already exists.');
-  }
+  const tokens = await issueTokenPair(user.id, user.role, tokenVersion);
 
-  // Check NIC uniqueness if provided
-  if (data.nic) {
-    const existingNic = await prisma.user.findUnique({
-      where: { nic: data.nic },
-    });
+  logger.info({ userId: user.id }, 'New student registered');
 
-    if (existingNic) {
-      throw new AppError('NIC_ALREADY_EXISTS', 409, 'An account with this NIC already exists.');
-    }
-  }
-
-  const hashedPassword = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
-
-  // indexNumber is only known once autoincrement assigns it, so the LMS QR (derived from it)
-  // is a follow-up write. Both happen in one transaction so a card that collides with an
-  // existing code fails the whole registration instead of leaving a student without a card.
-  const user = await prisma
-    .$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          email: data.email,
-          name: data.name,
-          password: hashedPassword,
-          phone: data.phone ?? null,
-          nic: data.nic ?? null,
-          address: data.address ?? null,
-          city: data.city ?? null,
-          // role defaults to STUDENT (schema default)
-          // deletedAt defaults to null (active)
-        },
-      });
-
-      const barcode = formatLmsBarcode(created.indexNumber);
-      await assertScanCodeFree(tx, barcode, { exceptUserId: created.id, allowLmsFormat: true });
-
-      return tx.user.update({ where: { id: created.id }, data: { barcode } });
-    })
-    .catch((error: unknown) => {
-      if (error instanceof AppError && error.code === 'CODE_UNAVAILABLE') {
-        logger.warn({ email: data.email }, 'Registration refused: the generated LMS card is already held by another user.');
-      }
-      throw error;
-    });
-
-  const tokens = await issueTokenPair(user.id, user.role, user.tokenVersion);
-
-  logger.info({ userId: user.id, email: user.email }, 'New student registered');
-
-  return { user: toSafeUser(user), tokens };
+  return { user, tokens };
 };
 
 /**

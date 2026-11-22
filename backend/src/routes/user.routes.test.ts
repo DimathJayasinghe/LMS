@@ -24,6 +24,7 @@ vi.mock('@/controllers/user.controller', () => ({
   assignBarcode: vi.fn(),
   resetPassword: vi.fn(),
   createStaff: vi.fn(),
+  createStudent: vi.fn(),
   getOrphanedClasses: vi.fn(),
   handOverOrphaned: vi.fn(),
 }));
@@ -163,6 +164,33 @@ describe('user routes — staff account creation', () => {
     const handles = stack() as unknown[];
     expect(handles).not.toContain(checkIdempotency);
     expect(handles.indexOf(checkOneTimeSecretIdempotency)).toBe(handles.indexOf(UserController.createStaff) - 1);
+  });
+});
+
+describe('user routes — walk-in student registration', () => {
+  const stack = () => handlesFor(userRoutes, 'post', '/students') as Array<(req: Request, res: Response, next: () => void) => void>;
+  const call = (role: Role) => {
+    const json = vi.fn();
+    const res = { status: vi.fn().mockReturnValue({ json }) } as unknown as Response;
+    const next = vi.fn();
+    stack()[1]!({ user: { userId: 'u', role } } as Request, res, next);
+    return { next, status: res.status as ReturnType<typeof vi.fn> };
+  };
+
+  it.each([Role.SUPER_ADMIN, Role.ADMIN])('lets %s through the role guard', (role) => {
+    expect(call(role).next).toHaveBeenCalled();
+  });
+
+  it.each([Role.TEACHER, Role.MARKER, Role.STUDENT])('refuses %s with 403 at the route', (role) => {
+    const { next, status } = call(role);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('uses the one-time-secret idempotency variant immediately before the controller', () => {
+    const handles = stack() as unknown[];
+    expect(handles).not.toContain(checkIdempotency);
+    expect(handles.indexOf(checkOneTimeSecretIdempotency)).toBe(handles.indexOf(UserController.createStudent) - 1);
   });
 });
 
