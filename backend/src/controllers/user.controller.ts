@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { extractAuditContext } from '@/utils/audit-context';
 import * as UserService from '@/services/user.service';
+import * as StudentLookupService from '@/services/student-lookup.service';
 import * as PasswordResetService from '@/services/password-reset.service';
 import * as StaffAccountService from '@/services/staff-account.service';
 import * as AuditService from '@/services/audit.service';
@@ -15,6 +16,7 @@ import {
 	createStudentBarcodeSchema,
 	studentBarcodeIdParamSchema,
 	resolveBarcodeQuerySchema,
+	studentLookupQuerySchema,
 	type AssignBarcodeInput,
 	type CreateStaffInput,
 	type ResetPasswordInput,
@@ -201,6 +203,14 @@ export const deleteMyInstituteBarcode = asyncHandler(async (req: Request, res: R
 		data: null,
 		message: 'Institute barcode removed.',
 	});
+});
+
+export const lookupStudents = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+	const data = await StudentLookupService.lookupStudents(req.user!, studentLookupQuerySchema.parse(req.query));
+
+	// Student names and index numbers: never held by a shared cache or the browser.
+	res.set('Cache-Control', 'no-store');
+	res.status(200).json({ status: 'success', data, count: data.length });
 });
 
 export const resolveBarcode = asyncHandler(async (req: Request, res: Response): Promise<void> => {

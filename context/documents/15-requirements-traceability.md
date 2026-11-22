@@ -49,7 +49,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-STU-02 | Unique student ID as QR/barcode, printable ID card | Partial | `User.barcode` auto-issued and shown as a QR in the app; no printable card layout |
 | R-STU-03 | Class setup: subject, teacher, fee, timetable, branch | Done | `Subject → Course`, `TimetableSlot`, `Institute` |
 | R-STU-04 | Class capacity and teaching medium | Planned | D-STRUCTURE-3, Wave 2c T11. Audit 2026-11-19: F-92. |
-| R-STU-05 | Enrol/unenrol; transfer between classes or branches | Partial | Enrol/cancel/reactivate exist; mode change is specified in the HYBRID design; no transfer workflow |
+| R-STU-05 | Enrol/unenrol; transfer between classes or branches | Partial | Enrol/cancel/reactivate exist; the front desk enrols a student from Collect payment or the class page (F-11, #114); one active enrollment per course (F-65 interim); mode change is specified in the HYBRID design; no transfer workflow |
 | R-STU-06 | Physical, online and hybrid attendance of one student | Planned | Sessions support all three; **enrollment** gains `HYBRID` per the payment/enrollment spec §4 |
 | R-STU-07 | Free-card, half-fee, scholarship, sibling discounts | Planned | D-MONEY-3 concessions, Wave 2b T10 |
 | R-STU-08 | Bulk student import from Excel/CSV | Gap | Bulk Excel upload exists for payments only; exam rosters are replaced through the exam-audience API, not imported |

@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Camera, CameraOff, Loader2, Receipt, Search } from "lucide-react";
+import { Camera, CameraOff, Loader2, Receipt, Search, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QrCamera } from "@/components/custom/QrCamera";
 import { api, ApiError } from "@/lib/api";
 import { currentPaymentMonth } from "@/lib/payhere";
+import { useStudentLookup } from "@/lib/student-lookup";
 import { CollectionBranch, useRememberedBranch } from "./CollectionBranch";
+import { StaffEnrollDialog } from "@/components/custom/StaffEnrollDialog";
 import { formatCurrency } from "@/lib/utils";
-import type { ApiList, ApiSuccess, Enrollment, Payment, ResolvedBarcodeStudent, User } from "@/lib/types";
+import type { ApiList, ApiSuccess, Enrollment, Payment, ResolvedBarcodeStudent } from "@/lib/types";
 
 const inputClass =
   "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring";
@@ -40,10 +42,6 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
   const [branchId, setBranchId] = useRememberedBranch(institutes);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResponse, setSearchResponse] = useState<{ term: string; results: User[] }>({
-    term: "",
-    results: [],
-  });
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -51,6 +49,7 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
   const [student, setStudent] = useState<SelectedStudent | null>(null);
   const [instituteId, setInstituteId] = useState<string | null>(null);
   const [matchedBarcode, setMatchedBarcode] = useState<string | null>(null);
+  const [enrolOpen, setEnrolOpen] = useState(false);
 
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [enrollmentId, setEnrollmentId] = useState("");
@@ -65,28 +64,7 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
   const [lastReceiptId, setLastReceiptId] = useState<string | null>(null);
   const [session, setSession] = useState<Payment[]>([]);
 
-  useEffect(() => {
-    const term = searchTerm.trim();
-    if (term.length < 2) return;
-
-    let cancelled = false;
-    const t = setTimeout(() => {
-      api
-        .get<ApiList<User>>(`/users?search=${encodeURIComponent(term)}&role=STUDENT&limit=8`)
-        .then((r) => {
-          if (!cancelled) setSearchResponse({ term, results: r.data });
-        })
-        .catch(() => {
-          if (!cancelled) setSearchResponse({ term, results: [] });
-        });
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [searchTerm]);
-
-  const searchResults = searchResponse.term === searchTerm.trim() ? searchResponse.results : [];
+  const searchResults = useStudentLookup(searchTerm);
 
   const selectStudent = (
     s: SelectedStudent,
@@ -97,7 +75,6 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
     setInstituteId(resolvedInstituteId);
     setMatchedBarcode(resolvedBarcode);
     setSearchTerm("");
-    setSearchResponse({ term: "", results: [] });
     setScanError(null);
     setEnrollmentId("");
     setEnrollments([]);
@@ -137,10 +114,10 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
     : (outstandingMonths[0] ?? "");
   const month = outstandingMonths.includes(selectedMonth) ? selectedMonth : defaultMonth;
 
-  const selectEnrollment = (id: string): void => {
+  const selectEnrollment = (id: string, list: Enrollment[] = enrollments): void => {
     setEnrollmentId(id);
     setSelectedMonth("");
-    setAmount(enrollments.find((enrollment) => enrollment.id === id)?.course.monthlyFee ?? "");
+    setAmount(list.find((enrollment) => enrollment.id === id)?.course.monthlyFee ?? "");
     setSubmitError(null);
     setHistoryLoading(true);
     api
@@ -148,6 +125,13 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
       .then((r) => setHistory(r.data))
       .catch(() => setHistory([]))
       .finally(() => setHistoryLoading(false));
+  };
+
+  // A student enrolled at the desk goes straight to collecting their first fee.
+  const onEnrolled = (enrollment: Enrollment): void => {
+    const next = [enrollment, ...enrollments.filter((e) => e.id !== enrollment.id)];
+    setEnrollments(next);
+    selectEnrollment(enrollment.id, next);
   };
 
   const selectMonth = (nextMonth: string): void => {
@@ -298,6 +282,12 @@ export function CollectPayment({ timezone, institutes = [] }: { timezone: string
                 ))}
               </select>
             </label>
+
+            <Button type="button" size="sm" variant="outline" onClick={() => setEnrolOpen(true)}>
+              <UserPlus className="size-4" aria-hidden />
+              Enrol in a class
+            </Button>
+            <StaffEnrollDialog open={enrolOpen} onOpenChange={setEnrolOpen} student={student} onEnrolled={onEnrolled} />
 
             {enrollmentId && (
               <div className="space-y-3">

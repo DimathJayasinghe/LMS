@@ -9,6 +9,8 @@
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
+import { DEFAULT_ORGANIZATION_ID } from '@/utils/constants';
+import { withAdvisoryLock } from '@/utils/advisory-lock';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import type {
 	CreateEnrollmentInput,
@@ -62,6 +64,14 @@ const resolveTargetUserId = async (
 	return target.id;
 };
 
+/**
+ * Enrolls a student (themselves, or the one named by staff) in an active class.
+ *
+ * A student holds at most one active enrollment per class: a second one in the other mode would carry its own monthly
+ * dues for the same content (F-65, until HYBRID and mode switching land). The same-mode check names the more specific
+ * refusal first, and a cancelled row in this mode is brought back rather than duplicated, but only while the other mode is
+ * not active. The lock makes two desks enrolling the same student at once run one after the other.
+ */
 export const createEnrollment = async (
 	input: CreateEnrollmentInput,
 	actor: AuthenticatedUser,
@@ -71,43 +81,59 @@ export const createEnrollment = async (
 	// The course must exist and be active to enroll into.
 	const course = await prisma.course.findFirst({
 		where: { id: input.courseId, isActive: true },
-		select: { id: true },
+		select: { id: true, organizationId: true },
 	});
 	if (!course) {
 		throw new AppError('CLASS_NOT_FOUND', 404, 'Class not found.');
 	}
 
-	const existing = await prisma.enrollment.findUnique({
-		where: {
-			userId_courseId_classType: {
+	return prisma.$transaction(async (tx) => {
+		await withAdvisoryLock(tx, 'enrollment', course.organizationId ?? DEFAULT_ORGANIZATION_ID, `${userId}:${course.id}`);
+
+		const existing = await tx.enrollment.findUnique({
+			where: {
+				userId_courseId_classType: {
+					userId,
+					courseId: input.courseId,
+					classType: input.classType,
+				},
+			},
+			select: { id: true, isActive: true },
+		});
+
+		if (existing?.isActive) {
+			throw new AppError('ALREADY_ENROLLED', 409, 'Already enrolled in this class.');
+		}
+
+		const otherMode = await tx.enrollment.findFirst({
+			where: { userId, courseId: input.courseId, isActive: true, classType: { not: input.classType } },
+			select: { id: true },
+		});
+		if (otherMode) {
+			throw new AppError(
+				'ALREADY_ENROLLED_OTHER_MODE',
+				409,
+				'Already enrolled in this class in the other mode. Cancel that enrollment first.',
+			);
+		}
+
+		// Reactivate a previously cancelled enrollment rather than creating a duplicate.
+		if (existing) {
+			return tx.enrollment.update({
+				where: { id: existing.id },
+				data: { isActive: true },
+				select: enrollmentSelect,
+			});
+		}
+
+		return tx.enrollment.create({
+			data: {
 				userId,
 				courseId: input.courseId,
 				classType: input.classType,
 			},
-		},
-		select: { id: true, isActive: true },
-	});
-
-	if (existing?.isActive) {
-		throw new AppError('ALREADY_ENROLLED', 409, 'Already enrolled in this class.');
-	}
-
-	// Reactivate a previously cancelled enrollment rather than creating a duplicate.
-	if (existing) {
-		return prisma.enrollment.update({
-			where: { id: existing.id },
-			data: { isActive: true },
 			select: enrollmentSelect,
 		});
-	}
-
-	return prisma.enrollment.create({
-		data: {
-			userId,
-			courseId: input.courseId,
-			classType: input.classType,
-		},
-		select: enrollmentSelect,
 	});
 };
 

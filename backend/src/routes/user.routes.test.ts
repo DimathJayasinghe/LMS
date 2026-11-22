@@ -17,6 +17,7 @@ vi.mock('@/controllers/user.controller', () => ({
   createMyInstituteBarcode: vi.fn(),
   deleteMyInstituteBarcode: vi.fn(),
   resolveBarcode: vi.fn(),
+  lookupStudents: vi.fn(),
   getUserById: vi.fn(),
   updateRole: vi.fn(),
   updateStatus: vi.fn(),
@@ -160,5 +161,19 @@ describe('user routes — staff account creation', () => {
     const handles = stack() as unknown[];
     expect(handles).not.toContain(checkIdempotency);
     expect(handles.indexOf(checkOneTimeSecretIdempotency)).toBe(handles.indexOf(UserController.createStaff) - 1);
+  });
+});
+
+describe('user routes — student lookup wiring', () => {
+  const index = (method: string, path: string) =>
+    (userRoutes as unknown as { stack: RouterLayer[] }).stack.findIndex((l) => l.route?.path === path && l.route.methods[method]);
+
+  it('registers /lookup before /:id so it is not read as an id', () => {
+    expect(index('get', '/lookup')).toBeGreaterThanOrEqual(0);
+    expect(index('get', '/lookup')).toBeLessThan(index('get', '/:id'));
+  });
+
+  it('wires /lookup to its controller', () => {
+    expect(handlesFor(userRoutes, 'get', '/lookup')).toContain(UserController.lookupStudents);
   });
 });
