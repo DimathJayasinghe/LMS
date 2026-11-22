@@ -117,8 +117,8 @@ Submit button disables at 0:00 (F-86); a failed PDF upload leaves a dead submiss
 (F-22).
 
 **Front desk: the day at the counter.** Register or find a walk-in → enroll → take cash → scan in → chase
-unpaid → end-of-day tally. *Breaks:* no enroll UI (F-11, fixed in #114: an Enrol in a class step in Collect payment and a panel on the class page, both through the minimal `GET /users/lookup`), no bulk "who owes" list (F-10, fixed in #111: Payments, Who owes, with reminders), scanner marks any active
-student present and shows nothing about enrollment, payment or mode (F-12), the scanner and cash desk resolve
+unpaid → end-of-day tally. *Breaks:* no enroll UI (F-11, fixed in #114: an Enrol in a class step in Collect payment and a panel on the class page, both through the minimal `GET /users/lookup`), no bulk "who owes" list (F-10, fixed in #111: Payments, Who owes, with reminders), scanner marked any active
+student present and showed nothing about enrollment, payment or mode (F-12, partly fixed in #115: the scan now shows the photo and the enrollment and fee state and records them; the Zoom path is unchanged), the scanner and cash desk resolve
 the same card with different rules (F-39), scan identity resolution was hardened in Wave 0 (F-07), the bulk Excel upload could set any month `SUCCESS` without a per-row trail (F-58, fixed in #113: owner only, checked first, all or nothing, audited per row),
 cash collection could silently overwrite an existing `SUCCESS` row (F-59, fixed in #112: it is now refused with `ALREADY_PAID`), and there was no end-of-day cash tally
 (F-77, fixed in #112: Payments, Cash).
@@ -143,7 +143,7 @@ Today, per route:
 | Recording list/get | enrollment required for students on both; list and metadata omit the provider video id for students (F-06 fixed in Wave 0) | – |
 | Modules and materials | enrollment, payment for downloads | owner/teacher scope |
 | Exams | enrollment only (no payment) (F-23) | marker assigned only |
-| Attendance scan | none: enrollment, mode and payment are not checked (F-12) | – |
+| Attendance scan | warns and records enrollment, mode and fee state (F-12, #115); policies can refuse | – |
 
 **Target (as decided 2026-11-19, planned).** Access is the conjunction of: active enrollment; the delivery
 mode of that enrollment (`PHYSICAL`-only students get no live or recording unless `HYBRID` or
@@ -191,7 +191,7 @@ letters are S (hours), M (days), L (a week or more).
   used; F-02 keep SSR traffic out of the per-IP limiter; F-07 scan identity resolution; the owner-safety slice
   of F-28 and F-31 (seed no longer resets the owner, last-owner and self-demotion guards, D-IDENTITY-5).
 - **Wave 1 — give each role a working day ([plan](../../docs/superpowers/plans/2026-11-20-wave-1-working-day-per-role.md); foundations first: settings registry, Colombo billing clock, advisory lock, simple `isStudentCovered`, F-15 per-request revocation; then identity safety F-03 F-21 F-29, attendance and scan policy F-12, teacher and money visibility):** F-11 enroll UI, F-10 "who owes" view, F-77 end-of-day cash tally, F-58 bulk-upload guard
-  and F-12 scanner context for the front desk; F-83 teacher roster; F-67 teacher marking (done, #105) and F-13 hall-mark
+  and F-12 scanner context for the front desk (warning half done, #115); F-83 teacher roster; F-67 teacher marking (done, #105) and F-13 hall-mark
   entry (done, #109); F-17 scoped-exam sitting; F-22 and F-86 exam resilience; F-03 password reset (done, #108) and F-21 staff creation (done, #110); F-10 who owes with CSV and manual reminders and F-78 (done, #111); F-11 front-desk enrolment and the F-65 second-mode block (done, #114); F-104 timetable-generated classes
   that can go live (a live-checked S fix; done in #107, unreleased); F-127 read-only owner console.
 - **Wave 2 — make access coherent (decisions made, doc 19; sub-order 2a enrollment migration with HYBRID, 2b money core and single content gate, 2c structure, 2d bank slip, 2e identity and communication, 2f teacher money authority):** the single content gate with mode and

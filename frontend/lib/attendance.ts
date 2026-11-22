@@ -11,6 +11,8 @@ export function attendanceSourceLabel(source: AttendanceSource): string {
       return "Online";
     case "MANUAL":
       return "Manual";
+    case "VIDEO":
+      return "Recording";
     default:
       return source;
   }

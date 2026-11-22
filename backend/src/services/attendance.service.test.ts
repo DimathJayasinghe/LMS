@@ -10,6 +10,7 @@ const {
 	attendanceUpsert,
 	attendanceFindMany,
 	attendanceCount,
+	evaluateScan,
 } = vi.hoisted(() => ({
 	classSessionFindUnique: vi.fn(),
 	courseFindUnique: vi.fn(),
@@ -19,6 +20,12 @@ const {
 	attendanceUpsert: vi.fn(),
 	attendanceFindMany: vi.fn().mockResolvedValue([]),
 	attendanceCount: vi.fn().mockResolvedValue(0),
+	evaluateScan: vi.fn(),
+}));
+
+vi.mock('@/services/scan-context.service', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/services/scan-context.service')>()),
+	evaluateScan,
 }));
 
 vi.mock('@/config/database', () => ({
@@ -36,16 +43,24 @@ vi.mock('@/config/database', () => ({
 	},
 }));
 
-import { getAttendanceBySession, getAttendanceByCourse, getStudentAttendance, scanBarcode } from './attendance.service';
+import { getAttendanceBySession, getAttendanceByCourse, getStudentAttendance, markManualAttendance, scanBarcode } from './attendance.service';
 
 const SUPER_ADMIN = { userId: 'sa-1', role: Role.SUPER_ADMIN };
 const ADMIN = { userId: 'fd-1', role: Role.ADMIN };
 const owningTeacher = { userId: 'teacher-1', role: Role.TEACHER };
 const otherTeacher = { userId: 'teacher-2', role: Role.TEACHER };
 
-const session = { id: 'session-1', courseId: 'course-1', deletedAt: null, timetableSlot: null };
+const session = { id: 'session-1', courseId: 'course-1', deletedAt: null, timetableSlot: null, course: { organizationId: 'org-1' } };
 const course = { id: 'course-1', teacherId: 'teacher-1' };
 const student = { id: 'student-1', deletedAt: null, role: Role.STUDENT };
+const enrolledPaid = {
+	enrollmentState: 'ENROLLED',
+	paidThisMonth: true,
+	covered: 'PAID',
+	month: '2026-11',
+	graceUntil: '2026-11-10',
+	warnings: [],
+};
 const scanInput = {
 	barcode: 'INST-001',
 	classSessionId: '11111111-1111-4111-8111-111111111111',
@@ -59,7 +74,8 @@ beforeEach(() => {
 	instituteFindUnique.mockReset().mockResolvedValue({ id: scanInput.instituteId, isActive: true });
 	queryRaw.mockReset().mockResolvedValue([{ kind: 'CARD', instituteId: scanInput.instituteId, ...student }]);
 	userFindUnique.mockReset().mockResolvedValue(student);
-	attendanceUpsert.mockReset().mockResolvedValue({ id: 'attendance-1' });
+	attendanceUpsert.mockReset().mockResolvedValue({ id: 'attendance-1', user: { name: 'Nimal Perera', indexNumber: 42, profileImage: 'https://cdn.example/p.jpg' } });
+	evaluateScan.mockReset().mockResolvedValue({ context: enrolledPaid, block: null });
 	attendanceFindMany.mockClear();
 	attendanceCount.mockClear();
 });
@@ -356,5 +372,107 @@ describe('getStudentAttendance - role and target scoping', () => {
 		await getStudentAttendance('student-1', ADMIN, query);
 		const select = attendanceFindMany.mock.calls[0]![0].select;
 		expect(select.user.select).toEqual({ id: true, name: true, indexNumber: true });
+	});
+});
+
+describe('scanBarcode - enrollment and fee state at the door', () => {
+	it('evaluates the student against the session course in the course organization, after the structural checks', async () => {
+		await scanBarcode(scanInput);
+
+		expect(evaluateScan).toHaveBeenCalledWith({
+			studentId: student.id,
+			courseId: 'course-1',
+			organizationId: 'org-1',
+			now: expect.any(Date),
+		});
+	});
+
+	it('snapshots the state, the fee and the institute on the first scan', async () => {
+		evaluateScan.mockResolvedValue({ context: { ...enrolledPaid, enrollmentState: 'NOT_ENROLLED', paidThisMonth: false, covered: 'UNPAID', warnings: ['NOT_ENROLLED'] }, block: null });
+
+		await scanBarcode(scanInput);
+
+		expect(attendanceUpsert.mock.calls[0]![0].create).toMatchObject({
+			enrollmentStateAtScan: 'NOT_ENROLLED',
+			paidAtScan: false,
+			instituteId: scanInput.instituteId,
+		});
+	});
+
+	it('keeps the first snapshot on a repeat scan: only the last-seen time changes', async () => {
+		await scanBarcode(scanInput);
+
+		expect(Object.keys(attendanceUpsert.mock.calls[0]![0].update)).toEqual(['lastSeenAt']);
+	});
+
+	it('returns the record with the context and the face to compare, never a blocked flag', async () => {
+		const result = await scanBarcode(scanInput);
+
+		expect(result.attendance).toMatchObject({ id: 'attendance-1' });
+		expect(result.context).toEqual({
+			...enrolledPaid,
+			student: { name: 'Nimal Perera', indexNumber: 42, profileImage: 'https://cdn.example/p.jpg' },
+		});
+		expect(result.context).not.toHaveProperty('block');
+	});
+
+	it.each([
+		['SCAN_BLOCKED_NOT_ENROLLED', 403],
+		['SCAN_BLOCKED_UNPAID', 402],
+	])('refuses with %s and writes nothing when the policy says so', async (code, statusCode) => {
+		evaluateScan.mockResolvedValue({ context: enrolledPaid, block: code });
+
+		await expect(scanBarcode(scanInput)).rejects.toMatchObject({ code, statusCode });
+		expect(attendanceUpsert).not.toHaveBeenCalled();
+	});
+
+	it('does not evaluate fees for a refused identity (structural refusal comes first)', async () => {
+		queryRaw.mockResolvedValue([{ kind: 'CARD', instituteId: scanInput.instituteId, ...student, deletedAt: new Date() }]);
+
+		await expect(scanBarcode(scanInput)).rejects.toMatchObject({ code: 'STUDENT_DEACTIVATED' });
+		expect(evaluateScan).not.toHaveBeenCalled();
+	});
+
+	it('falls back to the default organization for a course with none', async () => {
+		classSessionFindUnique.mockResolvedValueOnce({ ...session, course: { organizationId: null } });
+
+		await scanBarcode(scanInput);
+
+		expect(evaluateScan).toHaveBeenCalledWith(expect.objectContaining({ organizationId: '00000000-0000-4000-8000-000000000001' }));
+	});
+});
+
+describe('markManualAttendance - state is recorded, never refused', () => {
+	const manualInput = { userId: student.id, classSessionId: '11111111-1111-4111-8111-111111111111' };
+
+	it('snapshots the same state as the door', async () => {
+		await markManualAttendance(manualInput);
+
+		expect(evaluateScan).toHaveBeenCalledWith(expect.objectContaining({ studentId: student.id, courseId: 'course-1', organizationId: 'org-1' }));
+		expect(attendanceUpsert.mock.calls[0]![0].create).toMatchObject({
+			source: AttendanceSource.MANUAL,
+			enrollmentStateAtScan: 'ENROLLED',
+			paidAtScan: true,
+		});
+	});
+
+	it('marks the student even when the door policy would have refused the scan', async () => {
+		evaluateScan.mockResolvedValue({ context: { ...enrolledPaid, covered: 'UNPAID', paidThisMonth: false }, block: 'SCAN_BLOCKED_UNPAID' });
+
+		await expect(markManualAttendance(manualInput)).resolves.toBeDefined();
+		expect(attendanceUpsert).toHaveBeenCalled();
+	});
+
+	it('leaves the snapshot of an existing row alone', async () => {
+		await markManualAttendance(manualInput);
+
+		expect(Object.keys(attendanceUpsert.mock.calls[0]![0].update).sort()).toEqual(['lastSeenAt', 'source']);
+	});
+
+	it('checks the student before evaluating anything', async () => {
+		userFindUnique.mockResolvedValue({ ...student, role: Role.TEACHER });
+
+		await expect(markManualAttendance(manualInput)).rejects.toMatchObject({ code: 'INVALID_ROLE_FOR_ATTENDANCE' });
+		expect(evaluateScan).not.toHaveBeenCalled();
 	});
 });
