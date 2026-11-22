@@ -15,6 +15,9 @@ import type {
   CompleteSubmissionInput,
   CorrectPublishedResultInput,
 } from '@/schemas/submission.schema';
+import { organizationClockForUser } from '@/services/organization-clock.service';
+import { createSettingsReader } from '@/services/settings.service';
+import { assertOnlineSittingAudience, resolveStudentExamAudience } from '@/services/exam-audience-access.service';
 import * as StreamService from '@/services/stream.service';
 import * as NotificationService from '@/services/notification.service';
 
@@ -183,6 +186,10 @@ const ensureExamActive = async (examId: string): Promise<Prisma.ExamGetPayload<{
   return exam;
 };
 
+/** A PDF attempt whose file never landed: the student may start again on the same row instead of being locked out. */
+const isUnfinishedUpload = (row: { status: SubmissionStatus; answerPdfUrl: string | null }): boolean =>
+  row.status === SubmissionStatus.UPLOADING && row.answerPdfUrl === null;
+
 // ─── Start Submission ─────────────────────────────────────
 // Students call this to begin their submission. Depending on exam type:
 // - MCQ: answers are submitted inline and auto-graded immediately
@@ -220,7 +227,7 @@ export const startSubmission = async (
     select: submissionDetailSelect,
   });
 
-  if (existing) {
+  if (existing && !isUnfinishedUpload(existing)) {
     throw new AppError('ALREADY_SUBMITTED', 409, 'You have already submitted for this exam.');
   }
 
@@ -303,13 +310,14 @@ export const startSubmission = async (
     const enrolled = await tx.enrollment.findFirst({ where: { userId, courseId: locked.courseId, isActive: true }, select: { id: true } });
     if (!enrolled) throw new AppError('NOT_ENROLLED', 403, 'You are not enrolled in this course.');
     if (locked.paperRevisionId) {
-      if (!input.audienceId) throw new AppError('EXAM_AUDIENCE_REQUIRED', 400, 'Choose your assigned online audience.');
-      const participant = await tx.examParticipant.findFirst({ where: { examId: input.examId, userId, audienceId: input.audienceId, audience: { deliveryMode: 'ONLINE' } }, select: { id: true } });
-      if (!participant) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'You are not eligible to start this exam audience.');
+      assertOnlineSittingAudience(await resolveStudentExamAudience(tx, input.examId, userId), input.audienceId);
     }
-    const duplicate = await tx.submission.findUnique({ where: { userId_examId: { userId, examId: input.examId } }, select: { id: true } });
-    if (duplicate) throw new AppError('ALREADY_SUBMITTED', 409, 'You have already submitted for this exam.');
-    return tx.submission.create({ data: { userId, examId: input.examId, status, answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, writtenAnswers: hasTyped ? (input.writtenAnswers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, marks: isMcqOnly ? mcqMarks : null, gradedAt: isMcqOnly ? new Date() : null }, select: submissionDetailSelect });
+    const duplicate = await tx.submission.findUnique({ where: { userId_examId: { userId, examId: input.examId } }, select: { id: true, status: true, answerPdfUrl: true } });
+    if (duplicate && !isUnfinishedUpload(duplicate)) throw new AppError('ALREADY_SUBMITTED', 409, 'You have already submitted for this exam.');
+    const data = { status, answers: input.answers ? (input.answers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, writtenAnswers: hasTyped ? (input.writtenAnswers as unknown as Prisma.InputJsonObject) : Prisma.JsonNull, marks: isMcqOnly ? mcqMarks : null, gradedAt: isMcqOnly ? new Date() : null };
+    return duplicate
+      ? tx.submission.update({ where: { id: duplicate.id }, data, select: submissionDetailSelect })
+      : tx.submission.create({ data: { userId, examId: input.examId, ...data }, select: submissionDetailSelect });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   // Automatic grading is stored immediately but released only by the teacher.
@@ -380,9 +388,10 @@ export const completeSubmission = async (
     throw new AppError('RESULTS_ALREADY_PUBLISHED', 409, 'Submissions are closed for this published exam.');
   }
 
-  // Verify server time hasn't passed exam end + grace period
+  // Verify server time hasn't passed exam end + the owner's upload grace (exams.uploadGraceSeconds)
   const now = new Date();
-  const graceMs = 60 * 1000; // 1-minute grace for upload completion after exam ends
+  const { organizationId } = await organizationClockForUser(userId);
+  const graceMs = (await createSettingsReader(organizationId)('exams.uploadGraceSeconds')) * 1000;
   if (now > new Date(submission.exam.endTime.getTime() + graceMs)) {
     throw new AppError(
       'EXAM_ENDED',

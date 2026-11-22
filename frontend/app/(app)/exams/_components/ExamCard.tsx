@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { CheckCircle2, Clock, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ExamStatusBadge } from "@/components/features/ExamStatusBadge";
 import { examTypeLabel, formatExamWindow, getExamStatus } from "@/lib/exam";
 import type { Exam } from "@/lib/types";
 
 /** The viewing student's relationship to this exam, for the corner hint. */
-export type ExamCardState = "none" | "submitted" | "result";
+export type ExamCardState = "none" | "submitted" | "result" | "incomplete";
 
 interface ExamCardProps {
   exam: Exam;
@@ -31,6 +31,11 @@ export default function ExamCard({ exam, courseName, state = "none" }: ExamCardP
             {examTypeLabel(exam.type)}
           </Badge>
           <ExamStatusBadge status={status} />
+          {exam.myAudience?.deliveryMode === "PHYSICAL" && (
+            <Badge variant="outline" className="font-normal text-muted-foreground">
+              Sat in the hall
+            </Badge>
+          )}
         </div>
         {state === "result" ? (
           <Badge
@@ -38,6 +43,11 @@ export default function ExamCard({ exam, courseName, state = "none" }: ExamCardP
             className="border-transparent bg-blue-500/10 text-blue-600 dark:text-blue-400"
           >
             Results out
+          </Badge>
+        ) : state === "incomplete" ? (
+          <Badge variant="outline" className="gap-1 border-transparent text-destructive">
+            <AlertCircle className="size-3" aria-hidden />
+            Upload not finished
           </Badge>
         ) : state === "submitted" ? (
           <Badge variant="outline" className="gap-1 border-transparent text-muted-foreground">

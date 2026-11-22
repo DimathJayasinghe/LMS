@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { notFound, unstable_rethrow } from "next/navigation";
 import {
   ArrowLeft,
+  Building2,
   Clock,
   FileText,
   Hourglass,
@@ -19,7 +20,7 @@ import { ExamNotice } from "./_components/ExamNotice";
 import { CountdownTimer } from "./_components/CountdownTimer";
 import { api } from "@/lib/api-server";
 import { ApiError } from "@/lib/api";
-import { examTypeLabel, formatExamWindow, getExamStatus } from "@/lib/exam";
+import { examTypeLabel, formatExamWindow, getExamStatus, hallMessage, studentExamView } from "@/lib/exam";
 import type { ApiList, ApiSuccess, Course, ExamDetail, MySubmission } from "@/lib/types";
 
 const opensAtFmt = new Intl.DateTimeFormat("en-LK", {
@@ -54,7 +55,20 @@ export default async function ExamDetailPage({
     exam = (await guard401(api.get<ApiSuccess<ExamDetail>>(`/exams/${examId}`, { cookie }))).data;
   } catch (e) {
     unstable_rethrow(e);
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && e.status === 404) {
+      if (user.role !== "STUDENT") notFound();
+      // Not found and not on the exam's list look the same on purpose; either way the student's next step is the teacher.
+      return (
+        <div className="mx-auto max-w-3xl">
+          {backLink}
+          <ExamNotice
+            icon={Lock}
+            title="Exam not available"
+            message="You are not on the list for this exam. Ask your teacher."
+          />
+        </div>
+      );
+    }
     if (e instanceof ApiError && (e.code === "NOT_ENROLLED" || e.status === 403)) {
       return (
         <div className="mx-auto max-w-3xl">
@@ -124,28 +138,33 @@ export default async function ExamDetailPage({
         message="This exam is sat on paper in class. Your marks will appear here once staff enter them."
       />
     );
-  } else if (mySub) {
-    content = <ExamResult submission={mySub} />;
-  } else if (status === "upcoming") {
-    content = (
-      <ExamNotice
-        icon={Hourglass}
-        title="Not started yet"
-        message={`This exam opens ${opensAtFmt.format(new Date(exam.startTime))}.`}
-      >
-        <CountdownTimer target={exam.startTime} className="text-lg" />
-      </ExamNotice>
-    );
-  } else if (status === "active") {
-    content = <ExamSit exam={exam} />;
   } else {
-    content = (
-      <ExamNotice
-        icon={Lock}
-        title="Exam closed"
-        message="The submission window has passed and no submission was received. Contact your teacher if this is unexpected."
-      />
-    );
+    const view = studentExamView(exam, status, mySub);
+    if (view === "result" || view === "not-received") {
+      content = <ExamResult submission={mySub!} />;
+    } else if (view === "hall") {
+      content = <ExamNotice icon={Building2} title="Sat in the hall" message={hallMessage(exam.myAudience!)} />;
+    } else if (view === "upcoming") {
+      content = (
+        <ExamNotice
+          icon={Hourglass}
+          title="Not started yet"
+          message={`This exam opens ${opensAtFmt.format(new Date(exam.startTime))}.`}
+        >
+          <CountdownTimer target={exam.startTime} className="text-lg" />
+        </ExamNotice>
+      );
+    } else if (view === "sit") {
+      content = <ExamSit exam={exam} resume={mySub} />;
+    } else {
+      content = (
+        <ExamNotice
+          icon={Lock}
+          title="Exam closed"
+          message="The submission window has passed and no submission was received. Contact your teacher if this is unexpected."
+        />
+      );
+    }
   }
 
   return (

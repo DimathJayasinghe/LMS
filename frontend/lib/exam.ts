@@ -5,7 +5,7 @@
  * Note: status computed here is for **display only**. The backend is
  * authoritative on whether a submission is accepted (server-time gate).
  */
-import type { ExamType } from "@/lib/types";
+import type { Exam, ExamType, MyAudience, MySubmission } from "@/lib/types";
 
 export type ExamStatus = "upcoming" | "active" | "ended";
 
@@ -79,4 +79,29 @@ export function formatRemaining(ms: number): string {
   const mm = String(m).padStart(2, "0");
   const ss = String(s).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** A PDF attempt whose file never landed. The server lets the student start again on the same row. */
+export function isUnfinishedUpload(sub: Pick<MySubmission, "status" | "answerPdfUrl">): boolean {
+  return sub.status === "UPLOADING" && !sub.answerPdfUrl;
+}
+
+export type StudentExamView = "result" | "hall" | "upcoming" | "sit" | "not-received" | "closed";
+
+/** What a student sees on a sittable exam, from their audience, their submission and the window. */
+export function studentExamView(
+  exam: Pick<Exam, "myAudience">,
+  status: ExamStatus,
+  submission?: Pick<MySubmission, "status" | "answerPdfUrl">,
+): StudentExamView {
+  if (submission && !isUnfinishedUpload(submission)) return "result";
+  if (exam.myAudience?.deliveryMode === "PHYSICAL") return "hall";
+  if (status === "upcoming") return "upcoming";
+  if (status === "active") return "sit";
+  return submission ? "not-received" : "closed";
+}
+
+export function hallMessage(audience: MyAudience): string {
+  const where = audience.instituteName ? ` at ${audience.instituteName}` : "";
+  return `Your paper is sat in the hall${where}. There is no online submission.`;
 }

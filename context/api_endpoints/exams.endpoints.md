@@ -98,6 +98,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 - `allowTypedAnswers` / `allowPdfUpload` are returned on both list and detail reads (2026-07-10) so the client knows which written-answer channels the exam accepts.
 - `paperPdfUrl` is returned as a presigned URL for `STUDENT` only within the exam time window (`SUPER_ADMIN`/`TEACHER`/`MARKER` receive it at any time — see line below).
 - `mcqPayload` for students excludes `isCorrect` and is returned only inside the exam window.
+- `myAudience` (students only, list and detail, #117): `{ label, deliveryMode: "ONLINE" | "PHYSICAL", instituteName }` for a scoped exam (one with a paper revision), `null` for a course-wide exam; absent for every other role. The audience id is never returned.
 - `SUPER_ADMIN`/`TEACHER` always receive full MCQ payloads and can access paper URLs at any time (`MARKER` receives the paper but has `isCorrect` stripped; front-desk `ADMIN` has no exam access — see GET `/`/`/:id` below).
 
 ## Endpoint Summary
@@ -162,8 +163,9 @@ Audience/roster replacement is serializable and rejects stale versions with
 `409 EXAM_CONFIGURATION_STALE`; started, published, deleted, or legacy exams
 reject scoped configuration. Each participant must be an active student with
 an active enrollment in the exam course and may appear only once per instance.
-New scoped online starts provide an audience ID and require an ONLINE matching
-participant row; legacy starts retain course-enrollment behavior.
+A scoped online start needs no audience from the client: the server derives it from the
+student's participant row, which must be in an ONLINE audience (details in `submissions.endpoints.md`);
+legacy starts retain course-enrollment behavior.
 Replacing audiences while any marker allocation grant references them returns
 `409 MARKER_ALLOCATIONS_EXIST`; clear the exam's allocations first (confirm an empty allocation set).
 
@@ -226,7 +228,8 @@ Create a new exam.
 
 List exams, scoped by the caller's role: `SUPER_ADMIN` sees all; `TEACHER` sees only their own
 courses' exams; `MARKER` sees only exams they are assigned to; `STUDENT` sees only exams for courses
-they are actively enrolled in. Front-desk `ADMIN` has **no exam access** (`403`). Non-`SUPER_ADMIN`
+they are actively enrolled in, and a scoped exam only if the student is on its roster (a participant row), whatever
+audience they are in. Front-desk `ADMIN` has **no exam access** (`403`). Non-`SUPER_ADMIN`
 callers never see soft-deleted exams.
 
 **Query params**
@@ -253,7 +256,9 @@ callers never see soft-deleted exams.
 
 ### GET `/:id`
 
-Get a single exam. Student responses are time-gated. A `MARKER` assigned to the exam receives the question paper but **not** the MCQ answer key (the `isCorrect` flags are stripped, as they are for students). `TEACHER`/`SUPER_ADMIN` receive the full payload.
+Get a single exam. Student responses are time-gated. For a scoped exam a student who is not on the roster gets the
+same `404 EXAM_NOT_FOUND` as for an exam that does not exist, and a student whose audience is `PHYSICAL` gets the
+exam with `myAudience` but no paper link and no MCQ payload: the paper is sat in the hall. A `MARKER` assigned to the exam receives the question paper but **not** the MCQ answer key (the `isCorrect` flags are stripped, as they are for students). `TEACHER`/`SUPER_ADMIN` receive the full payload.
 
 **Success (200)**
 

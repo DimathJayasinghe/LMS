@@ -16,6 +16,7 @@ import {
 	type ReplaceMarkersInput,
 	type UpdateExamInput,
 } from '@/schemas/exam.schema';
+import { resolveStudentExamAudience, studentAudienceSelect, toMyAudience, toStudentAudience, type MyAudience } from '@/services/exam-audience-access.service';
 import * as StreamService from '@/services/stream.service';
 
 // ─── Types ────────────────────────────────────────────────
@@ -55,6 +56,8 @@ interface ExamListItem {
 	createdAt: Date;
 	updatedAt: Date;
 	paperRevisionId: string | null;
+	/** Students only: the student's own audience of a scoped exam, null for a course-wide exam. */
+	myAudience?: MyAudience | null;
 }
 
 interface ExamDetail extends ExamListItem {
@@ -267,7 +270,11 @@ export const listExams = async (
 		...(role === Role.SUPER_ADMIN ? {} : { deletedAt: null }),
 		// Students only see exams for courses they are actively enrolled in.
 		...(role === Role.STUDENT
-			? { course: { enrollments: { some: { userId: actor.userId, isActive: true } } } }
+			? {
+				course: { enrollments: { some: { userId: actor.userId, isActive: true } } },
+				// A scoped exam exists for a student only if the roster lists them.
+				OR: [{ paperRevisionId: null }, { participants: { some: { userId: actor.userId } } }],
+			}
 			: {}),
 		// Teachers only see exams for courses they teach — a list filter, not a
 		// throw, mirroring the STUDENT scoping directly above.
@@ -278,6 +285,18 @@ export const listExams = async (
 			: {}),
 		...timeFilter,
 	};
+
+	if (role === Role.STUDENT) {
+		const rows = await prisma.exam.findMany({
+			where,
+			select: { ...examListSelect, participants: studentAudienceSelect(actor.userId) },
+			orderBy: { startTime: 'desc' },
+		});
+		return rows.map(({ participants, ...exam }) => ({
+			...exam,
+			myAudience: participants[0] ? toMyAudience(toStudentAudience(participants[0].audience)) : null,
+		}));
+	}
 
 	return prisma.exam.findMany({
 		where,
@@ -311,9 +330,18 @@ export const getExamById = async (
 	// Students may only read exams for courses they are enrolled in.
 	await assertStudentContentAccess(actor, exam.courseId, { requirePaid: false });
 
+	// A scoped exam is visible to a student only through the roster; a hall participant learns where, but gets no paper.
+	const audience = role === Role.STUDENT && exam.paperRevisionId
+		? await resolveStudentExamAudience(prisma, examId, actor.userId)
+		: null;
+	if (role === Role.STUDENT && exam.paperRevisionId && !audience) {
+		throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
+	}
+	const sitsInHall = audience?.deliveryMode === 'PHYSICAL';
+
 	const now = new Date();
 	const isWithinWindow = now >= exam.startTime && now <= exam.endTime;
-	const allowPaper = role !== Role.STUDENT || isWithinWindow;
+	const allowPaper = role !== Role.STUDENT || (isWithinWindow && !sitsInHall);
 
 	const paperPdfUrl = exam.paperPdfUrl && allowPaper
 		? await createR2PresignedGetUrl(exam.paperPdfUrl, EXAM_PDF_URL_TTL_SECONDS)
@@ -323,7 +351,7 @@ export const getExamById = async (
 	if (exam.mcqPayload) {
 		const parsed = validateMcqPayload(exam.mcqPayload);
 
-		if (role === Role.STUDENT && !isWithinWindow) {
+		if (role === Role.STUDENT && !allowPaper) {
 			mcqPayload = null;
 		} else {
 			mcqPayload = (role === Role.STUDENT || role === Role.MARKER)
@@ -336,6 +364,7 @@ export const getExamById = async (
 		...exam,
 		paperPdfUrl,
 		mcqPayload,
+		...(role === Role.STUDENT ? { myAudience: audience ? toMyAudience(audience) : null } : {}),
 	};
 };
 

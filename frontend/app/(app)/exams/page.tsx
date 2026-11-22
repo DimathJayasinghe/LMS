@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { Button } from "@/components/ui/button";
 import ExamCard, { type ExamCardState } from "./_components/ExamCard";
 import { api } from "@/lib/api-server";
+import { isUnfinishedUpload } from "@/lib/exam";
 import { cn } from "@/lib/utils";
 import type { ApiList, Course, Exam, MySubmission } from "@/lib/types";
 
@@ -52,7 +53,7 @@ export default async function ExamsPage({
     try {
       const mine = await guard401(api.get<ApiList<MySubmission>>("/submissions/mine", { cookie }));
       for (const s of mine.data) {
-        stateByExam.set(s.examId, s.published ? "result" : "submitted");
+        stateByExam.set(s.examId, isUnfinishedUpload(s) ? "incomplete" : s.published ? "result" : "submitted");
       }
     } catch (error) {
       unstable_rethrow(error);

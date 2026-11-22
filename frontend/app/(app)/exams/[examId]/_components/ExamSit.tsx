@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Loader2, Send } from "lucide-react";
+import { AlertCircle, Info, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "./CountdownTimer";
 import { McqQuestionList } from "./McqQuestionList";
@@ -17,17 +17,19 @@ import type {
   ApiSuccess,
   ExamDetail,
   McqAnswers,
+  MySubmission,
   StartSubmissionResult,
   WrittenAnswers,
 } from "@/lib/types";
 
-export function ExamSit({ exam }: { exam: ExamDetail }) {
+/** `resume` is the student's own unfinished upload: starting again reuses that row on the server. */
+export function ExamSit({ exam, resume }: { exam: ExamDetail; resume?: MySubmission }) {
   const router = useRouter();
   const requiresMcq = exam.type === "MCQ" || exam.type === "HYBRID";
   const requiresWritten = exam.type === "WRITTEN" || exam.type === "HYBRID";
   const storageKey = `exam:${exam.id}:answers`;
 
-  const [mcq, setMcq] = useState<McqAnswers>({});
+  const [mcq, setMcq] = useState<McqAnswers>(resume?.answers ?? {});
   const [channel, setChannel] = useState<WrittenChannel>(
     exam.allowTypedAnswers ? "typed" : "pdf",
   );
@@ -151,6 +153,17 @@ export function ExamSit({ exam }: { exam: ExamDetail }) {
 
   return (
     <div className="space-y-6">
+      {resume && (
+        <p className="flex items-start gap-2 rounded-lg bg-muted/50 px-4 py-3 text-sm text-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            <strong className="font-medium">Your earlier upload did not finish</strong>
+            <br />
+            Choose your PDF again or type your answers, then submit.
+          </span>
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-5 py-3">
         <span className="text-sm text-muted-foreground">Time remaining</span>
         <CountdownTimer target={exam.endTime} onExpire={() => setTimeUp(true)} className="text-lg" />

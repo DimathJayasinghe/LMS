@@ -267,7 +267,7 @@ sequenceDiagram
 Notes:
 - The start flow is server-authoritative: exam timing is checked with server time, not client time.
 - MCQ exams can auto-grade immediately; written and hybrid exams receive a presigned upload URL for R2.
-- `completeSubmission` is idempotent and enforces a one-minute grace period after exam end for upload finalization.
+- `completeSubmission` is idempotent and enforces the owner's upload grace (`exams.uploadGraceSeconds`, default 180 seconds) after exam end for upload finalization.
 - Mark submission requires an idempotency key at the route level to prevent double grading on retries.
 - Result publishing triggers both audit logging and SMS notifications as non-blocking side effects.
 

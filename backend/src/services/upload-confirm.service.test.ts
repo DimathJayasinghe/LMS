@@ -42,6 +42,8 @@ vi.mock('@/services/stream.service', () => ({}));
 vi.mock('@/services/notification.service', () => ({ dispatch: vi.fn() }));
 vi.mock('@/services/access.service', () => ({ assertStudentContentAccess: vi.fn() }));
 vi.mock('@/services/class.service', () => ({ assertCourseAccess }));
+vi.mock('@/services/organization-clock.service', () => ({ organizationClockForUser: async () => ({ organizationId: 'org-1', timezone: 'Asia/Colombo' }) }));
+vi.mock('@/services/settings.service', () => ({ createSettingsReader: () => async () => 180 }));
 
 import { confirmNicUpload } from './user.service';
 import { confirmExamPaper } from './exam.service';
