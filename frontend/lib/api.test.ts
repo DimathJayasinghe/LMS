@@ -217,3 +217,24 @@ describe("refreshSession result", () => {
     expect(refreshCalls()).toHaveLength(1);
   });
 });
+
+describe("api error details", () => {
+  it("carries a structured error payload for the caller to act on", async () => {
+    const data = { courses: [{ id: "c1", name: "Physics" }] };
+    installFetch(async () => json(409, { status: "error", message: "Hand over first.", code: "TEACHER_HAS_CLASSES", data }));
+
+    const error = (await api.get("/x").catch((cause: unknown) => cause)) as ApiError;
+
+    expect(error).toMatchObject({ status: 409, code: "TEACHER_HAS_CLASSES", details: data });
+    expect(error.fields).toBeUndefined();
+  });
+
+  it("keeps a validation list as fields, not details", async () => {
+    installFetch(async () => json(400, { status: "error", message: "Invalid.", code: "VALIDATION_ERROR", data: [{ field: "reason", message: "Required" }] }));
+
+    const error = (await api.get("/x").catch((cause: unknown) => cause)) as ApiError;
+
+    expect(error.fields).toEqual([{ field: "reason", message: "Required" }]);
+    expect(error.details).toBeUndefined();
+  });
+});

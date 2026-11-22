@@ -8,18 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { roleLabel } from "@/lib/roles";
 import { canResetPassword } from "@/lib/password-reset";
+import { accountActions } from "@/lib/account-actions";
+import { AccountChangeDialog } from "./AccountChangeDialog";
 import { ResetPasswordDialog } from "./ResetPasswordDialog";
 import type { Role, User } from "@/lib/types";
 
 interface Props {
   users: User[];
-  canChangeRole: boolean;
   viewerId: string;
   viewerRole: Role;
-  roles: Role[];
 }
 
-export function UsersTable({ users, canChangeRole, viewerId, viewerRole, roles }: Props) {
+export function UsersTable({ users, viewerId, viewerRole }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<{ id: string; msg: string } | null>(null);
@@ -63,8 +63,8 @@ export function UsersTable({ users, canChangeRole, viewerId, viewerRole, roles }
         <tbody className="divide-y divide-border">
           {users.map((u) => {
             const active = u.deletedAt == null;
-            const isSelf = u.id === viewerId;
             const busy = busyId === u.id;
+            const { canChangeStatus, canChangeRole } = accountActions({ id: viewerId, role: viewerRole }, u);
             return (
               <tr key={u.id} className="bg-card align-middle">
                 <td className="px-4 py-3">
@@ -77,23 +77,7 @@ export function UsersTable({ users, canChangeRole, viewerId, viewerRole, roles }
                 <td className="px-4 py-3 tabular-nums text-muted-foreground">#{u.indexNumber}</td>
 
                 <td className="px-4 py-3">
-                  {canChangeRole && !isSelf ? (
-                    <select
-                      value={u.role}
-                      disabled={busy}
-                      onChange={(e) => mutate(u.id, () => api.patch(`/users/${u.id}/role`, { role: e.target.value }, { headers: { "Idempotency-Key": crypto.randomUUID() } }))}
-                      aria-label={`Role for ${u.name}`}
-                      className="rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      {roles.map((r) => (
-                        <option key={r} value={r}>
-                          {roleLabel(r)}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <Badge variant="outline">{roleLabel(u.role)}</Badge>
-                  )}
+                  <Badge variant="outline">{roleLabel(u.role)}</Badge>
                 </td>
 
                 <td className="px-4 py-3">
@@ -149,16 +133,19 @@ export function UsersTable({ users, canChangeRole, viewerId, viewerRole, roles }
                       {active ? "Active" : "Inactive"}
                     </Badge>
                     {canResetPassword({ id: viewerId, role: viewerRole }, u) && <ResetPasswordDialog user={u} />}
-                    {!isSelf && (
+                    {canChangeRole && <AccountChangeDialog kind="role" user={u} />}
+                    {canChangeStatus && (active ? (
+                      <AccountChangeDialog kind="deactivate" user={u} />
+                    ) : (
                       <Button
                         size="sm"
                         variant="ghost"
                         disabled={busy}
-                        onClick={() => mutate(u.id, () => api.patch(`/users/${u.id}/status`, { isActive: !active }, { headers: { "Idempotency-Key": crypto.randomUUID() } }))}
+                        onClick={() => mutate(u.id, () => api.patch(`/users/${u.id}/status`, { isActive: true }, { headers: { "Idempotency-Key": crypto.randomUUID() } }))}
                       >
-                        {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : active ? "Deactivate" : "Activate"}
+                        {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : "Activate"}
                       </Button>
-                    )}
+                    ))}
                   </div>
                 </td>
               </tr>

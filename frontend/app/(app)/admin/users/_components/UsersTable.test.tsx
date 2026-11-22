@@ -13,8 +13,6 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...actual, api: { patch, get: vi.fn(), post: vi.fn(), upload: vi.fn(), del: vi.fn() } };
 });
 
-const roles: Role[] = ["SUPER_ADMIN", "TEACHER", "ADMIN", "MARKER", "STUDENT"];
-
 const nimal = {
   id: "u1",
   name: "Nimal",
@@ -24,8 +22,10 @@ const nimal = {
   barcode: "A-0001",
   deletedAt: null,
 } as User;
+const kamal = { ...nimal, id: "u2", name: "Kamal", role: "TEACHER", indexNumber: 7 } as User;
+const owner = { ...nimal, id: "owner-1", name: "Owner", role: "SUPER_ADMIN", indexNumber: 1 } as User;
 
-const baseProps = { users: [nimal], canChangeRole: true, viewerId: "admin-1", viewerRole: "SUPER_ADMIN" as Role, roles };
+const baseProps = { users: [nimal], viewerId: "admin-1", viewerRole: "SUPER_ADMIN" as Role };
 
 // Every mutation must carry a UUID Idempotency-Key in the request options.
 const IDEM = expect.objectContaining({
@@ -38,18 +38,11 @@ beforeEach(() => {
 });
 
 describe("UsersTable — Idempotency-Key on mutations", () => {
-  it("sends an Idempotency-Key on role change", async () => {
+  it("sends an Idempotency-Key on activate", async () => {
     const user = userEvent.setup();
-    render(<UsersTable {...baseProps} />);
-    await user.selectOptions(screen.getByLabelText("Role for Nimal"), "MARKER");
-    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/role", { role: "MARKER" }, IDEM));
-  });
-
-  it("sends an Idempotency-Key on status toggle", async () => {
-    const user = userEvent.setup();
-    render(<UsersTable {...baseProps} />);
-    await user.click(screen.getByRole("button", { name: "Deactivate" }));
-    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/status", { isActive: false }, IDEM));
+    render(<UsersTable {...baseProps} users={[{ ...nimal, deletedAt: "2026-11-01T00:00:00Z" } as User]} />);
+    await user.click(screen.getByRole("button", { name: "Activate" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/users/u1/status", { isActive: true }, IDEM));
   });
 
   it("sends an Idempotency-Key on barcode save", async () => {
@@ -63,17 +56,48 @@ describe("UsersTable — Idempotency-Key on mutations", () => {
   });
 });
 
+describe("UsersTable — the actions each viewer is offered", () => {
+  it("shows the owner a role change and a deactivate on a teacher, and no role dropdown", () => {
+    render(<UsersTable {...baseProps} users={[kamal]} />);
+    expect(screen.getByRole("button", { name: "Change role for Kamal" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deactivate Kamal" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Role for Kamal")).toBeNull();
+  });
+
+  it("offers the owner no role change on a student or on an owner account, but can deactivate them", () => {
+    render(<UsersTable {...baseProps} users={[nimal, owner]} />);
+    expect(screen.queryByRole("button", { name: /Change role for/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Deactivate Nimal" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deactivate Owner" })).toBeInTheDocument();
+  });
+
+  it("offers the front desk a deactivate on a student only, and no role change anywhere", () => {
+    render(<UsersTable {...baseProps} users={[nimal, kamal]} viewerRole="ADMIN" />);
+    expect(screen.getByRole("button", { name: "Deactivate Nimal" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Deactivate Kamal" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Change role for/ })).toBeNull();
+  });
+
+  it("offers nobody anything on their own row", () => {
+    render(<UsersTable {...baseProps} users={[{ ...kamal, id: "admin-1" } as User]} />);
+    expect(screen.queryByRole("button", { name: /Change role for|Deactivate|Activate/ })).toBeNull();
+  });
+
+  it("shows the role as a plain badge", () => {
+    render(<UsersTable {...baseProps} users={[kamal]} />);
+    expect(screen.getByText("Teacher")).toBeInTheDocument();
+  });
+});
+
 describe("UsersTable — reset password action", () => {
   it("shows the action where the backend would accept it", () => {
-    render(<UsersTable {...baseProps} viewerRole="ADMIN" canChangeRole={false} />);
+    render(<UsersTable {...baseProps} viewerRole="ADMIN" />);
     expect(screen.getByRole("button", { name: "Reset password for Nimal" })).toBeInTheDocument();
   });
 
   it("hides it for staff targets when the viewer is front desk, and on the viewer's own row", () => {
-    const teacher = { ...nimal, id: "u2", name: "Kamal", role: "TEACHER" } as User;
     const self = { ...nimal, id: "admin-1", name: "Me" } as User;
-    render(<UsersTable {...baseProps} users={[teacher, self]} viewerRole="ADMIN" canChangeRole={false} />);
+    render(<UsersTable {...baseProps} users={[kamal, self]} viewerRole="ADMIN" />);
     expect(screen.queryByRole("button", { name: /Reset password for/ })).toBeNull();
   });
 });
-

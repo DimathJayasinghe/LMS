@@ -26,6 +26,8 @@ export class ApiError extends Error {
     public fields?: FieldError[],
     /** True when a 401 signals an expired (refreshable) access token. */
     public expired?: boolean,
+    /** Structured detail from the error body, such as the classes that blocked a hand-over. */
+    public details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -103,6 +105,7 @@ async function request<T>(path: string, opts: ApiOptions = {}): Promise<T> {
       payload.code,
       Array.isArray(payload.data) ? (payload.data as FieldError[]) : undefined,
       expired,
+      payload.data !== null && typeof payload.data === "object" && !Array.isArray(payload.data) ? payload.data : undefined,
     );
   }
 
