@@ -66,6 +66,20 @@ cannot be self-submitted through this endpoint, and published exams are closed t
 Automatically calculated MCQ marks are saved server-side but `marks`, `feedback`, and `gradedAt`
 remain null in the student response until results are published.
 
+**Scoped exams and the audience (Wave 1, #117):** the client never chooses an audience. For an exam with a
+paper revision the server reads the student's own participant row (unique on exam and student) and applies it:
+an `ONLINE` audience starts; a `PHYSICAL` audience answers `409 EXAM_PHYSICAL_AUDIENCE` (the paper is sat in the
+hall); no row answers `403 EXAM_PARTICIPANT_NOT_FOUND`. `audienceId` in the body is optional; if sent it must be
+the student's own, otherwise `400 EXAM_AUDIENCE_MISMATCH`. The row is read again inside the locked transaction.
+Check order: exam, enrollment (`NOT_ENROLLED`), participant and audience, published, time window, duplicate or
+resume. Legacy exams are unchanged.
+
+**Resume after a failed upload:** a submission that is `UPLOADING` with no stored PDF is an unfinished attempt.
+While the window is open, starting again by the same student reuses that row instead of `409 ALREADY_SUBMITTED`:
+a PDF start returns a fresh upload URL, and a typed-answers start completes the row without an upload (a hybrid
+exam needs its MCQ answers again). A `COMPLETED` row, or an `UPLOADING` row that already holds a stored file,
+still answers `409 ALREADY_SUBMITTED`. After the exam ends nothing starts.
+
 ### Request Body
 
 ```json
@@ -127,7 +141,10 @@ metadata fields are required together (`FILE_METADATA_REQUIRED`, 400), before a 
 | `EXAM_NOT_FOUND` | 404 | Exam doesn't exist or is deleted |
 | `EXAM_NOT_STARTED` | 400 | Server time is before exam start |
 | `EXAM_ENDED` | 400 | Server time is after exam end |
-| `ALREADY_SUBMITTED` | 409 | Student already has a submission |
+| `ALREADY_SUBMITTED` | 409 | Student already has a finished submission (an unfinished upload is resumed instead) |
+| `EXAM_PHYSICAL_AUDIENCE` | 409 | Scoped exam: the student's paper is sat in the hall |
+| `EXAM_PARTICIPANT_NOT_FOUND` | 403 | Scoped exam: the student is not on the exam's list |
+| `EXAM_AUDIENCE_MISMATCH` | 400 | A sent `audienceId` is not the student's own |
 | `MCQ_ANSWERS_REQUIRED` | 400 | MCQ/HYBRID exam but no answers provided |
 | `FILE_NAME_REQUIRED` | 400 | WRITTEN/HYBRID exam but no file name |
 | `INVALID_QUESTION_ID` | 400 | Answer references unknown question |
@@ -158,7 +175,8 @@ metadata fields are required together (`FILE_METADATA_REQUIRED`, 400), before a 
 > Typed-only/MCQ attempts are already completed when created; replaying their completion needs no key
 > and performs no write. An `UPLOADING` attempt requires a key (`400 UPLOAD_KEY_REQUIRED`), continued
 > active enrollment, and an exam that has not been deleted or published. Publication closes upload
-> completion even within the existing one-minute grace period. Completion responses never reveal
+> completion even within the grace period. The grace after the exam's end is the owner setting
+> `exams.uploadGraceSeconds` (default 180, was a fixed 60 seconds); a start is never accepted after the end. Completion responses never reveal
 > unpublished marks, feedback, or grading time; already-completed historical results remain readable
 > by their owner after publication, independently of current enrollment.
 
@@ -186,7 +204,7 @@ metadata fields are required together (`FILE_METADATA_REQUIRED`, 400), before a 
 |------|--------|-------------|
 | `SUBMISSION_NOT_FOUND` | 404 | Submission doesn't exist |
 | `FORBIDDEN` | 403 | Not the student's own submission |
-| `EXAM_ENDED` | 400 | Exam window + grace period expired |
+| `EXAM_ENDED` | 400 | Exam end plus `exams.uploadGraceSeconds` has passed |
 
 ---
 

@@ -13,6 +13,7 @@ import { AppError } from '@/utils/app-error';
 import type { AuthenticatedUser } from '@/types/auth.types';
 import { billingMonthOf, dayOfMonthInTz } from '@/utils/org-time';
 import { createSettingsReader } from '@/services/settings.service';
+import { assertOnlineSittingAudience, resolveStudentExamAudience } from '@/services/exam-audience-access.service';
 
 /** Current billing month in the Payment.paymentMonth format ("YYYY-MM"). */
 export const getCurrentPaymentMonth = (now: Date = new Date(), timezone = 'Asia/Colombo'): string =>
@@ -83,9 +84,9 @@ export const isStudentCovered = async ({ userId, courseId, enrollmentId, now }: 
 };
 
 /**
- * Student start gate for exam instances. Legacy exams deliberately preserve
- * course-wide enrollment behavior; scoped instances additionally require the
- * student's frozen participant row in the requested ONLINE audience.
+ * Student start gate for exam instances. Legacy exams deliberately preserve course-wide enrollment behavior; a scoped
+ * instance additionally needs the student's frozen participant row in an ONLINE audience, which the server derives
+ * (a body `audienceId` is optional and must match). Order: exam, enrollment, participant and audience.
  */
 export const assertStudentExamStartAccess = async (
   actor: AuthenticatedUser,
@@ -97,11 +98,7 @@ export const assertStudentExamStartAccess = async (
   if (!exam) throw new AppError('EXAM_NOT_FOUND', 404, 'Exam not found.');
   await assertStudentContentAccess(actor, exam.courseId);
   if (!exam.paperRevisionId) return;
-  if (!audienceId) throw new AppError('EXAM_AUDIENCE_REQUIRED', 400, 'Choose your assigned online audience.');
-  const participant = await prisma.examParticipant.findFirst({
-    where: { examId, userId: actor.userId, audienceId, audience: { deliveryMode: 'ONLINE' } }, select: { id: true },
-  });
-  if (!participant) throw new AppError('EXAM_PARTICIPANT_NOT_FOUND', 403, 'You are not eligible to start this exam audience.');
+  assertOnlineSittingAudience(await resolveStudentExamAudience(prisma, examId, actor.userId), audienceId);
 };
 
 /**

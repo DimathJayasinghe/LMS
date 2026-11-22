@@ -127,6 +127,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-EXM-08 | Rankings and percentiles | Planned | Roadmap P1 "Gradebook" |
 | R-EXM-09 | Student progress charts and weak-topic analysis | Planned | Roadmap P2 "Learning analytics" |
 | R-EXM-10 | Shared or separate exam instances per audience | Partial | Exam papers, revisions, audiences and participants are merged on `dev`; the design and delivery plan are in `docs/superpowers/specs/2026-09-06-customizable-exam-marking-design.md` and the matching plan; scoped allocations are merged, physical-result entry and the guided workflow remain |
+| R-EXM-11 | A student sits a scoped exam without choosing an audience, retries an upload that failed, and sees only exams they are listed for | Done | `startSubmission` derives the audience from the participant row and resumes an unfinished PDF upload; `GET /exams` and `/exams/:id` add `myAudience` and hide an exam from a student who is not on its roster; the upload grace is `exams.uploadGraceSeconds` (F-17, F-22, F-69 student half, #117) |
 
 ### 1.8 Communication
 

@@ -3,7 +3,7 @@ import { ExamType, SubmissionStatus } from '@prisma/client';
 
 const db = vi.hoisted(() => ({
   exam: { findUnique: vi.fn() }, enrollment: { findFirst: vi.fn() },
-  submission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() }, $executeRaw: vi.fn(), $transaction: vi.fn(), examParticipant: { findFirst: vi.fn() },
+  submission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() }, $executeRaw: vi.fn(), $transaction: vi.fn(), examParticipant: { findUnique: vi.fn() },
 }));
 const storage = vi.hoisted(() => ({ createR2PresignedPutUrl: vi.fn(), r2HeadObject: vi.fn() }));
 vi.mock('@/config/database', () => ({ prisma: db }));
@@ -11,6 +11,8 @@ vi.mock('@/utils/r2', () => storage);
 vi.mock('@/services/class.service', () => ({}));
 vi.mock('@/services/stream.service', () => ({}));
 vi.mock('@/services/notification.service', () => ({}));
+vi.mock('@/services/organization-clock.service', () => ({ organizationClockForUser: async () => ({ organizationId: 'org-1', timezone: 'Asia/Colombo' }) }));
+vi.mock('@/services/settings.service', () => ({ createSettingsReader: () => async () => 180 }));
 import { completeSubmission, startSubmission } from './submission.service';
 
 const now = new Date('2026-09-06T09:00:00Z');

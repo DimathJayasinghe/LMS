@@ -470,6 +470,8 @@
 
 **Reversibility:** Fully; clients still sending audienceId keep working.
 
+**Wave 1 implementation (#117, unreleased):** built as decided. The audience rules live in `exam-audience-access.service.ts` (`resolveStudentExamAudience`, `assertOnlineSittingAudience`); a student who is not on the roster gets the same 404 as for a missing exam on `GET /exams/:id` and does not see the exam in `GET /exams`; a hall participant sees the exam with `myAudience` but gets no paper link and no MCQ payload. Two additions beyond the decision text: a hall participant's start answers `409 EXAM_PHYSICAL_AUDIENCE`, and a sent `audienceId` that is not the student's own answers `400 EXAM_AUDIENCE_MISMATCH`. The F-22 retry is part of the same change: an `UPLOADING` submission with no stored file is resumed on the same row while the window is open (a PDF start gets a fresh upload URL, typed answers complete it), and `completeSubmission` now reads `exams.uploadGraceSeconds` (default 180) instead of the fixed 60 seconds, which is the grace part of D-EXAMS-5; the per-student extension and the late flag of D-EXAMS-5 are still to do.
+
 **Code impact:** assertStudentExamStartAccess findUnique on examId_userId; submission.service.ts same lookup in the transaction; schema audienceId optional; exam.service student DTO myAudience; frontend three states. Combine with the F-22 retry fix. Size S.
 
 ### D-EXAMS-4: Publish, unpublish, re-publish and completeness of results

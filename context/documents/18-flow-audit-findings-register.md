@@ -46,9 +46,9 @@
 | F-12 | high | flow-gap | Entrance scan, manual mark and the Zoom webhook never check enrollment, delivery mode or payment, and the staff member sees none of it | M | yes | live | ATT-04, UXS-04(staff) | Partial |
 | F-13 | high | flow-gap | In-class / physical-hall paper marks have no entry path at all (INCLASS exams are dead ends) | L | - | code + 2nd | EXM-02, UXS-08(staff) | Fixed (#109, unreleased) |
 | F-14 | high | doc-drift | Zoom 'auto attendance' webhook matches only on participant email, which the Meeting SDK join very likely does not supply (code-verified; Zoom-side behaviour not observed); teachers can still repair it through manual reconciliation | M | - | code + 2nd | ATT-05, DEL-07 | Open |
-| F-17 | high | ui-gap | Students cannot sit scoped (paperRevision) exams from the UI: audienceId is required but never sent or discoverable | S | - | live | EXM-03, UXS-14(student) | Open |
+| F-17 | high | ui-gap | Students cannot sit scoped (paperRevision) exams from the UI: audienceId is required but never sent or discoverable | S | - | live | EXM-03, UXS-14(student) | Fixed (#117, unreleased) |
 | F-19 | high | domain-mismatch | Signup and setup demand a NIC and NIC photos from every student, but most A/L-age students and minors do not hold one; setup is enforced only in the browser | M | yes | code + 2nd | UXS-12(student), ACC-14 | Open |
-| F-22 | high | data-integrity | PDF answer upload failure leaves a submission row with no PDF and the retry is rejected with ALREADY_SUBMITTED | M | - | code + 2nd | UXS-06(student), EXM-08 | Open |
+| F-22 | high | data-integrity | PDF answer upload failure leaves a submission row with no PDF and the retry is rejected with ALREADY_SUBMITTED | M | - | code + 2nd | UXS-06(student), EXM-08 | Fixed (#117, unreleased) |
 | F-54 | high | access-leak | Zoom webhook endpoint-validation handling hardened and route rate-limited | S | - | code + 2nd | DEL-01 | Fixed (#101, unreleased; staging verification pending) |
 | F-67 | high | flow-gap | Teachers cannot enter marks on their own exam; only MARKER can, and the teacher's only 'grading' path is publish-then-correct | S | yes | code + 2nd | EXM-01, UXS-09(staff) | Fixed (#105, unreleased) |
 | F-83 | high | access-gap | Teacher has no general roster of enrolled students and no view of who has paid or who is absent (exception: the exam-configuration eligible-students list for the teacher's own course) | M | yes | code + 2nd | UXS-07(staff) | Fixed (#116, unreleased) |
@@ -96,7 +96,7 @@
 | F-64 | medium | domain-mismatch | Mid-month joiner and reactivated enrollment: full-month fee, no proration, and 'owed months' are computed from the original createdAt | M | yes | code | PAY-14 | Open |
 | F-65 | medium | flow-gap | No transfer; a student can hold ONLINE and PHYSICAL enrollments of one course at once, each with its own monthly dues, while access is shared | M | - | code | PAY-15 | Partial |
 | F-68 | medium | ui-gap | Entire scoped-exam workflow (papers, audiences, rosters, marker groups, allocations) has no frontend; the existing marker panel uses the legacy endpoint that 409s on scoped exams | L | - | code | EXM-04, UXS-18(staff) | Open |
-| F-69 | medium | access-leak | Scoped-exam visibility needs audience checks (details kept in the private audit notes) | S | - | code | EXM-05 | Open |
+| F-69 | medium | access-leak | Scoped-exam visibility needs audience checks (details kept in the private audit notes) | S | - | code | EXM-05 | Fixed, student half (#117, unreleased) |
 | F-70 | medium | data-integrity | HYBRID: auto-graded MCQ score is computed then discarded, and markers cannot see the key to mark the MCQ part | M | - | code | EXM-06 | Open |
 | F-71 | medium | flow-gap | Publish results has no completeness check, is irreversible, and locks marker edits; exams are live to students from creation (no draft state) | S | - | code | EXM-07, UXS-10(staff) | Open |
 | F-73 | medium | domain-mismatch | No ranking, percentile or class-level results view for staff or students | M | yes | code | EXM-11 | Open |

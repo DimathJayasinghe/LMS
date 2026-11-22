@@ -302,6 +302,13 @@ export interface McqPayload {
   questions: McqQuestion[];
 }
 
+/** A student's own audience of a scoped exam: where and how they sit it. The server derives it from the roster. */
+export interface MyAudience {
+  label: string;
+  deliveryMode: "ONLINE" | "PHYSICAL";
+  instituteName: string | null;
+}
+
 /** Exam list item (see exams.endpoints.md). Times are ISO UTC strings. */
 export interface Exam {
   id: string;
@@ -316,6 +323,8 @@ export interface Exam {
   courseId: string;
   /** Set for a scoped exam (one with audiences); null for a course-wide exam. */
   paperRevisionId?: string | null;
+  /** Students only; null for a course-wide exam. */
+  myAudience?: MyAudience | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;

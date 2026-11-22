@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Role } from '@prisma/client';
 
-const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindFirst, userFindUnique, settingsFindUnique, grantFindMany } = vi.hoisted(() => ({
+const { enrollmentFindFirst, paymentFindFirst, markerAssignmentFindUnique, markerAssignmentFindFirst, examFindUnique, participantFindUnique, userFindUnique, settingsFindUnique, grantFindMany } = vi.hoisted(() => ({
 	grantFindMany: vi.fn(),
 	enrollmentFindFirst: vi.fn(),
 	paymentFindFirst: vi.fn(),
 	markerAssignmentFindUnique: vi.fn(),
 	markerAssignmentFindFirst: vi.fn(),
 	examFindUnique: vi.fn(),
-	participantFindFirst: vi.fn(),
+	participantFindUnique: vi.fn(),
 	userFindUnique: vi.fn(),
 	settingsFindUnique: vi.fn(),
 }));
@@ -22,7 +22,7 @@ vi.mock('@/config/database', () => ({
 	markerAssignment: { findUnique: markerAssignmentFindUnique, findFirst: markerAssignmentFindFirst },
 	exam: { findUnique: examFindUnique },
 	markerAssignmentAudience: { findMany: grantFindMany },
-	examParticipant: { findFirst: participantFindFirst },
+	examParticipant: { findUnique: participantFindUnique },
 	},
 }));
 
@@ -35,30 +35,61 @@ beforeEach(() => {
 	markerAssignmentFindFirst.mockReset();
 	grantFindMany.mockReset();
 	examFindUnique.mockReset();
-	participantFindFirst.mockReset();
+	participantFindUnique.mockReset();
 	userFindUnique.mockReset().mockResolvedValue({ organizationId: 'org', organization: { timezone: 'Asia/Colombo' } });
 	settingsFindUnique.mockReset().mockResolvedValue(null);
 });
 
 describe('assertStudentExamStartAccess', () => {
 	const student = { userId: 'student-1', role: Role.STUDENT };
+	const scoped = () => examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: 'revision-1' });
+	const enrolled = () => enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
+	const participant = (audience: { id: string; label: string; deliveryMode: 'ONLINE' | 'PHYSICAL'; institute: { name: string } | null }) =>
+		participantFindUnique.mockResolvedValueOnce({ audience });
+	const onlineAudience = { id: 'aud-1', label: 'Online group', deliveryMode: 'ONLINE' as const, institute: null };
+	const hallAudience = { id: 'aud-2', label: 'Hall A', deliveryMode: 'PHYSICAL' as const, institute: { name: 'Nugegoda Centre' } };
+
 	it('retains active course enrollment behavior for a legacy exam', async () => {
 		examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: null });
-		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
+		enrolled();
 		await expect(assertStudentExamStartAccess(student, 'exam-1')).resolves.toBeUndefined();
-		expect(participantFindFirst).not.toHaveBeenCalled();
+		expect(participantFindUnique).not.toHaveBeenCalled();
 	});
-	it('denies an unlisted enrolled student on a scoped exam', async () => {
-		examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: 'revision-1' });
-		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
-		participantFindFirst.mockResolvedValueOnce(null);
-		await expect(assertStudentExamStartAccess(student, 'exam-1', 'audience-1')).rejects.toMatchObject({ code: 'EXAM_PARTICIPANT_NOT_FOUND' });
+	it('answers an unknown exam with 404 before reading enrollment', async () => {
+		examFindUnique.mockResolvedValueOnce(null);
+		await expect(assertStudentExamStartAccess(student, 'nope')).rejects.toMatchObject({ code: 'EXAM_NOT_FOUND', statusCode: 404 });
+		expect(enrollmentFindFirst).not.toHaveBeenCalled();
 	});
-	it('denies a tampered or physical audience for a scoped online start', async () => {
-		examFindUnique.mockResolvedValueOnce({ id: 'exam-1', courseId: 'course-1', paperRevisionId: 'revision-1' });
-		enrollmentFindFirst.mockResolvedValueOnce({ id: 'enrollment-1' });
-		participantFindFirst.mockResolvedValueOnce(null);
-		await expect(assertStudentExamStartAccess(student, 'exam-1', 'other-audience')).rejects.toMatchObject({ code: 'EXAM_PARTICIPANT_NOT_FOUND' });
+	it('checks enrollment before the participant row', async () => {
+		scoped();
+		enrollmentFindFirst.mockResolvedValueOnce(null);
+		await expect(assertStudentExamStartAccess(student, 'exam-1')).rejects.toMatchObject({ code: 'NOT_ENROLLED', statusCode: 403 });
+		expect(participantFindUnique).not.toHaveBeenCalled();
+	});
+	it('lets an online participant start without sending an audience', async () => {
+		scoped(); enrolled(); participant(onlineAudience);
+		await expect(assertStudentExamStartAccess(student, 'exam-1')).resolves.toBeUndefined();
+		expect(participantFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { examId_userId: { examId: 'exam-1', userId: 'student-1' } } }));
+	});
+	it('lets an online participant start when the sent audience is their own', async () => {
+		scoped(); enrolled(); participant(onlineAudience);
+		await expect(assertStudentExamStartAccess(student, 'exam-1', 'aud-1')).resolves.toBeUndefined();
+	});
+	it.each([undefined, 'aud-1'])('denies an unlisted enrolled student (audience sent: %s)', async (sent) => {
+		scoped(); enrolled(); participantFindUnique.mockResolvedValueOnce(null);
+		await expect(assertStudentExamStartAccess(student, 'exam-1', sent)).rejects.toMatchObject({ code: 'EXAM_PARTICIPANT_NOT_FOUND', statusCode: 403 });
+	});
+	it('tells a hall participant the paper is sat in the hall', async () => {
+		scoped(); enrolled(); participant(hallAudience);
+		await expect(assertStudentExamStartAccess(student, 'exam-1')).rejects.toMatchObject({ code: 'EXAM_PHYSICAL_AUDIENCE', statusCode: 409 });
+	});
+	it("refuses another audience's id sent by a listed student", async () => {
+		scoped(); enrolled(); participant(onlineAudience);
+		await expect(assertStudentExamStartAccess(student, 'exam-1', 'aud-9')).rejects.toMatchObject({ code: 'EXAM_AUDIENCE_MISMATCH', statusCode: 400 });
+	});
+	it.each([Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN, Role.MARKER])('does not apply to %s', async (role) => {
+		await expect(assertStudentExamStartAccess({ userId: 'staff', role }, 'exam-1')).resolves.toBeUndefined();
+		expect(examFindUnique).not.toHaveBeenCalled();
 	});
 });
 

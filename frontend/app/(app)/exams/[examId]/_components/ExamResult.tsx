@@ -1,4 +1,5 @@
-import { CheckCircle2, Clock3, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, FileText } from "lucide-react";
+import { isUnfinishedUpload } from "@/lib/exam";
 import type { MySubmission } from "@/lib/types";
 
 interface ExamResultProps {
@@ -21,6 +22,20 @@ export function ExamResult({ submission }: ExamResultProps) {
   const writtenAnswers = submission.writtenAnswers
     ? Object.entries(submission.writtenAnswers)
     : [];
+
+  if (isUnfinishedUpload(submission)) {
+    return (
+      <div className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-6" role="alert">
+        <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
+        <div>
+          <p className="font-medium text-foreground">Your answer file was not received</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The upload did not finish before the exam closed. Contact your teacher.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
