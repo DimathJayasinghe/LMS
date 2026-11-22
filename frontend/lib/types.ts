@@ -616,6 +616,24 @@ export interface CashList extends ApiList<CashRow> {
   tallyEnabled: boolean;
 }
 
+/** One student in GET /classes/:id/roster: no contact details, amounts or ID numbers by design. */
+export interface RosterRow {
+  studentId: string;
+  name: string;
+  indexNumber: number;
+  classType: "ONLINE" | "PHYSICAL";
+  enrolledAt: string;
+  /** Absent when the owner turned the paid state off for teachers. */
+  feeState?: "PAID" | "NOT_PAID";
+  /** Sessions attended out of the last held sessions (up to the owner's window). */
+  attendedLastN: { attended: number; sessions: number };
+}
+
+export interface RosterList extends ApiList<RosterRow> {
+  page: number;
+  pageSize: number;
+}
+
 export interface PaymentAdjustment {
   id: string;
   type: PaymentAdjustmentType;

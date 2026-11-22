@@ -144,6 +144,7 @@ Enum: `SUPER_ADMIN`, `TEACHER`, `ADMIN`, `MARKER`, `STUDENT`.
 | POST | `/` | ADMIN, STAFF | Create a class (course). |
 | GET | `/` | Any authenticated | List classes. |
 | GET | `/:classId` | Any authenticated | Get class detail. |
+| GET | `/:classId/roster` | Owning TEACHER, ADMIN, SUPER_ADMIN | The class's students with this month's fee state and recent attendance (F-83). |
 | PATCH | `/:classId` | ADMIN, STAFF | Update class (including active status). |
 | POST | `/:classId/assets/upload-url` | Owning TEACHER, SUPER_ADMIN | Authorize a course-bound image upload. |
 | POST | `/:classId/assets/confirm` | Owning TEACHER, SUPER_ADMIN | Decode, verify, and attach uploaded artwork. |
@@ -267,6 +268,59 @@ Get class detail. Non-admin users only see active classes.
 - 400 validation error
 - 401 auth middleware error
 - 404 `CLASS_NOT_FOUND` (service error shape)
+
+### GET `/:classId/roster`
+
+The active students of one class, for its teacher, the front desk and the owner. Added in #116 (F-83, D-EXAMS-7).
+
+Check order: role (`SUPER_ADMIN`, `ADMIN`, `TEACHER`; `MARKER` and `STUDENT` get `403 FORBIDDEN`), then the class
+(`404 CLASS_NOT_FOUND`), then ownership (`403 FORBIDDEN_COURSE` for a `TEACHER` who does not teach it; `ADMIN` and
+`SUPER_ADMIN` pass). The answer is `Cache-Control: no-store`, ordered by name, and has no CSV form and no messaging.
+
+**Query params**
+
+- `page`: 1-based, default 1. The page size is the owner's `roster.pageSize` setting (default 100), not a parameter.
+
+**Success (200)**
+
+```json
+{
+	"status": "success",
+	"data": [
+		{
+			"studentId": "uuid",
+			"name": "Nimal Perera",
+			"indexNumber": 1001,
+			"classType": "PHYSICAL",
+			"enrolledAt": "2026-02-05T05:00:00.000Z",
+			"feeState": "PAID",
+			"attendedLastN": { "attended": 5, "sessions": 8 }
+		}
+	],
+	"count": 61,
+	"page": 1,
+	"pageSize": 100
+}
+```
+
+- `count` is the number of active students in the class, not of the page.
+- Exactly these keys per row and nothing else: never phone, NIC, address, email, amount, method, collector or
+  concession. Adding a key is a privacy decision that needs a change to D-EXAMS-7 and D-IDENTITY-8 first.
+- `feeState` is `PAID` when the enrollment has a `SUCCESS` payment for the current Asia/Colombo billing month, else
+  `NOT_PAID`. It is deliberately not grace-aware, so a teacher sees who actually paid; it can differ from the content
+  gate. The key is omitted when the owner turns `roster.showPaidState` off. The `TRIAL` value of D-EXAMS-7 arrives
+  with trial months (Wave 2c).
+- `attendedLastN.sessions` is the number of sessions the class has already held (not deleted, `date` up to now), at
+  most `roster.attendanceWindowSessions` (default 8), counted over the whole class, not per cohort.
+  `attended` counts this student's rows in those sessions with status `PRESENT` or `LATE` that are not voided.
+- A dropped enrollment (`isActive` false) or a deactivated student is not listed.
+
+**Errors**
+
+- 400 validation error (bad `classId`, `page`)
+- 401 auth middleware error
+- 403 `FORBIDDEN` (role), 403 `FORBIDDEN_COURSE` (a teacher's colleague's class)
+- 404 `CLASS_NOT_FOUND`
 
 ### PATCH `/:classId`
 

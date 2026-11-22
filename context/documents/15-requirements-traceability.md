@@ -54,6 +54,7 @@ Related documents: [01 overview](./01-project-overview.md), [13 roadmap](./13-pr
 | R-STU-07 | Free-card, half-fee, scholarship, sibling discounts | Planned | D-MONEY-3 concessions, Wave 2b T10 |
 | R-STU-08 | Bulk student import from Excel/CSV | Gap | Bulk Excel upload exists for payments only; exam rosters are replaced through the exam-audience API, not imported |
 | R-STU-09 | Several children per guardian | Planned | With R-USR-02 |
+| R-STU-10 | A teacher sees who is in their class, who has paid this month and who attends | Done | `GET /classes/:id/roster` and the Students section of the class page (F-83, #116): name, index number, mode, enrolment date, a paid or not paid mark and attendance over the last sessions; no contact details or amounts; the paid mark is switchable with `roster.showPaidState` |
 
 ### 1.3 Attendance
 
